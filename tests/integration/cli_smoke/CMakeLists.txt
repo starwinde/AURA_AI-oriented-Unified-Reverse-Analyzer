@@ -2,6 +2,7 @@
 # Built only when AURA_ENABLE_RIZIN is ON (the `aura` binary requires it).
 
 add_executable(cli_smoke cli_smoke.cpp)
+add_dependencies(cli_smoke aura)
 target_include_directories(cli_smoke PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party/cjson
     ${CMAKE_SOURCE_DIR}/third_party/doctest
@@ -27,6 +28,7 @@ set_tests_properties(cli_smoke PROPERTIES
 # AURA_ENABLE_RIZIN because it links against the `aura` binary which
 # itself depends on aura_core (built only with RIZIN=ON).
 add_executable(probe_engines_smoke probe_engines_smoke.cpp)
+add_dependencies(probe_engines_smoke aura)
 target_include_directories(probe_engines_smoke PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party/cjson
     ${CMAKE_SOURCE_DIR}/third_party/doctest

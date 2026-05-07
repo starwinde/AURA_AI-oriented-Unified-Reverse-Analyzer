@@ -82,6 +82,7 @@ jobs:
         run: |
           cmake --build build-smoke --target orchestrator_smoke -j$(nproc)
           cmake --build build-smoke --target cli_smoke -j$(nproc)
+          cmake --build build-smoke --target probe_engines_smoke -j$(nproc)
           cmake --build build-smoke --target gui_smoke -j$(nproc)
 
       - name: Run ctest (all integration labels)
@@ -105,7 +106,6 @@ jobs:
           host: 'windows'
           target: 'desktop'
           arch: 'win64_msvc2019_64'
-          modules: 'qtbase'
           cache: true
 
       - name: Cache Rizin prebuilt
@@ -143,6 +143,7 @@ jobs:
         run: |
           cmake --build build-smoke --target orchestrator_smoke --config Debug -- /m
           cmake --build build-smoke --target cli_smoke --config Debug -- /m
+          cmake --build build-smoke --target probe_engines_smoke --config Debug -- /m
           cmake --build build-smoke --target gui_smoke --config Debug -- /m
 
       - name: Set AURA_RIZIN_BIN for CLI invocation

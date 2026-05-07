@@ -45,13 +45,13 @@ jobs:
           cmake --build third_party/zydis/build -j$(nproc)
 
       - name: Configure AURA
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DAURA_ENABLE_RIZIN=ON
 
       - name: Build AURA
-        run: make -C build -j$(nproc)
+        run: cmake --build build -j$(nproc)
 
       - name: Verify binary
-        run: build/aura --version
+        run: build/src/cli/aura --version
 
       - name: Run tests
-        run: cd build && ctest --output-on-failure
+        run: cd build && ctest --output-on-failure -LE integration

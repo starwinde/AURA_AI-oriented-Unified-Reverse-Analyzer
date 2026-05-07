@@ -58,11 +58,11 @@ target_sources(gui_smoke PRIVATE
 target_compile_features(gui_smoke PRIVATE cxx_std_17)
 
 if(WIN32)
-    set(_gui_rizin_bin "${CMAKE_SOURCE_DIR}/third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin.exe")
+    set(_gui_rizin_bin "${CMAKE_SOURCE_DIR}/third_party/rizin/0.8.2/bin/rizin.exe")
 else()
-    set(_gui_rizin_bin "${CMAKE_SOURCE_DIR}/third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin")
+    set(_gui_rizin_bin "${CMAKE_SOURCE_DIR}/third_party/rizin/0.8.2/bin/rizin")
 endif()
-set(_gui_sleigh_home "${CMAKE_SOURCE_DIR}/third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/lib/rizin/plugins/rz_ghidra_sleigh")
+set(_gui_sleigh_home "${CMAKE_SOURCE_DIR}/third_party/rizin/0.8.2/lib/rizin/plugins/rz_ghidra_sleigh")
 
 add_test(NAME gui_smoke COMMAND gui_smoke)
 set_tests_properties(gui_smoke PROPERTIES
