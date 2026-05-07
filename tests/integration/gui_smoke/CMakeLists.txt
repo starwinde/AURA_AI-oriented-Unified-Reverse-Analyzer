@@ -69,5 +69,5 @@ set_tests_properties(gui_smoke PROPERTIES
     LABELS "integration;gui;reference_engine"
     TIMEOUT 120
     ENVIRONMENT
-        "AURA_REPO_ROOT=${CMAKE_SOURCE_DIR};AURA_RIZIN_BIN=${_gui_rizin_bin};SLEIGHHOME=${_gui_sleigh_home};QT_QPA_PLATFORM=offscreen"
+        "AURA_REPO_ROOT=${CMAKE_SOURCE_DIR};AURA_RIZIN_BIN=${_gui_rizin_bin};AURA_RIZIN_PATH=${_gui_rizin_bin};SLEIGHHOME=${_gui_sleigh_home};QT_QPA_PLATFORM=offscreen"
 )

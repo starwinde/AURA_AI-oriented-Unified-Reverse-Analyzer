@@ -109,9 +109,11 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
     SUBCASE("analyze auto-discovers vendored Rizin without env override") {
         const QByteArray oldRoot = qgetenv("AURA_REPO_ROOT");
         const QByteArray oldBin = qgetenv("AURA_RIZIN_BIN");
+        const QByteArray oldPath = qgetenv("AURA_RIZIN_PATH");
         const QByteArray oldSleigh = qgetenv("SLEIGHHOME");
         qunsetenv("AURA_REPO_ROOT");
         qunsetenv("AURA_RIZIN_BIN");
+        qunsetenv("AURA_RIZIN_PATH");
         qunsetenv("SLEIGHHOME");
 
         REQUIRE(window.openProject(dbPath));
@@ -122,6 +124,8 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         else qunsetenv("AURA_REPO_ROOT");
         if (!oldBin.isEmpty()) qputenv("AURA_RIZIN_BIN", oldBin);
         else qunsetenv("AURA_RIZIN_BIN");
+        if (!oldPath.isEmpty()) qputenv("AURA_RIZIN_PATH", oldPath);
+        else qunsetenv("AURA_RIZIN_PATH");
         if (!oldSleigh.isEmpty()) qputenv("SLEIGHHOME", oldSleigh);
         else qunsetenv("SLEIGHHOME");
     }
