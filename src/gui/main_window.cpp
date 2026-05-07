@@ -224,7 +224,10 @@ QString resolveRizinExecForGui() {
     seedSleighHomeForGui(root);
 
     if (const char* env = std::getenv("AURA_RIZIN_BIN")) {
-        if (*env) return QString::fromUtf8(env);
+        if (*env) {
+            qputenv("AURA_RIZIN_PATH", QByteArray(env));
+            return QString::fromUtf8(env);
+        }
     }
 
     char resolved[1024] = {0};
@@ -241,7 +244,11 @@ QString resolveRizinExecForGui() {
                               resolved,
                               sizeof(resolved));
 #endif
-    return QString::fromUtf8(resolved);
+    const QString exec = QString::fromUtf8(resolved);
+    if (QFileInfo::exists(exec)) {
+        qputenv("AURA_RIZIN_PATH", exec.toUtf8());
+    }
+    return exec;
 }
 
 QString backendLabel(uint32_t backend) {
