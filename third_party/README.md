@@ -22,6 +22,23 @@ trees.
 | `ghidra-decompile/` | Future/legacy Ghidra decompile material | Current probe path expects an external `ghidra-decomp` runtime |
 | `llvm-project/` | Developer tooling reference for `tools/ast_diff` | Not part of the core runtime build |
 
+## Rizin runtime baseline
+
+AURA's approved Rizin execution baseline is **Rizin 0.8.0**:
+
+| Platform | Runtime directory | Required binary |
+| --- | --- | --- |
+| Windows | `rizin/0.8.0-shared/` | `rizin-win-installer-clang_cl-64/bin/rizin.exe` |
+| Linux CI | `rizin/0.8.0-static/` | `bin/rizin` |
+
+Windows decompile support also requires:
+
+`rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/lib/rizin/plugins/rz_ghidra_sleigh`
+
+The older `rizin/0.8.2/` runtime directory is not part of the approved local,
+test, CI, or demo setup and should not be recreated unless a separate
+compatibility branch explicitly asks for it.
+
 ## Deliberately not vendored
 
 | Path | Status | Reason |

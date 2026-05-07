@@ -87,15 +87,16 @@ fetch_tool() {
         return 0
     fi
 
-    local version url sha256 archive strip binrel
+    local version url sha256 archive install_dir strip binrel
     version="$(read_manifest "$tool" "version")"
     url="$(read_manifest "$tool" "platforms.$PLATFORM.url")"
     sha256="$(read_manifest "$tool" "platforms.$PLATFORM.sha256")"
     archive="$(read_manifest "$tool" "platforms.$PLATFORM.archive")"
+    install_dir="$(read_manifest "$tool" "platforms.$PLATFORM.install_dir")"
     strip="$(read_manifest "$tool" "platforms.$PLATFORM.strip_components")"
     binrel="$(read_manifest "$tool" "platforms.$PLATFORM.binary_relpath")"
 
-    local dest_dir="$ROOT/third_party/$tool/$version"
+    local dest_dir="$ROOT/third_party/$tool/$install_dir"
     local bin_path="$dest_dir/$binrel"
 
     if [[ -x "$bin_path" ]]; then

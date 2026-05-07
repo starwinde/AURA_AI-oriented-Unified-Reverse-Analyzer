@@ -26,9 +26,9 @@ const AuraRizinCmd AURA_RIZIN_ANALYZE_GLOBAL[] = {
 const size_t AURA_RIZIN_ANALYZE_GLOBAL_COUNT =
     sizeof(AURA_RIZIN_ANALYZE_GLOBAL) / sizeof(AURA_RIZIN_ANALYZE_GLOBAL[0]);
 
-/* Phase 3B v0.8.2 baseline: id base column kept stable for the
- * snapshot parser; cmd column issues the rizin v0.8.2 form. `aftj`
- * removed (no JSON mode in v0.8.2). */
+/* Phase 3B v0.8.x catalog: id base column kept stable for the
+ * snapshot parser; cmd column issues the Rizin v0.8 command form. `aftj`
+ * removed (no JSON mode in the v0.8 baseline). */
 const AuraRizinPerFunctionCmd AURA_RIZIN_PER_FUNCTION_CMDS[] = {
     { "agfj", "agf json" }, /* basic-block CFG (JSON)        */
     { "axtj", "axtj"     }, /* xrefs to address              */

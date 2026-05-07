@@ -174,12 +174,12 @@ static int populate_symbols(const cJSON *root, AuraRizinCanonical *c)
 /* CFG block parser. Two input shapes are supported, both decided by
  * the JSON root type — no inference, just direct mapping:
  *
- *   1. v0.8.2 stable `agf json @ <addr>`:
+ *   1. v0.8 baseline `agf json @ <addr>`:
  *        { "nodes": [ { "id": N, "offset": N, "out_nodes": [N,...],
  *                        "title": "0xN", "body": "..." }, ... ] }
  *      Two passes. Pass 1 builds id→offset. Pass 2 emits one
  *      AuraRizinCanonBlock per node — addr from `offset`; size left
- *      0 (v0.8.2 does not report a per-block size in this shape and
+ *      0 (Rizin v0.8 does not report a per-block size in this shape and
  *      we do not derive it from the body); jump/fail from out_nodes
  *      positionally (out_nodes[0]→jump, out_nodes[1]→fail). Extra
  *      out-edges beyond the second are not representable in the
@@ -189,14 +189,14 @@ static int populate_symbols(const cJSON *root, AuraRizinCanonical *c)
  *
  *   2. legacy array-of-blocks: either `[{"name":..., "blocks":[...]}]`
  *      or a flat array of `{"addr"|"offset", "size", "jump", "fail"}`.
- *      Used by synthetic test fixtures and pre-v0.8.2 rizin.
+ *      Used by synthetic test fixtures and older Rizin shapes.
  */
 static int populate_cfg(const cJSON *root, uint64_t function_addr,
                         FlatVec *cfgs_vec)
 {
     if (!root) return 0;
 
-    /* ── v0.8.2 shape: object with "nodes" array ───────────────────── */
+    /* ── Rizin v0.8 shape: object with "nodes" array ───────────────── */
     if (cJSON_IsObject(root)) {
         const cJSON *nodes =
             cJSON_GetObjectItemCaseSensitive(root, "nodes");
@@ -238,7 +238,7 @@ static int populate_cfg(const cJSON *root, uint64_t function_addr,
             AuraRizinCanonBlock blk;
             memset(&blk, 0, sizeof(blk));
             blk.addr = off;
-            /* size: v0.8.2 does not report it on this shape. Leave 0. */
+            /* size: Rizin v0.8 does not report it on this shape. Leave 0. */
 
             const cJSON *outs =
                 cJSON_GetObjectItemCaseSensitive(nd, "out_nodes");
@@ -368,7 +368,7 @@ static int populate_strings(const cJSON *root, FlatVec *strings_vec)
 /* Per-variable parser. Two element shapes are recognised, both by
  * direct field reads (no inference):
  *
- *   v0.8.2 stable `afvlj`:
+ *   v0.8 baseline `afvlj`:
  *     { "name", "type", "arg": bool,
  *       "storage": { "type": "stack"|"reg", "stack": int, "reg": str } }
  *
@@ -404,7 +404,7 @@ static int populate_variables_from_array(const cJSON *arr, uint64_t function_add
         }
 
         /* stack offset:
-         *   v0.8.2 → element.storage.stack (int)
+         *   Rizin v0.8 → element.storage.stack (int)
          *   legacy → element.ref.offset (int) */
         v.stack_offset = 0;
         const cJSON *st = cJSON_GetObjectItemCaseSensitive(e, "storage");
@@ -421,7 +421,7 @@ static int populate_variables_from_array(const cJSON *arr, uint64_t function_add
             }
         }
 
-        /* arg flag: prefer v0.8.2 "arg", fall back to legacy "isarg". */
+        /* arg flag: prefer Rizin v0.8 "arg", fall back to legacy "isarg". */
         int is_arg = 0;
         if (!json_get_bool(e, "arg", &is_arg)) {
             json_get_bool(e, "isarg", &is_arg);

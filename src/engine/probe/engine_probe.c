@@ -109,7 +109,7 @@ static int parse_rizin_version(const char *stdout_buf, char *out_ver, size_t cap
 
     /* Look for the literal "rizin " prefix at the start of any line.
      * The output of `rizin -v` typically begins:
-     *     "rizin 0.8.2 @ linux-x86-64 git.0.8.2"
+     *     "rizin 0.8.0 @ linux-x86-64 git.0.8.0"
      * but build banners or warnings may precede it on some hosts. */
     const char *needle = "rizin ";
     const size_t needle_len = 6;
@@ -182,11 +182,11 @@ int aura_probe_rizin(AuraCommandRunner *runner, AuraProbeResult *out)
     char rizin_bin[512];
 #ifdef _WIN32
     aura_probe_resolve_binary("AURA_RIZIN_BIN",
-                              "third_party/rizin/0.8.2/bin/rizin.exe",
+                              "third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin.exe",
                               "rizin", rizin_bin, sizeof(rizin_bin));
 #else
     aura_probe_resolve_binary("AURA_RIZIN_BIN",
-                              "third_party/rizin/0.8.2/bin/rizin",
+                              "third_party/rizin/0.8.0-static/bin/rizin",
                               "rizin", rizin_bin, sizeof(rizin_bin));
 #endif
     int rc = runner->run(runner, rizin_bin, argv, &cmd);

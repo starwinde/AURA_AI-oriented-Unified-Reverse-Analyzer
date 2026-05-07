@@ -1,23 +1,25 @@
 {
-  "_comment": "Rizin external tool acquisition manifest. See ADR-0032 for the pattern, ADR-0031 for why Rizin is the reference engine. Edit version + per-platform sha256/url when upgrading; the fetch script verifies sha256 before extracting.",
+  "_comment": "Rizin external tool acquisition manifest. See ADR-0032 for the pattern, ADR-0031 for why Rizin is the reference engine. Edit version + per-platform sha256/url/install_dir when upgrading; the fetch script verifies sha256 before extracting.",
 
   "tool": "rizin",
-  "version": "0.8.2",
+  "version": "0.8.0",
 
   "platforms": {
     "linux-x86_64": {
-      "url": "https://github.com/rizinorg/rizin/releases/download/v0.8.2/rizin-v0.8.2-static-x86_64.tar.xz",
-      "sha256": "39299d492a43458900233e3036058b653d7554a6786192397fd4464c51fce5d6",
+      "url": "https://github.com/rizinorg/rizin/releases/download/v0.8.0/rizin-v0.8.0-static-x86_64.tar.xz",
+      "sha256": "3d227b893c57c105b386ff620535ee908e17de19bf26f89cc6898ebd8830bf31",
       "archive": "tar.xz",
+      "install_dir": "0.8.0-static",
       "strip_components": 0,
       "binary_relpath": "bin/rizin"
     },
     "windows-x86_64": {
-      "url": "https://github.com/rizinorg/rizin/releases/download/v0.8.2/rizin-windows-static-v0.8.2.zip",
-      "sha256": "2232a5763d0fb31010e0bc57447344f8263efae1f9b4922f3f0c707395f8eee0",
+      "url": "https://github.com/rizinorg/rizin/releases/download/v0.8.0/rizin-windows-shared64-v0.8.0.zip",
+      "sha256": "3de26fc92113a81f47889e328e00812bc25a5c333732ee11e3c79c3955ccf542",
       "archive": "zip",
-      "strip_components": 1,
-      "binary_relpath": "bin/rizin.exe"
+      "install_dir": "0.8.0-shared",
+      "strip_components": 0,
+      "binary_relpath": "rizin-win-installer-clang_cl-64/bin/rizin.exe"
     }
   }
 }

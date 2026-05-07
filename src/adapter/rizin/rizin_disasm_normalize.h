@@ -3,7 +3,7 @@
  *
  * pdfj cJSON tree → AuraRizinDisasmBody single-allocation body.
  *
- * pdfj output shape (rizin 0.8.2):
+ * pdfj output shape (Rizin v0.8 baseline):
  *   {
  *     "name": "fcn.00400000",
  *     "size": 30,
