@@ -1,0 +1,40 @@
+Task 2.15: Inline Function Detection
+======================================
+Date: 2026-04-04
+
+DoD Verification:
+  1. Repeated code pattern matching: PASS
+     - Sliding window algorithm (8-instruction mnemonic-sequence hash)
+     - Non-overlapping instance detection (32-byte minimum gap)
+     - Function-level fingerprinting via func_detect integration
+  2. FLIRT signature DB integration: PASS
+     - Cross-references inline candidates against FlirtDb
+     - Names matched patterns with FLIRT signature names
+  3. make test: 54/54 PASS
+     - test_inline_detect: 4/4 PASS
+
+Algorithm:
+  Phase 1 — Sliding Window:
+    For each position in the instruction stream, hash the mnemonic
+    sequence of 8 consecutive instructions (FNV-1a). Windows appearing
+    at 2+ non-overlapping locations (>= 32 bytes apart) form a group.
+
+  Phase 2 — Function-Level:
+    Detected functions (via func_detect) with <= 16 instructions get
+    their full mnemonic sequence hashed. Groups with 2+ matches are
+    inline candidates.
+
+  Phase 3 — FLIRT Cross-Reference:
+    All groups are checked against FLIRT match results. Known library
+    function patterns are named accordingly (e.g., "memcpy (inlined)").
+
+Test Details:
+  - test_null_safety: NULL/empty input safety verified
+  - test_single_function: NULL FileInfo returns NULL correctly
+  - test_real_binary: /usr/bin/ls → 1286 inline groups detected
+  - test_with_flirt: FLIRT DB integration verified
+
+Files:
+  - src/core/inline_detect.c — implementation
+  - include/inline_detect.h — public API
+  - tests/core/test_inline_detect.c — tests

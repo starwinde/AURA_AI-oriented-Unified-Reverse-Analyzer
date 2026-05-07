@@ -1,0 +1,44 @@
+태스크: 2.T Phase 2 종합 테스트 (디스어셈블러 모듈 통합 검증)
+검증 날짜: 2026-03-31 (원래 완료: 2026-03-26, 결과 파일 소급 기록)
+상태: [x] 완전 완료
+
+== ctest (Debug 빌드) — Phase 2 대상 3개 ==
+3/3 PASS
+  - test_disasm:    4/4 PASS (x86_64 기본 디스어셈, 아키텍처 변환, 에러 처리, AArch64)
+  - test_elf_parser: 7/7 PASS (ELF 로드, 아키텍처 감지, 섹션, mmap 포인터, 심볼, 에러, detect_format)
+  - test_pipeline:  7/7 PASS (ELF→.text→disasm 파이프라인, 섹션 매핑, NOBITS, 에러 처리, info text/json/error)
+
+== ASAN 빌드 (ctest) ==
+3/3 PASS — AddressSanitizer/UBSanitizer 오류 0건
+
+== x86_64 파이프라인 검증 ==
+명령: aura --disasm tests/disasm/data/test_x86_64.elf
+결과: 20/20 명령어 100% 일치 (상세: tests/results/2.6_disasm_x86_64.txt 참조)
+  push rbp / mov rbp, rsp / mov eax, 0x2a / pop rbp / ret /
+  add rax, rbx / sub rax, 1 / neg rax / ret /
+  test rax, rax / je 0x40005d / inc eax / ret /
+  mov rax, [rdi] / mov [rsi], rax / ret / nop x4
+
+== AArch64 파이프라인 검증 ==
+명령: aura --disasm /bin/ls
+결과:
+  아키텍처 자동 감지: "Disassembly of .text from '/bin/ls' [AArch64]" ✓
+  .text 범위: 0x3e80 ~ 0x1817c (82,684 bytes) ✓
+  총 디스어셈블 라인: 20,672개 ✓
+  objdump 대조: 일치 (상세: tests/results/2.7_disasm_aarch64.txt 참조)
+
+== 아키텍처 자동 감지 (e_machine 기반) ==
+x86_64 (EM_X86_64=62)  → AURA_ARCH_X86_64 → CS_ARCH_X86   ✓
+AArch64 (EM_AARCH64=183) → AURA_ARCH_ARM64 → CS_ARCH_ARM64 ✓
+
+== 1MB 성능 벤치마크 ==
+파일: /tmp/bench_x86_64.elf (1,048,576 bytes .text, x86_64 반복 패턴)
+결과: 0.204s (목표 < 1초 달성) — ~483,963 instructions, ~5.1 MB/s
+(상세: docs/benchmark.md 참조)
+
+== 참조 결과 파일 ==
+- tests/results/2.2_disasm.txt      — Capstone 래퍼 단위 테스트
+- tests/results/2.3_elf_loader.txt  — ELF 로더 단위 테스트
+- tests/results/2.4_pipeline.txt    — 파이프라인 단위 테스트
+- tests/results/2.6_disasm_x86_64.txt — x86_64 정확도·성능 검증
+- tests/results/2.7_disasm_aarch64.txt — AArch64 검증

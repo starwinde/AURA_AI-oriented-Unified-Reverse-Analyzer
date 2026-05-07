@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "profile_id": "default",
+  "rule_pack_ids": ["korean-sensitive", "secret-api-key"],
+  "eval_dataset_ids": ["safety-default"],
+  "masking_policy": {
+    "format": "label_numbered",
+    "same_value_same_mask": true
+  },
+  "model_policy": {
+    "enabled": true,
+    "mode": "conditional",
+    "model_id": "openai-privacy-filter",
+    "max_input_chars": 4096,
+    "timeout_ms": 1500,
+    "run_when": ["external_export", "rule_findings_empty", "contains_natural_language"],
+    "on_missing": "degrade",
+    "on_timeout": "degrade",
+    "on_error": "degrade"
+  }
+}

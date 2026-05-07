@@ -1,0 +1,59 @@
+{
+  "baseline": "/home/str_dgx_spark/Desktop/AURA/tests/results/phase_f_step3_f1g/aura_self/parity.json",
+  "current": "/home/str_dgx_spark/Desktop/AURA/tests/results/v2_3_0_rc6_covered_avg/aura_self/parity.json",
+  "binary": "aura_self_v2_1_0",
+  "common_functions": 1,
+  "scored_common": 1,
+  "new_in_current": 1133,
+  "removed_from_baseline": 1127,
+  "summary": {
+    "sig_delta": {
+      "pos": 0,
+      "neg": 1,
+      "zero": 0,
+      "mean": -12.0
+    },
+    "ctrl_delta": {
+      "pos": 0,
+      "neg": 1,
+      "zero": 0,
+      "mean": -5.0
+    },
+    "mem_delta": {
+      "pos": 1,
+      "neg": 0,
+      "zero": 0,
+      "mean": 11.0
+    },
+    "ops_delta": {
+      "pos": 0,
+      "neg": 1,
+      "zero": 0,
+      "mean": -1.0
+    },
+    "naming_delta": {
+      "pos": 0,
+      "neg": 1,
+      "zero": 0,
+      "mean": -1.0
+    },
+    "total_delta": {
+      "pos": 0,
+      "neg": 1,
+      "zero": 0,
+      "mean": -8.0
+    }
+  },
+  "deltas": {
+    "FUN_001b29cc_0x1b29cc": {
+      "sig_delta": -12,
+      "ctrl_delta": -5,
+      "mem_delta": 11,
+      "ops_delta": -1,
+      "naming_delta": -1,
+      "total_delta": -8,
+      "base_total": 41,
+      "current_total": 33
+    }
+  }
+}

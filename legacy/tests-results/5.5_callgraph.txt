@@ -1,0 +1,10 @@
+=== test_callgraph (Task 5.5) ===
+  test_cg_empty [text output has "Call Graph"]         PASS
+  test_cg_dot_nodes ["digraph CallGraph" + func names] PASS
+  test_cg_dot_edges ["->" in DOT output]               PASS
+  test_cg_external ["external" + "dashed" in DOT]      PASS
+  test_call_emit ["sub_401000(" in Pseudo-C]           PASS
+
+Results: 5/5 PASS
+
+ctest (full suite): 15/15 PASS

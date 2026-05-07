@@ -1,0 +1,899 @@
+{
+  "baseline": "/home/str_dgx_spark/Desktop/AURA/tests/results/phase_f_step3_f1g/cat/parity.json",
+  "current": "/home/str_dgx_spark/Desktop/AURA/tests/results/v2_3_0_rc6_covered_avg/cat/parity.json",
+  "binary": "cat",
+  "common_functions": 85,
+  "scored_common": 85,
+  "new_in_current": 0,
+  "removed_from_baseline": 0,
+  "summary": {
+    "sig_delta": {
+      "pos": 35,
+      "neg": 0,
+      "zero": 50,
+      "mean": 10.024
+    },
+    "ctrl_delta": {
+      "pos": 64,
+      "neg": 17,
+      "zero": 4,
+      "mean": 17.482
+    },
+    "mem_delta": {
+      "pos": 66,
+      "neg": 13,
+      "zero": 6,
+      "mean": 8.976
+    },
+    "ops_delta": {
+      "pos": 0,
+      "neg": 1,
+      "zero": 84,
+      "mean": -0.012
+    },
+    "naming_delta": {
+      "pos": 69,
+      "neg": 0,
+      "zero": 16,
+      "mean": 5.094
+    },
+    "total_delta": {
+      "pos": 64,
+      "neg": 21,
+      "zero": 0,
+      "mean": 41.565
+    }
+  },
+  "deltas": {
+    "FUN_00101700_0x101700": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 16,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 76,
+      "base_total": 0,
+      "current_total": 76
+    },
+    "FUN_00101b00_0x101b00": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 1,
+      "base_total": 44,
+      "current_total": 45
+    },
+    "FUN_00102cf4_0x102cf4": {
+      "sig_delta": 0,
+      "ctrl_delta": -1,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -2,
+      "base_total": 65,
+      "current_total": 63
+    },
+    "FUN_00102d10_0x102d10": {
+      "sig_delta": 0,
+      "ctrl_delta": -6,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -6,
+      "base_total": 80,
+      "current_total": 74
+    },
+    "FUN_00102d40_0x102d40": {
+      "sig_delta": 0,
+      "ctrl_delta": -6,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -6,
+      "base_total": 80,
+      "current_total": 74
+    },
+    "FUN_00102de0_0x102de0": {
+      "sig_delta": 0,
+      "ctrl_delta": -4,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -4,
+      "base_total": 54,
+      "current_total": 50
+    },
+    "FUN_00102e84_0x102e84": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -1,
+      "base_total": 17,
+      "current_total": 16
+    },
+    "FUN_00102ee0_0x102ee0": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -4,
+      "base_total": 49,
+      "current_total": 45
+    },
+    "FUN_00102ff0_0x102ff0": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -4,
+      "base_total": 46,
+      "current_total": 42
+    },
+    "FUN_00103144_0x103144": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -6,
+      "base_total": 59,
+      "current_total": 53
+    },
+    "FUN_001031c4_0x1031c4": {
+      "sig_delta": 0,
+      "ctrl_delta": 2,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -2,
+      "base_total": 68,
+      "current_total": 66
+    },
+    "FUN_00103210_0x103210": {
+      "sig_delta": 0,
+      "ctrl_delta": -4,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -7,
+      "base_total": 60,
+      "current_total": 53
+    },
+    "FUN_00103320_0x103320": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -8,
+      "base_total": 58,
+      "current_total": 50
+    },
+    "FUN_00103390_0x103390": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -1,
+      "base_total": 32,
+      "current_total": 31
+    },
+    "FUN_00103810_0x103810": {
+      "sig_delta": 0,
+      "ctrl_delta": -4,
+      "mem_delta": -3,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -7,
+      "base_total": 52,
+      "current_total": 45
+    },
+    "FUN_001038f0_0x1038f0": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -2,
+      "base_total": 10,
+      "current_total": 8
+    },
+    "FUN_00104d70_0x104d70": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 44,
+      "current_total": 43
+    },
+    "FUN_00104f70_0x104f70": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -7,
+      "base_total": 44,
+      "current_total": 37
+    },
+    "FUN_00105014_0x105014": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -6,
+      "ops_delta": -1,
+      "naming_delta": 0,
+      "total_delta": -12,
+      "base_total": 73,
+      "current_total": 61
+    },
+    "FUN_001050b4_0x1050b4": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 1,
+      "base_total": 58,
+      "current_total": 59
+    },
+    "FUN_00105190_0x105190": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -5,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -5,
+      "base_total": 62,
+      "current_total": 57
+    },
+    "_DT_FINI_0x1051ac": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 16,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 76,
+      "base_total": 0,
+      "current_total": 76
+    },
+    "_DT_INIT_0x1016e8": {
+      "sig_delta": 30,
+      "ctrl_delta": 23,
+      "mem_delta": 15,
+      "ops_delta": 0,
+      "naming_delta": 3,
+      "total_delta": 71,
+      "base_total": 0,
+      "current_total": 71
+    },
+    "_FINI_0_0x102d80": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": -3,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -6,
+      "base_total": 62,
+      "current_total": 56
+    },
+    "_INIT_0_0x102dd0": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -2,
+      "base_total": 80,
+      "current_total": 78
+    },
+    "__ctype_b_loc_0x101980": {
+      "sig_delta": 18,
+      "ctrl_delta": 25,
+      "mem_delta": 10,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 60,
+      "base_total": 0,
+      "current_total": 60
+    },
+    "__ctype_get_mb_cur_max_0x1019b0": {
+      "sig_delta": 18,
+      "ctrl_delta": 25,
+      "mem_delta": 16,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 68,
+      "base_total": 0,
+      "current_total": 68
+    },
+    "__cxa_atexit_0x101790": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__cxa_finalize_0x101780": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__errno_location_0x101a70": {
+      "sig_delta": 18,
+      "ctrl_delta": 25,
+      "mem_delta": 9,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 59,
+      "base_total": 0,
+      "current_total": 59
+    },
+    "__fpending_0x1017b0": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__fprintf_chk_0x101960": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__fpurge_0x101860": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__freading_0x101a40": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__gmon_start___0x1018d0": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__libc_start_main_0x101760": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__memmove_chk_0x101a90": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__memset_chk_0x1018f0": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__printf_chk_0x101850": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__stack_chk_fail_0x1018a0": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "_exit_0x101730": {
+      "sig_delta": 12,
+      "ctrl_delta": 25,
+      "mem_delta": 16,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 58,
+      "base_total": 0,
+      "current_total": 58
+    },
+    "abort_0x101900": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "aligned_alloc_0x101840": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "bindtextdomain_0x101830": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "clearerr_unlocked_0x1019f0": {
+      "sig_delta": 12,
+      "ctrl_delta": 25,
+      "mem_delta": 10,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 52,
+      "base_total": 0,
+      "current_total": 52
+    },
+    "close_0x1018b0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 14,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 48,
+      "base_total": 0,
+      "current_total": 48
+    },
+    "copy_file_range_0x101870": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "dcgettext_0x101a20": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "entry_0x102cc0": {
+      "sig_delta": 0,
+      "ctrl_delta": 2,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -2,
+      "base_total": 56,
+      "current_total": 54
+    },
+    "error_0x101770": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "exit_0x101750": {
+      "sig_delta": 12,
+      "ctrl_delta": 25,
+      "mem_delta": 16,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 58,
+      "base_total": 0,
+      "current_total": 58
+    },
+    "fclose_0x1017e0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "fflush_0x1019e0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "fflush_unlocked_0x1019d0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "fileno_0x1017d0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "fputc_unlocked_0x101a10": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "fputs_unlocked_0x101a30": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "free_0x1019a0": {
+      "sig_delta": 12,
+      "ctrl_delta": 25,
+      "mem_delta": 10,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 52,
+      "base_total": 0,
+      "current_total": 52
+    },
+    "fseeko_0x101990": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "fstat_0x101aa0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "fwrite_0x1019c0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "getopt_long_0x101950": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "getpagesize_0x101890": {
+      "sig_delta": 18,
+      "ctrl_delta": 25,
+      "mem_delta": 16,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 68,
+      "base_total": 0,
+      "current_total": 68
+    },
+    "ioctl_0x101ab0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 14,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 48,
+      "base_total": 0,
+      "current_total": 48
+    },
+    "iswprint_0x101a60": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 14,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 48,
+      "base_total": 0,
+      "current_total": 48
+    },
+    "lseek_0x1017a0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 14,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 48,
+      "base_total": 0,
+      "current_total": 48
+    },
+    "malloc_0x101800": {
+      "sig_delta": 4,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 44,
+      "base_total": 0,
+      "current_total": 44
+    },
+    "mbrtoc32_0x101a50": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "mbsinit_0x101920": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "memcmp_0x101930": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "memcpy_0x101720": {
+      "sig_delta": 4,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 44,
+      "base_total": 0,
+      "current_total": 44
+    },
+    "nl_langinfo_0x1017f0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 40,
+      "base_total": 0,
+      "current_total": 40
+    },
+    "open_0x101810": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "posix_fadvise_0x101910": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 14,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 48,
+      "base_total": 0,
+      "current_total": 48
+    },
+    "read_0x101a00": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 9,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 43,
+      "base_total": 0,
+      "current_total": 43
+    },
+    "realloc_0x101880": {
+      "sig_delta": 4,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 44,
+      "base_total": 0,
+      "current_total": 44
+    },
+    "setlocale_0x101ac0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 40,
+      "base_total": 0,
+      "current_total": 40
+    },
+    "stpcpy_0x1017c0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 40,
+      "base_total": 0,
+      "current_total": 40
+    },
+    "strcmp_0x101970": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "strlen_0x101740": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "strncmp_0x101820": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "strrchr_0x1018c0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 40,
+      "base_total": 0,
+      "current_total": 40
+    },
+    "textdomain_0x101940": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "uname_0x101a80": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "write_0x1018e0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 9,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 43,
+      "base_total": 0,
+      "current_total": 43
+    }
+  }
+}

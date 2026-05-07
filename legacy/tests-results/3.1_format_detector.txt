@@ -1,0 +1,26 @@
+태스크: 3.1 파일 포맷 분석기 설계 (format_detector + 헤더 정의)
+검증 날짜: 2026-03-31
+상태: [x] 완전 완료
+
+== 산출물 확인 ==
+- include/mapped_file.h      존재 ✓  (MappedFile 구조체)
+- include/file_format.h      존재 ✓  (FileInfo, Section, Symbol, 공통 추상화)
+- src/parser/format_detector.c 존재 ✓ (magic bytes 기반 포맷 감지)
+- docs/design/parser.md      존재 ✓  (설계 기준 문서)
+
+== format_detector 수동 검증 ==
+ELF  (7F 45 4C 46): aura --info /bin/ls → "Format: ELF"         ✓
+PE   (4D 5A):       합성 PE → detect_format=PE (파서 실패는 별도 태스크) ✓
+Raw  (unknown):     "hello world" 텍스트 → "unsupported or unknown file format" ✓
+
+== aura_detect_format 단위 테스트 ==
+test_elf_parser TC-7: aura_detect_format on ELF binary → PASS ✓
+
+== ASAN ==
+ASAN 빌드 ctest 8/8 PASS — AddressSanitizer/UBSanitizer 오류 0건 ✓
+
+== 설계 결정 ==
+- 파일 I/O: mmap (D-6 확정)
+- 구조체: B안 2레이어 (MappedFile + FileInfo, D-10 확정)
+- FileInfo 정렬: aligned_alloc(64, sizeof(FileInfo))
+- 포맷 감지: magic bytes 독립 모듈 (파서 레이어 바깥)

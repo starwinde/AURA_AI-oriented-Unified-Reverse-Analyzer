@@ -1,0 +1,121 @@
+================================================================================
+  AURA Phase 12 (Ghidra Parity) -- Comprehensive Verification Report
+  Date: 2026-04-05
+================================================================================
+
+1. BUILD VERIFICATION
+---------------------
+  Regular build:   PASS (0 errors, 0 warnings)
+  ASAN build:      PASS (0 errors, 0 warnings)
+
+2. CTEST RESULTS
+----------------
+  Regular build:   67/67 PASS (100%)
+  ASAN build:      66/67 PASS (99%)
+    - FAIL: test_python (CPython libpython3.12.so internal leak, NOT AURA code)
+    - All 5 Python subtests PASS; ASAN reports leak in PyType_GenericAlloc
+      inside libpython3.12.so -- known CPython ASAN false positive
+
+3. PHASE 12 SUBTASK VERIFICATION (24/24 PASS)
+----------------------------------------------
+
+  Task   | Feature                    | Source File                          | Test File                             | Subtests | Status
+  -------|----------------------------|--------------------------------------|---------------------------------------|----------|-------
+  12.1   | Xref backend               | src/core/xref.c                     | tests/core/test_xref.c                | 11/11    | PASS
+  12.2   | String reference analysis  | src/core/string_refs.c               | tests/core/test_string_refs.c         |  6/6     | PASS
+  12.3   | Data reference analysis    | src/core/data_refs.c                 | tests/core/test_data_refs.c           |  6/6     | PASS
+  12.4   | Full recursive disassembly | src/core/recursive_disasm.c           | tests/core/test_recursive_disasm.c    |  6/6     | PASS
+  12.5   | Indirect call/jump resolve | src/disasm/indirect_resolver.c        | tests/disasm/test_indirect_resolver.c |  6/6     | PASS
+  12.6   | Non-returning func detect  | src/core/noreturn_detect.c            | tests/core/test_noreturn_detect.c     |  6/6     | PASS
+  12.7   | Inline function detect     | src/core/inline_detect.c              | tests/core/test_inline_detect.c       |  4/4     | PASS
+  12.8   | Calling convention detect  | src/decompiler/calling_conv.c         | tests/decompiler/test_calling_conv.c  | 12/12    | PASS
+  12.9   | Struct/array recovery      | src/decompiler/struct_recovery.c      | tests/decompiler/test_struct_recovery.c|  5/5    | PASS
+  12.10  | Pointer chain tracking     | src/decompiler/ptr_chain.c            | tests/decompiler/test_ptr_chain.c     |  5/5     | PASS
+  12.11  | Variable name propagation  | src/decompiler/var_propagation.c      | tests/decompiler/test_var_propagation.c|  5/5    | PASS
+  12.12  | Constant propagation       | src/decompiler/const_prop.c           | tests/decompiler/test_const_prop.c    |  6/6     | PASS
+  12.13  | Dead code elimination      | src/decompiler/dead_code.c            | tests/decompiler/test_dead_code.c     |  5/5     | PASS
+  12.14  | DWARF parser               | src/parser/dwarf_parser.c             | tests/parser/test_dwarf_parser.c      |  9/9     | PASS
+  12.15  | DWARF type integration     | src/decompiler/dwarf_types.c          | tests/decompiler/test_dwarf_types.c   |  9/9     | PASS
+  12.16  | PDB parser                 | src/parser/pdb_parser.c               | tests/parser/test_pdb_parser.c        |  9/9     | PASS
+  12.17  | PDB type integration       | src/decompiler/pdb_types.c            | tests/decompiler/test_pdb_types.c     |  9/9     | PASS
+  12.18  | .eh_frame parser           | src/parser/eh_frame_parser.c          | tests/parser/test_eh_frame_parser.c   |  8/8     | PASS
+  12.19  | SEH analysis (PE)          | src/parser/seh_parser.c               | tests/parser/test_seh_parser.c        |  6/6     | PASS
+  12.20  | Exception flow CFG         | src/decompiler/exception_flow.c       | tests/decompiler/test_exception_flow.c|  8/8     | PASS
+  12.21  | Alias analysis             | src/decompiler/alias_analysis.c       | tests/decompiler/test_alias_analysis.c|  7/7     | PASS
+  12.22  | Taint analysis             | src/core/taint_analysis.c             | tests/core/test_taint_analysis.c      |  7/7     | PASS
+  12.23  | Stack frame analysis       | src/decompiler/stack_analysis.c       | tests/decompiler/test_stack_analysis.c|  6/6     | PASS
+  12.24  | Relocation processing      | src/parser/relocation.c               | tests/parser/test_relocation.c        |  6/6     | PASS
+  -------|----------------------------|--------------------------------------|---------------------------------------|----------|-------
+  TOTAL  |                            | 24 source files                      | 24 test files                         | 165 sub  | ALL PASS
+
+4. GHIDRA PARITY COVERAGE ASSESSMENT
+-------------------------------------
+  Ghidra core analyzer features mapped to AURA Phase 12:
+
+  #  | Ghidra Feature                      | AURA Task  | Status
+  ---|-------------------------------------|------------|--------
+  1  | Cross-reference (Xref) engine       | 12.1-12.3  | DONE
+  2  | Recursive descent disassembly       | 12.4       | DONE
+  3  | Indirect call/jump resolution       | 12.5       | DONE
+  4  | Non-returning function detection    | 12.6       | DONE
+  5  | Function signature matching         | 12.7+11.21 | DONE
+  6  | Calling convention detection        | 12.8       | DONE
+  7  | Struct/union/array recovery         | 12.9-12.10 | DONE
+  8  | Variable propagation & naming       | 12.11      | DONE
+  9  | Constant propagation                | 12.12      | DONE
+  10 | Dead code elimination               | 12.13      | DONE
+  11 | DWARF debug info parsing + types    | 12.14-12.15| DONE
+  12 | PDB debug info parsing + types      | 12.16-12.17| DONE
+  13 | Exception handling analysis         | 12.18-12.20| DONE
+  14 | Alias + Taint analysis              | 12.21-12.22| DONE
+  15 | Stack frame analysis + Relocation   | 12.23-12.24| DONE
+
+  Phase-12 project milestone coverage: 15/15 feature categories = 100%
+  (target: >= 80%, ACHIEVED — this is a Phase-12 internal scope, not overall
+  Ghidra parity. Codex adversarial assessment on 2026-04-16 placed overall
+  Ghidra parity at approximately 45% — this is an external estimate,
+  not reproduced in-repo. See AUTOMATION_ROADMAP.md Phase C/D for
+  verifiable gap_analyzer baselines.)
+
+5. PHASE 1-11 REGRESSION CHECK
+-------------------------------
+  Pre-Phase 12 tests: 43/43 PASS (0 regressions)
+
+  Phase breakdown:
+    Phase 1 (infra):        test_disasm               PASS
+    Phase 2 (disasm):       test_elf_parser            PASS
+    Phase 3 (parser):       test_pe_parser, macho      PASS
+    Phase 4 (symbolic):     test_cfg, dfg, func_detect PASS
+    Phase 5 (decompiler):   test_decompiler, etc.      PASS
+    Phase 6 (LLM local):    test_lmstudio, cache       PASS
+    Phase 7 (LLM cloud):    test_cloud_client          PASS
+    Phase 8 (GUI):           test_gui_e2e              PASS
+    Phase 9 (integration):  test_pipeline, disasm_parser PASS
+    Phase 10 (release):     test_headless              PASS
+    Phase 11 (extended):    test_plugin, python, etc.  PASS
+
+6. DoD CHECKLIST
+----------------
+  [x] All Phase 12 tasks 12.1-12.24 marked [x]
+  [x] ctest full PASS (67/67)
+  [x] ASAN build 0 AURA memory errors (CPython internal leak excluded)
+  [x] Phase-12 analyzer-category milestone coverage >= 80%
+      (achieved: 100%, 15/15 Phase-12 categories — note this is a project-
+       internal scope; overall Ghidra parity is ~45% per Codex 2026-04-16)
+
+7. SUMMARY
+----------
+  Phase 12 (Ghidra Parity) COMPLETE.
+  All 24 subtasks implemented, tested, and verified.
+  67 ctest targets, 165+ individual subtests, 0 failures.
+  ASAN clean (0 AURA memory errors).
+  Phase-12 project milestone achieved: 15/15 Phase-12 analyzer-feature
+  categories implemented. This is a project-internal scope and does NOT
+  imply overall Ghidra parity. A Codex adversarial assessment on
+  2026-04-16 placed overall Ghidra parity at approximately 45% — see
+  AUTOMATION_ROADMAP.md for the δ bundle and Phase D roadmap that target
+  the remaining gap (silent-skip in lifter, condition-code loss,
+  vtable false-positives in function detection).
+  No regressions in Phase 1-11 test suite.
+
+================================================================================

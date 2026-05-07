@@ -1,0 +1,21 @@
+=== test_binary_diff (Task 4.9) ===
+  [1] Identical buffers                                  PASS
+  [2] Completely different buffers                       PASS
+  [3] Partial differences                                PASS
+  [4] Different sizes (tail region)                      PASS
+  [5] Section-level comparison                           PASS
+  [6] Symbol-level comparison                            PASS
+  [7] NULL/empty input handling                          PASS
+  [8] Change type name helpers                           PASS
+  [9] Print output (smoke test)                          === Binary Diff ===
+  File A: 4 bytes
+  File B: 5 bytes
+  Similarity: 40.0%
+  Total diff bytes: 3
+
+  Byte-level changes (2 regions):
+    [MODIFIED] offset 0x1, 1 bytes
+    [ADDED] offset 0x4, 1 bytes
+PASS
+
+  Result: 9 / 9 passed

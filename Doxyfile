@@ -1,0 +1,55 @@
+# Doxyfile for AURA — AI-powered Unified Reverse Analyzer
+# Generated for Task 10.3 (API Documentation)
+
+PROJECT_NAME           = "AURA"
+PROJECT_NUMBER         = 0.1.0
+PROJECT_BRIEF          = "AI-powered Unified Reverse Analyzer"
+OUTPUT_DIRECTORY       = docs/api
+INPUT                  = include/ src/core/aura.h
+FILE_PATTERNS          = *.h
+RECURSIVE              = NO
+
+# Extraction settings
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+EXTRACT_LOCAL_CLASSES  = NO
+
+# Source browsing
+SOURCE_BROWSER         = NO
+INLINE_SOURCES         = NO
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+
+# Output formats
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+GENERATE_MAN           = NO
+GENERATE_XML           = NO
+
+# HTML settings
+HTML_OUTPUT            = html
+HTML_COLORSTYLE_HUE    = 220
+HTML_COLORSTYLE_SAT    = 100
+HTML_COLORSTYLE_GAMMA  = 80
+HTML_DYNAMIC_SECTIONS  = YES
+SEARCHENGINE           = YES
+
+# Preprocessing
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+PREDEFINED             = __cplusplus __GNUC__
+
+# Graphs (dot not required)
+HAVE_DOT               = NO
+CLASS_GRAPH            = NO
+
+# Warnings
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = YES
+
+# Misc
+OPTIMIZE_OUTPUT_FOR_C  = YES
+TYPEDEF_HIDES_STRUCT   = YES
+SORT_MEMBER_DOCS       = NO
+QUIET                  = YES

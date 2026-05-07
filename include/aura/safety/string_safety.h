@@ -1,0 +1,85 @@
+// Copyright 2026 AURA Project Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+#pragma once
+
+#include <cstddef>
+#include <string>
+#include <vector>
+
+namespace aura::safety {
+
+enum class FindingSource {
+    Rule,
+    Model,
+};
+
+struct Finding {
+    FindingSource source = FindingSource::Rule;
+    std::string detector_id;
+    std::string kind;
+    std::size_t start = 0;
+    std::size_t end = 0;
+    double confidence = 0.0;
+    std::string mask_token;
+};
+
+enum class ModelPolicyMode {
+    Disabled,
+    Conditional,
+    Required,
+};
+
+enum class ModelFailureAction {
+    Degrade,
+    BlockExport,
+};
+
+struct ModelPolicy {
+    bool enabled = false;
+    ModelPolicyMode mode = ModelPolicyMode::Disabled;
+    std::string model_id;
+    std::size_t max_input_chars = 4096;
+    int timeout_ms = 1500;
+    std::vector<std::string> run_when;
+    ModelFailureAction on_missing = ModelFailureAction::Degrade;
+    ModelFailureAction on_timeout = ModelFailureAction::Degrade;
+    ModelFailureAction on_error = ModelFailureAction::Degrade;
+};
+
+struct SafetyProfile {
+    std::vector<std::string> rule_pack_ids;
+    std::vector<std::string> eval_dataset_ids;
+    std::string token_classification_model_id;
+    bool token_classification_enabled = false;
+    ModelPolicy model_policy;
+};
+
+struct ProtectedStringView {
+    std::string original;
+    std::string alias;
+    std::string masked;
+    std::string protected_value;
+    std::vector<Finding> findings;
+};
+
+class TokenClassificationModelAdapter {
+public:
+    virtual ~TokenClassificationModelAdapter() = default;
+    virtual std::vector<Finding> scan(const std::string& text) = 0;
+};
+
+SafetyProfile loadDefaultSafetyProfile();
+
+std::vector<Finding> scanStringWithRulePacks(const std::string& text,
+                                             const SafetyProfile& profile);
+
+std::vector<Finding> mergeFindings(std::vector<Finding> findings);
+void allocateMaskTokens(std::vector<Finding>& findings);
+
+ProtectedStringView buildProtectedStringView(
+    const std::string& original,
+    const std::string& alias,
+    std::vector<Finding> findings);
+
+}  // namespace aura::safety

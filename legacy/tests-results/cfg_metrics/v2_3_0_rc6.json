@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "commit": "bc3c93a",
+  "date": "2026-04-25",
+  "corpus": "smoke",
+  "per_func_count": 89,
+  "aggregate": {
+    "cfg": {
+      "cap_hits_512": 68,
+      "indirect_call_skipped": 56,
+      "indirect_jmp_skipped": 204,
+      "funcs_built": 89
+    },
+    "sa": {
+      "funcs": 89,
+      "aborts": 0
+    },
+    "hir": {
+      "gotos_emitted": 21,
+      "funcs_with_goto": 21,
+      "noreturn_truncations": 0
+    }
+  },
+  "per_func_lines_file": "v2_3_0_rc6.jsonl"
+}

@@ -1,0 +1,64 @@
+============================================================
+ AURA Release Phase (R) — 종합 테스트 (R.T) 결과
+ 날짜: 2026-04-04
+ 플랫폼: Linux aarch64 (Ubuntu 24.04 Noble, NVIDIA DGX)
+============================================================
+
+DoD-1: docs/ 내 모든 설계 문서 및 사용자 매뉴얼 존재 확인
+--------------------------------------------------------------
+  docs/design/disasm.md           — PRESENT
+  docs/design/parser.md           — PRESENT
+  docs/design/symbolic_exec.md    — PRESENT
+  docs/design/decompiler.md       — PRESENT
+  docs/design/llm_integration.md  — PRESENT
+  docs/design/gui.md              — PRESENT
+  docs/user_guide.md              — PRESENT
+  docs/doc_plan.md                — PRESENT
+  docs/test_plan.md               — PRESENT
+  docs/test_report.md             — PRESENT
+  docs/benchmark.md               — PRESENT
+  docs/api/html/index.html        — PRESENT (Doxygen output)
+  CHANGELOG.md                    �� PRESENT
+결과: PASS
+
+DoD-2: Doxygen 빌드 오류 없이 API 문서 생성 성공
+--------------------------------------------------------------
+  명령: make docs
+  출력: [100%] Generating API documentation with Doxygen
+        [100%] Built target docs
+  오류: 없음
+결과: PASS
+
+DoD-3: Docker 이미지 빌드 및 컨테이너 내 aura --version 실행 성공
+--------------------------------------------------------------
+  docker build -t aura:0.1.0 .    — 성공
+  docker run --rm aura:0.1.0 --version
+  출력: AURA v0.1.0
+결과: PASS
+
+DoD-4: GitHub Release v0.1.0 빌드 산출물 다운로드 후 동작 확인
+--------------------------------------------------------------
+  상태: DEFERRED — 사용자 리뷰 후 릴리스 예정
+  CHANGELOG.md 작성 완료
+  빌드 산출물 로컬 생성 확인:
+    build/aura_0.1.0_arm64.deb      — 2.5 MB
+    build/aura-0.1.0-Linux.tar.gz   — 2.5 MB
+    build/aura-0.1.0.tar.gz (src)   — 15 MB
+결과: DEFERRED (git tag + gh release 사용자 승인 대기)
+
+DoD-5: CHANGELOG.md 형식 검증 (Keep a Changelog 준수)
+--------------------------------------------------------------
+  헤더: "# Changelog" — OK
+  형식 선언: Keep a Changelog 1.1.0 참조 — OK
+  버전 섹션: ## [0.1.0] - 2026-04-04 — OK
+  하위 섹션: ### Added (2개) — OK
+  링크 정의: [0.1.0]: https://... — OK
+  Semantic Versioning 준수 — OK
+결과: PASS
+
+============================================================
+ 종합 결과: 4/5 PASS, 1 DEFERRED (DoD-4: 릴리스 대기)
+============================================================
+ Release Phase 로컬 검증 완료. GitHub Release는 사용자 최종 리뷰
+ 후 git tag v0.1.0 + gh release create 로 마무리 예정.
+============================================================

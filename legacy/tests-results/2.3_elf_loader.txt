@@ -1,0 +1,20 @@
+태스크: 2.3 ELF 파서 구현
+검증 날짜: 2026-03-26 (이전 세션 기반 소급 기록)
+상태: [x] 완전 완료
+
+== make test ==
+test_elf_loader: 5/5 PASS
+  - [TC-1] ELF 로드 + bits + entry point: PASS
+  - [TC-2] 아키텍처 감지 (AArch64/x86_64): PASS
+  - [TC-3] 섹션 목록 + .text 섹션 탐색: PASS
+  - [TC-4] 심볼 테이블 로드: PASS
+  - [TC-5] 에러 처리 (NULL, 비존재 경로): PASS
+
+== ASAN ==
+exit code: 0 (메모리 오류 없음)
+
+== 수동 검증 ==
+- readelf -S /bin/ls 결과와 elf_loader 섹션 출력 대조: 이름/주소/크기 일치
+- nm /bin/ls 결과와 심볼 130개 일치 확인 (stripped 바이너리, .dynsym fallback)
+- ELF32/ELF64, LE/BE 분기 로직 코드 내부 검토 완료
+- in_bounds() 경계 검사, needs_swap() 엔디언 감지 동작 확인

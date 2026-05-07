@@ -1,0 +1,30 @@
+=== 9.6 오류 처리 및 로깅 시스템 ===
+날짜: 2026-04-04
+
+--- DoD 검증 ---
+
+DoD-1: 전역 로깅 모듈 (src/core/logger.c)                     [PASS]
+  - include/logger.h: AuraLogLevel (DEBUG/INFO/WARN/ERROR/NONE)
+  - src/core/logger.c: aura_log(), aura_log_set_level(), aura_log_set_stream()
+  - 매크로: AURA_LOG_D, AURA_LOG_I, AURA_LOG_W, AURA_LOG_E
+  - DEBUG 메시지에 file:line 포함, 기본 레벨 INFO (DEBUG 억제)
+
+DoD-2: --verbose 플래그로 DEBUG 로그 활성화                    [PASS]
+  - src/core/aura.c: --verbose 인자 스캔 → aura_log_set_level(AURA_LOG_DEBUG)
+  - 테스트: ./build/aura --disasm /bin/ls --verbose
+    → "[DEBUG] aura.c:73: verbose logging enabled" 출력 확인
+
+DoD-3: 모든 크래시 경로에 적절한 오류 메시지 출력              [PASS]
+  - pipeline.c: 33개 fprintf(stderr, "aura: ...") 에러 경로
+  - 파서 모듈: elf_parser.c, pe_parser.c, macho_parser.c 에러 경로
+  - NULL/비정상 입력 → 에러 메시지 후 에러 코드 반환 (크래시 없음)
+  - test_disasm_parser 에러 핸들링 테스트: NULL, nonexistent, invalid format 모두 안전
+
+DoD-4: AddressSanitizer 메모리 오류 0건                        [PASS]
+  - ASAN 빌드 ctest: 24/24 PASS, 0 failures
+  - ASAN 빌드 직접 실행: ./build-asan/aura --disasm /bin/ls --verbose → 0 errors
+  - ASAN 빌드 test_disasm_parser: 12 PASS, 0 FAIL
+
+--- 산출물 ---
+  src/core/logger.c (77행)
+  include/logger.h (74행)

@@ -1,0 +1,44 @@
+AURA Search Module DoD Verification — Tasks 8.36-8.41
+========================================================
+Date: 2026-04-04
+Verifier: search-dev agent
+
+Tasks Covered:
+  8.36 — Byte pattern search (search_bytes)
+  8.37 — Wildcard pattern search (search_wildcard)
+  8.38 — Regex search (search_regex)
+  8.39 — Constant value search (search_constant)
+  8.40 — YARA rules search (search_yara, search_yara_string)
+  8.41 — Disasm/decompile text search (search_text)
+
+Files Created:
+  include/search.h              — Public API header for all search functions
+  src/core/search.c             — Implementation: byte, wildcard, regex, constant, text search
+  src/core/yara_search.c        — YARA rule search implementation (libyara integration)
+  third_party/yara/CMakeLists.txt — CMake build for libyara static library
+  tests/core/test_search.c      — Unit tests for 8.36-8.39, 8.41 (20 tests)
+  tests/core/test_yara_search.c — Unit tests for 8.40 (7 tests)
+
+Build:
+  cmake -B build -DAURA_BUILD_YARA=ON
+  cmake --build build
+  Result: OK (aura_core, yara_static, test_search, test_yara_search all built)
+
+Test Results (ctest):
+  31/31 tests PASS
+  - test_search: 20/20 PASS
+    [8.36] search_bytes_basic, search_bytes_no_match, search_bytes_max_hits,
+           search_bytes_null_input, search_bytes_single_byte
+    [8.37] search_wildcard_basic, search_wildcard_all_wildcards,
+           search_wildcard_exact, search_wildcard_invalid
+    [8.38] search_regex_basic, search_regex_hex_pattern,
+           search_regex_no_match, search_regex_invalid
+    [8.39] search_constant_basic, search_constant_decimal
+    [8.41] search_text_case_sensitive, search_text_case_insensitive,
+           search_text_multiple_per_line, search_text_no_match,
+           search_text_null_input
+  - test_yara_search: 7/7 PASS
+    yara_string_basic, yara_string_no_match, yara_string_multiple_rules,
+    yara_string_text_pattern, yara_file, yara_null_input, yara_invalid_rule
+
+No regressions — all 31 existing tests continue to pass.

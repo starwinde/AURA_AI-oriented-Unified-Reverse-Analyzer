@@ -1,0 +1,38 @@
+태스크: 4.1 심볼릭 실행 엔진 설계
+검증 날짜: 2026-03-31 (원래 완료: 2026-03-29, 결과 파일 소급 기록)
+상태: [x] 완전 완료
+
+== 산출물 확인 ==
+- docs/design/symbolic_exec.md   존재 ✓  (274 lines, 2026-03-29 확정)
+- include/symbolic.h             존재 ✓  (210 lines, 공개 API 정의)
+
+== symbolic_exec.md 내용 검증 ==
+§1 확정 결정 목록 (D-7, D-9 포함)  ✓
+§2 구조체 정의                      ✓
+  - 2.1 SymVal    — 추상 값 (tagged union: CONCRETE/SYMBOLIC)  ✓
+  - 2.2 SymConstraint — 경로 조건 노드 (연결 리스트)           ✓
+  - 2.3 SymState  — 실행 상태 (레지스터 32개 + PC + constraints) ✓
+  - 2.4 SymEngine — 엔진 핸들 (opaque)                        ✓
+§3 공개 API (3.1~3.4)               ✓
+§4 스레드 모델 (D-9)                 ✓
+§5 파서·디스어셈블러 연결            ✓
+§6 리스크 및 대응                    ✓
+§7 Phase 4 산출물 목록               ✓
+
+== PRD D-9 결정 ==
+단일 스레드 코어 + 큐 인터페이스 준비.
+멀티스레드 전환 시 dispatcher.c만 교체하는 구조로 설계. ✓
+
+== symbolic.h 공개 API 검증 ==
+SymEngine *sym_engine_create(AuraArch arch)   ✓
+void       sym_engine_destroy(SymEngine **)   ✓  (T** 소유권 모델)
+SymState  *sym_state_create(void)             ✓
+void       sym_state_destroy(SymState **)     ✓
+SymState  *sym_state_clone(const SymState *)  ✓
+AuraError  sym_step(SymEngine *, SymState *, const DisasmResult *) ✓
+AuraError  sym_queue_push(SymEngine *, uint64_t func_addr)         ✓
+AuraError  sym_queue_run(SymEngine *)                              ✓
+
+== 비고 ==
+설계 태스크 — 별도 바이너리 테스트 없음.
+구현 검증은 4.2 (test_symbolic) 에서 수행.

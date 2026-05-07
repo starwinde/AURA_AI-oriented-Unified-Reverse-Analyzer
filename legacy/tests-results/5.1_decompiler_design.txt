@@ -1,0 +1,55 @@
+태스크: 5.1 디컴파일러 설계 (SSA 기반 IR)
+검증 날짜: 2026-03-31
+상태: [x] 완전 완료
+
+== 확정 결정 ==
+
+IR 방향: SSA 기반 (사용자 확정 2026-03-31)
+  근거: Ghidra(P-code+SSA), IDA Pro(Microcode maturity 8=SSA),
+        Binary Ninja(LLIL/MLIL/HLIL+SSA) 모두 SSA 채택.
+        단순 IR 대비 def-use 관계 명확, 최적화 패스 적용 가능.
+
+IR 계층: 1계층 SSA IR (다계층은 Decompiler v2 이후 고려)
+최적화 패스 (MVP): 상수 폴딩, 복사 전파, DCE (3개)
+ARM64 패치 (D-8): x86/x86_64 전용. ARM64는 MVP 이후.
+
+== 산출물 ==
+
+[1] docs/design/decompiler.md
+  §1 확정 결정 목록 (10개 항목)
+  §2 SSA IR 파이프라인 개요
+  §3 IR 타입 구조 (IrType/IrOpcode/IrVal/IrInstr/IrBlock/IrFunc)
+  §4 SSA 생성 알고리즘 (5단계: RPO/지배트리/지배경계/φ삽입/Renaming)
+  §5 최적화 패스 (상수 폴딩/복사 전파/DCE)
+  §6 Pseudo-C 생성 전략 (타입 추론/제어 구조 복원/출력 형식)
+  §7 공개 API 요약
+  §8 파일 구조
+  §9 의존성
+
+[2] include/decompiler.h
+  IrType      — 7개 타입 (VOID/INT8/INT16/INT32/INT64/PTR/BOOL)
+  IrOpcode    — 22개 연산 코드 (이동/산술/비트/비교/메모리/제어흐름/PHI)
+  IrVal       — SSA 변수 (id/type/imm, IR_VAL_ID_UNDEF 센티넬)
+  IrInstr     — SSA 명령어 (PHI 전용 필드, 분기 대상, origin_addr)
+  IrBlock     — IR 기본 블록 (지배 트리 필드 포함)
+  IrFunc      — IR 함수 (next_val_id 카운터)
+  최적화 플래그 — IR_OPT_CONST_FOLD / IR_OPT_COPY_PROP / IR_OPT_DCE / IR_OPT_ALL
+  공개 API 5개:
+    ir_lift()          — CFG+DFG → 원시 IrFunc
+    ir_build_ssa()     — 원시 IR → SSA 형태 (in-place)
+    ir_optimize()      — 최적화 패스 적용 (in-place)
+    ir_emit_pseudoc()  — SSA IR → Pseudo-C 텍스트
+    ir_func_destroy()  — T** 메모리 해제
+    ir_print_text()    — SSA IR 텍스트 덤프 (디버그)
+
+== 빌드 검증 ==
+
+gcc -fsyntax-only -std=c11 -Iinclude -Isrc/core include/decompiler.h
+  결과: 오류 0건, 경고 0건 ✓
+
+== DoD 체크리스트 ==
+
+[x] docs/design/decompiler.md 작성 — IR 구조, SSA 알고리즘, 최적화 패스, Pseudo-C 전략 4개 섹션
+[x] include/decompiler.h 작성 — 공개 타입 및 API 정의
+[x] gcc -fsyntax-only 통과
+[x] Tasks.md 5.1 [x] 갱신, 다음 태스크 5.2 설정

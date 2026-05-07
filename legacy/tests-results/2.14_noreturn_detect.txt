@@ -1,0 +1,44 @@
+== Task 2.14: Non-Returning Function Detection ==
+Date: 2026-04-04
+Platform: AArch64 (Linux 6.17.0-1008-nvidia)
+
+=== DoD Verification ===
+
+DoD-1: Built-in noreturn database with 35+ known function names
+  PASS — 35 entries loaded (exit, _exit, _Exit, abort, quick_exit,
+         __assert_fail, __cxa_throw, __cxa_rethrow, __stack_chk_fail,
+         __fortify_fail, longjmp, siglongjmp, pthread_exit, etc.)
+
+DoD-2: Symbol-table scanning detects noreturn imports in real binaries
+  PASS — /usr/bin/ls: 5 noreturn functions detected
+
+DoD-3: Call-site scanning identifies call instructions to noreturn targets
+  PASS — noreturn_is_call_to_noreturn() verified in cfg_integration test
+
+DoD-4: User-defined noreturn function support
+  PASS — noreturn_db_add_user() + noreturn_db_contains() verified
+
+DoD-5: PLT stub name stripping (exit@plt -> exit)
+  PASS — name_matches_noreturn() strips @plt suffix
+
+DoD-6: NULL safety for all API functions
+  PASS — null_safety test covers noreturn_detect(NULL), noreturn_is_noreturn(NULL),
+         noreturn_is_call_to_noreturn(NULL), noreturn_result_destroy(NULL),
+         noreturn_print(NULL)
+
+=== Test Results ===
+
+test_noreturn_detect: 6/6 PASS
+  - null_safety ............. PASS
+  - db_operations ........... PASS
+  - builtin_loading ......... PASS  (35 entries)
+  - user_defined ............ PASS
+  - real_binary ............. PASS  (5 funcs, 0 call sites)
+  - cfg_integration ......... PASS
+
+Full suite: 57/57 tests pass (no regressions)
+
+=== Files ===
+  include/noreturn_detect.h          — Public API header
+  src/core/noreturn_detect.c         — Implementation (37 builtin names, symbol scan, call-site scan)
+  tests/core/test_noreturn_detect.c  — 6 unit tests

@@ -1,0 +1,26 @@
+태스크: 3.2 ELF 파일 파서 구현
+검증 날짜: 2026-03-31
+상태: [x] 완전 완료
+
+== ctest (Debug 빌드) ==
+test_elf_parser: 7/7 PASS
+  - [TC-1] ELF load (format, entry_point)... PASS  (entry=0xbc0)
+  - [TC-2] Architecture detection...         PASS  (arch=AArch64)
+  - [TC-3] Section list and .text...         PASS  (sections=35, .text: vaddr=0xbc0 size=9700)
+  - [TC-4] Section.data mmap pointer...      PASS  (data 포인터 유효, first_byte=0x1f)
+  - [TC-5] Symbol table parsing...           PASS  (symbols=176)
+  - [TC-6] Error handling...                 PASS
+  - [TC-7] aura_detect_format on ELF binary... PASS
+
+== ASAN 빌드 ==
+test_elf_parser: 7/7 PASS — AddressSanitizer/UBSanitizer 오류 0건
+
+== 산출물 확인 ==
+- src/parser/elf_parser.c    존재 ✓  (MappedFile + mmap I/O 기반)
+- include/elf_parser.h       존재 ✓
+- tests/elf_parser/test_elf_parser.c 존재 ✓
+- elf_loader.c / elf_loader.h → elf_parser.c/h 로 완전 대체 ✓
+
+== 교차 검증 (/bin/ls, AArch64) ==
+readelf: entry=0x5dc0, sections=28
+aura --info: entry=0x5dc0, sections=28 ✓

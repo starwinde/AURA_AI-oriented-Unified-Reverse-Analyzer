@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "id": "default",
+  "description": "AURA default string-safety rule pack for MVP PII masking.",
+  "rules": [
+    {
+      "id": "default/email",
+      "kind": "email",
+      "pattern": "[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}",
+      "confidence": 0.98
+    },
+    {
+      "id": "default/kr-phone",
+      "kind": "phone_number",
+      "pattern": "\\b(?:\\+82[- .]?)?(?:(?:0?1[016789])[- .]?\\d{3,4}[- .]?\\d{4}|(?:0?(?:2|[3-6][1-5]|70))[- .]?\\d{3,4}[- .]?\\d{4})\\b",
+      "confidence": 0.86
+    },
+    {
+      "id": "default/api-key",
+      "kind": "api_key",
+      "pattern": "(api[_\\- ]?key|secret|token|password|passwd)[A-Za-z0-9_ .:=\\-]{0,24}['\\\"]?[A-Za-z0-9_\\-]{16,}",
+      "confidence": 0.90
+    },
+    {
+      "id": "default/bearer-token",
+      "kind": "token",
+      "pattern": "Bearer[ \\t]+[A-Za-z0-9_\\-.]{16,}",
+      "confidence": 0.92
+    },
+    {
+      "id": "default/url",
+      "kind": "url",
+      "pattern": "https?://[A-Za-z0-9.\\-_/:%?&=#]+",
+      "confidence": 0.82
+    },
+    {
+      "id": "default/ipv4",
+      "kind": "ip_address",
+      "pattern": "\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b",
+      "confidence": 0.76
+    },
+    {
+      "id": "default/windows-path",
+      "kind": "internal_path",
+      "pattern": "[A-Za-z]:\\\\(?:[^\\\\/:*?\\\"<>|\\r\\n]+\\\\)*[^\\\\/:*?\\\"<>|\\r\\n]*",
+      "confidence": 0.78
+    },
+    {
+      "id": "default/posix-path",
+      "kind": "internal_path",
+      "pattern": "/(?:home|Users|var|etc|opt|srv|mnt)/[A-Za-z0-9._/\\-]+",
+      "confidence": 0.78
+    }
+  ]
+}

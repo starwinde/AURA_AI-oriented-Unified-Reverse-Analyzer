@@ -1,0 +1,15 @@
+=== test_format_support (Tasks 3.7~3.9) ===
+
+  [DEX] format detection: dex magic -> AURA_FORMAT_DEX     PASS
+  [DEX] parse header + methods -> 1 symbol                 PASS
+  [DEX] sections: .dex_header, .string_ids, .class_defs, .code PASS
+  [DEX] Dalvik lifter: add-int v0, v1, v2 -> ADD           PASS
+  [DEX] Dalvik lifter: invoke-virtual -> CALL              PASS
+  [.NET] format detection: PE + CLR -> AURA_FORMAT_DOTNET  PASS
+  [.NET] format detection: PE without CLR -> AURA_FORMAT_PE PASS
+  [FW] firmware_parse_buf -> .firmware section + _start symbol PASS
+  [FW] firmware .vectors section                           PASS
+  [FW] firmware with RISC-V arch                           PASS
+
+--- Results: 10 PASS, 0 FAIL ---
+RESULT: PASS

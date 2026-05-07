@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "model_id": "openai-privacy-filter",
+  "runner": "python_venv",
+  "runner_env_id": "pii-python-venv",
+  "backend": "transformers_token_classification",
+  "locale": ["ko-KR", "und"],
+  "entrypoint": "tools/pii-runner/aura_pii_runner.py",
+  "requirements_file": "tools/pii-runner/requirements.lock.txt",
+  "model_path": ".",
+  "tokenizer_path": ".",
+  "offset_unit": "utf8_byte",
+  "aggregation_strategy": "simple",
+  "max_batch_size": 16,
+  "device": "auto",
+  "local_files_only": true,
+  "normalizer": {
+    "kind_map": {
+      "EMAIL": "email",
+      "B-EMAIL": "email",
+      "I-EMAIL": "email",
+      "PHONE": "phone_number",
+      "B-PHONE": "phone_number",
+      "I-PHONE": "phone_number",
+      "PER": "person_name",
+      "PERSON": "person_name",
+      "B-PER": "person_name",
+      "I-PER": "person_name"
+    },
+    "default_threshold": 0.75,
+    "thresholds": {
+      "email": 0.80,
+      "phone_number": 0.75,
+      "person_name": 0.85
+    },
+    "unknown_label_action": "drop"
+  },
+  "notes": "Template only. Model weights are runtime assets under ~/.aura/token-classification-models/ and are not stored in git."
+}

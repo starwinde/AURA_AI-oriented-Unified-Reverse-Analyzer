@@ -1,0 +1,58 @@
+Task 5.2 — Pseudo-C 코드 생성기 기본 구조 DoD 검증 결과
+=============================================================
+날짜: 2026-04-01
+
+## 빌드 검증
+cmake -B build . -DCMAKE_BUILD_TYPE=Debug
+cmake --build build -j$(nproc)
+결과: SUCCESS (에러 0건)
+
+## ctest 전체 통과 (12/12)
+1/12  test_disasm        PASS
+2/12  test_elf_parser    PASS
+3/12  test_pipeline      PASS
+4/12  test_4T_symbolic   PASS
+5/12  test_pe_parser     PASS
+6/12  test_macho_parser  PASS
+7/12  test_demangle      PASS
+8/12  test_symbolic      PASS
+9/12  test_cfg           PASS
+10/12 test_dfg           PASS
+11/12 test_func_detect   PASS
+12/12 test_decompiler    PASS
+
+100% tests passed, 0 tests failed out of 12
+
+## test_decompiler 세부 결과
+=== test_decompiler (Task 5.2) ===
+  ir_lift(NULL) -> NULL                    PASS
+  ir_lift single block (mov+ret)           PASS
+  ir_build_ssa trivial (single block)      PASS
+  ir_optimize CONST_FOLD: 2+3=5            PASS
+  ir_emit_pseudoc non-empty output         PASS
+--- Results: 5 PASS, 0 FAIL ---
+RESULT: PASS
+
+## ASAN 빌드 (12/12)
+cmake -B build-asan . -DCMAKE_C_FLAGS="-fsanitize=address,undefined" ...
+make -j$(nproc)
+ctest --test-dir build-asan --output-on-failure
+결과: 100% tests passed, 0 tests failed out of 12 (ASAN 오류 0건)
+
+## CLI 검증
+./build/aura --dfg /bin/ls --func 0x5dc0
+결과: DFG 텍스트 출력 확인 (18 blocks)
+
+./build/aura --dfg /bin/ls --func 0x5dc0 --json
+결과: JSON 출력 확인 (LLM 소비 가능 구조화 출력)
+
+## 산출물
+- src/decompiler/codegen.c      (SSA IR 전체 파이프라인)
+- include/pipeline.h            (aura_dfg_func 선언)
+- src/core/pipeline.c           (aura_dfg_func 구현)
+- src/core/aura.c               (--dfg CLI)
+- tests/decompiler/test_decompiler.c  (5개 테스트)
+- CMakeLists.txt                (codegen.c → AURA_CORE_SOURCES)
+- tests/CMakeLists.txt          (test_decompiler 등록)
+
+VERDICT: PASS — 모든 DoD 항목 충족

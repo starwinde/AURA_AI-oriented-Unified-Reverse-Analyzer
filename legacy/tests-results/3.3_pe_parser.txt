@@ -1,0 +1,24 @@
+태스크: 3.3 PE (Windows) 파일 파서 구현
+검증 날짜: 2026-03-31
+상태: [x] 완전 완료
+
+== ctest (Debug 빌드) ==
+test_pe_parser: 5/5 PASS
+  - [TC-1] Basic fields (format, entry_point, arch)... PASS  (entry=0x401000 arch=x86)
+  - [TC-2] Sections (.text / .idata)...                PASS  (sections=2, .text vaddr=0x401000)
+  - [TC-3] .text section flags (EXEC|READ)...          PASS  (flags=0x5, .text[0]=0xc3)
+  - [TC-4] Import symbol 'ExitProcess'...              PASS  (symbols=1, 'ExitProcess' found)
+  - [TC-5] Error handling...                           PASS
+
+== ASAN 빌드 ==
+test_pe_parser: 5/5 PASS — AddressSanitizer/UBSanitizer 오류 0건
+
+== 산출물 확인 ==
+- src/parser/pe_parser.c     존재 ✓  (MappedFile + FileInfo B안 기반)
+- include/pe_parser.h        존재 ✓
+- tests/parser/test_pe_parser.c 존재 ✓
+- tests/parser/data/gen_pe.c 존재 ✓  (최소 PE32 합성 생성기)
+
+== 지원 범위 ==
+PE32 (x86): ✓ / PE32+ (x86_64): ✓
+Import 테이블, Export 테이블, 섹션, 헤더 메타데이터 추출 ✓

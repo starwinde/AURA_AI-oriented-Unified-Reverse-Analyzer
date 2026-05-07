@@ -1,0 +1,22 @@
+=== AURA vs Ghidra Parity Analysis ===
+Binary : build-rel/aura
+Output : tests/results/phase_f_step3_f1g/aura_self
+
+[1/3] Running Ghidra headless decompile...
+    Ghidra exported: 1198 functions
+[2/3] Running AURA decompile...
+    (no corpus match; fallback AArch64-PIE offset = 0x100000)
+    Ghidra image-base offset detected: 0x100000
+    Code sections: .init:0x3f528..0x3f540 .plt:0x3f540..0x3f9a0 .text:0x3f9c0..0xf7324 .fini:0xf7324..0xf7338 (denominator filter ON, Option A: keep .init/.plt/.text/.fini)
+    AURA decompiled: 1049 functions (timeouts/crashes: 8)
+    Denominator filter: 70 non-userland entries excluded (userland: 1128)
+[3/3] Computing parity scores...
+
+=== Summary ===
+    Ghidra functions (raw):      1198
+    Ghidra functions (userland): 1128  (filtered out: 70)
+    AURA-covered (userland):     1049 / 1128
+    AURA timeouts/crashes:       8
+    Avg (AURA-covered):          55/100
+    Avg (all userland):          51/100
+    Report:                      tests/results/phase_f_step3_f1g/aura_self/parity.json

@@ -1,0 +1,48 @@
+{
+  "baseline": "/home/str_dgx_spark/Desktop/AURA/tests/results/real_parity_2026-04-18/aura_self_v2/parity.json",
+  "current": "/home/str_dgx_spark/Desktop/AURA/tests/results/phase_f_complete_2026_04_18/aura_self/parity.json",
+  "binary": "aura",
+  "common_functions": 0,
+  "scored_common": 0,
+  "new_in_current": 1135,
+  "removed_from_baseline": 1202,
+  "summary": {
+    "sig_delta": {
+      "pos": 0,
+      "neg": 0,
+      "zero": 0,
+      "mean": 0.0
+    },
+    "ctrl_delta": {
+      "pos": 0,
+      "neg": 0,
+      "zero": 0,
+      "mean": 0.0
+    },
+    "mem_delta": {
+      "pos": 0,
+      "neg": 0,
+      "zero": 0,
+      "mean": 0.0
+    },
+    "ops_delta": {
+      "pos": 0,
+      "neg": 0,
+      "zero": 0,
+      "mean": 0.0
+    },
+    "naming_delta": {
+      "pos": 0,
+      "neg": 0,
+      "zero": 0,
+      "mean": 0.0
+    },
+    "total_delta": {
+      "pos": 0,
+      "neg": 0,
+      "zero": 0,
+      "mean": 0.0
+    }
+  },
+  "deltas": {}
+}

@@ -1,0 +1,41 @@
+태스크: 4.3 제어 흐름 그래프(CFG) 생성
+검증 날짜: 2026-03-31 (원래 완료: 2026-03-29, 결과 파일 소급 기록)
+상태: [x] 완전 완료
+
+== ctest (Debug 빌드) ==
+test_cfg: 6/6 PASS
+  - [TC-1]  cfg_build(NULL,0) 안전성 + T** destroy 모델       PASS
+  - [TC-2]  직선 함수 (5 insns, ret) → block==1, RET 엣지     PASS
+  - [TC-3]  조건 분기 함수 → BRANCH_TRUE/FALSE 엣지 확인      PASS
+  - [TC-4]  테일 콜 (external jmp) → to_block==NONE           PASS
+  - [TC-5]  T** destroy: 이중 해제 안전                       PASS
+  - [TC-6]  cfg_print_text / cfg_print_dot crash 없음         PASS
+
+== ASAN 빌드 ==
+test_cfg: 6/6 PASS — AddressSanitizer/UBSanitizer 오류 0건
+
+== CLI 검증 (--cfg, --dot) ==
+명령: aura --cfg tests/disasm/data/test_x86_64.elf --func 0x400040
+결과:
+  CFG of function 0x400040  (7 blocks, 8 edges)
+  Block 0: 0x400040..0x40004b (5 insns) → EXTERNAL [RET]
+  Block 2: 0x400056..0x40005b (2 insns) → Block4 [BRANCH_TRUE], Block3 [BRANCH_FALSE]
+  조건 분기(je) 엣지 BRANCH_TRUE/FALSE 정확히 분리됨 ✓
+  테일 콜/fallthrough 엣지 정상 처리 ✓
+
+DOT 출력:
+  digraph cfg_0x400040 { ... } 형식으로 정상 출력 ✓
+  각 블록 레이블에 주소·명령어 포함 ✓
+
+== DoD 충족 여부 ==
+기본 블록(Basic Block) 자동 식별 ✓  (7 blocks)
+블록 간 엣지 연결 (분기, 조건 분기, 호출) ✓  (8 edges)
+  BRANCH_TRUE / BRANCH_FALSE / FALLTHROUGH / RET / TAIL_CALL
+텍스트 출력 (--cfg) ✓
+DOT 형식 출력 (--dot) ✓
+
+== 산출물 확인 ==
+- src/symbolic/cfg.c         존재 ✓
+- include/cfg.h              존재 ✓
+- tests/core/test_cfg.c      존재 ✓  (6개 케이스)
+- CLI --cfg, --dot 플래그    존재 ✓

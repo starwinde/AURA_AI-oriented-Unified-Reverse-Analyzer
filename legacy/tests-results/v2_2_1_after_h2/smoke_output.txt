@@ -1,0 +1,16 @@
+== aura binary: AURA v2.2.0
+== fixture root: /home/str_dgx_spark/Desktop/AURA/tests/results/phase_f_complete_2026_04_18
+
+-- bucket: cat (20 funcs, bin=/bin/cat)
+-- bucket: ls (20 funcs, bin=/bin/ls)
+-- bucket: aura_self (50 funcs, bin=/home/str_dgx_spark/Desktop/AURA/build-rel/aura)
+
+== Per-function results (FAILures only) ==
+bucket     function                                                   fixture    current     addr_rel verdict
+
+== Summary ==
+  total   : 90
+  pass    : 90
+  fail    : 0
+  threshold: 85 of 90 must pass (±20%)
+  RESULT  : GREEN

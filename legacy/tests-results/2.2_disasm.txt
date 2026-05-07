@@ -1,0 +1,16 @@
+태스크: 2.2 Capstone 라이브러리 연동 및 테스트
+검증 날짜: 2026-03-26 (이전 세션 기반 소급 기록)
+상태: [x] 완전 완료
+
+== make test ==
+test_disasm: 3/3 PASS
+  - [TC-1] 기본 x86_64 디스어셈블 (add/sub/mov): PASS
+  - [TC-2] 아키텍처 문자열 변환 (disasm_arch_from_string): PASS
+  - [TC-3] 에러 처리 (NULL 입력, 미지원 아키텍처): PASS
+
+== ASAN ==
+exit code: 0 (메모리 오류 없음)
+
+== 수동 검증 ==
+- disasm_run()이 알려진 x86_64 바이트열에서 정확한 니모닉(add, sub, mov) 반환 확인
+- cs_disasm() 래핑 결과가 DisasmResult 구조체에 올바르게 복사됨 확인

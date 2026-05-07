@@ -1,0 +1,25 @@
+태스크: 3.4 Mach-O (macOS) 파일 파서 구현
+검증 날짜: 2026-03-31
+상태: [x] 완전 완료
+
+== ctest (Debug 빌드) ==
+test_macho_parser: 6/6 PASS
+  - [TC-1] Basic fields (format, arch)...              PASS  (arch=x86_64)
+  - [TC-2] Entry point (LC_MAIN)...                    PASS  (entry=0x1000)
+  - [TC-3] Section '__TEXT.__text'...                  PASS  (sections=1, vaddr=0x1000)
+  - [TC-4] __text flags (EXEC|READ) and data...        PASS  (flags=0x5, data[0]=0xc3)
+  - [TC-5] Symbol '_main' (FUNCTION, GLOBAL)...        PASS  (symbols=1, '_main' addr=0x1000)
+  - [TC-6] Error handling...                           PASS
+
+== ASAN 빌드 ==
+test_macho_parser: 6/6 PASS — AddressSanitizer/UBSanitizer 오류 0건
+
+== 산출물 확인 ==
+- src/parser/macho_parser.c  존재 ✓  (MappedFile + FileInfo B안 기반)
+- include/macho_parser.h     존재 ✓
+- tests/parser/test_macho_parser.c 존재 ✓
+- tests/parser/data/gen_macho.c   존재 ✓  (최소 Mach-O 합성 생성기)
+
+== 지원 범위 ==
+Mach-O 64 (x86_64): ✓ / Mach-O 32: ✓ / Fat Binary: ✓
+Load Commands, 섹션, 심볼, 동적 라이브러리 의존성 추출 ✓

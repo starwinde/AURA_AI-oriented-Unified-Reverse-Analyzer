@@ -1,0 +1,114 @@
+============================================================
+ AURA Phase 6.T — 로컬 LLM 연동 종합 테스트 결과
+ 날짜: 2026-04-04 (2차 검증)
+============================================================
+
+== 1. 테스트 환경 ==
+
+- OS: Linux 6.17.0-1008-nvidia (aarch64)
+- 컴파일러: gcc (Ubuntu 13.x)
+- libcurl: 8.5.0
+- cJSON: 1.7.18 (third_party/cjson/)
+- LM Studio: 실행 중 (localhost:1234, HTTP 401 — API 토큰 필요)
+- 모델: openai/gpt-oss-20b (로드됨, `lms ps` 확인)
+
+== 2. 빌드 결과 ==
+
+- Release 빌드: cmake --build build — 성공
+- ASAN 빌드: cmake -B build-asan (fsanitize=address) — 성공
+- aura_llm.a: 정적 라이브러리 생성 완료
+
+== 3. ctest 결과 (Release) ==
+
+21/22 tests PASS (test_llm_integration 빌드 실패 — 9.3 작업 진행 중)
+- test_lmstudio_client: 6 PASS, 0 FAIL, 1 SKIP
+- test_llm_cache: 5 PASS, 0 FAIL
+- test_prompt_templates: 8 PASS, 0 FAIL
+- test_phase6_integration: 7 PASS, 0 FAIL, 2 SKIP
+- test_cloud_client: (Phase 7 테스트, 함께 통과)
+- 기존 16개 테스트: 전부 통과 (무회귀)
+
+== 4. ctest 결과 (ASAN) ==
+
+test_phase6_integration (ASAN):
+- 7 PASS, 0 FAIL, 2 SKIP
+- 메모리 오류 0건
+- AddressSanitizer 경고 0건
+
+== 5. DoD 항목별 검증 ==
+
+DoD-1: LM Studio 코드 요약 요청 → 응답 수신
+  - 결과: SKIP (LM Studio API 토큰 필요 — HTTP 401)
+  - LM Studio 서버 가동 확인: `lms server status` → running, port 1234
+  - 모델 로드 확인: `lms ps` → openai/gpt-oss-20b (12.11 GB)
+  - `lms chat -p "Say OK"` → "OK" 응답 (CLI 내부 프로토콜로 동작)
+  - HTTP REST API는 인증 토큰 필요 (permissions-store.json: tokenMode=required)
+  - lmstudio_client.c에 LM_API_TOKEN 환경변수 지원 추가 완료
+  - 코드 경로: prompt_build(CODE_SUMMARY) → lmstudio_chat() →
+    llm_http_post_json() + auth_header → parse_chat_response() 완전 구현
+  - 블로커: 토큰 평문이 환경에 저장되지 않음 (SHA-512 해시만 존재)
+
+DoD-2: 함수명 제안 프롬프트 → JSON 파싱
+  - 결과: PARTIAL (E2E SKIP, 단위 테스트 PASS)
+  - test_prompt_templates 8/8 통과
+  - test_phase6_integration: parsers_func_name_and_summary PASS
+  - 정상 JSON, 접두 텍스트 포함 JSON, 잘못된 JSON 모두 테스트
+  - E2E (LLM 실제 호출)는 DoD-1과 동일한 인증 블로커
+
+DoD-3: 모델 미실행 시 타임아웃/에러 (크래시 없음)
+  - 결과: PASS
+  - test_lmstudio_client: connection_failure_graceful PASS
+  - test_phase6_integration: dod3_timeout_no_crash PASS
+  - test_phase6_integration: dod3_full_pipeline_no_server PASS
+  - 존재하지 않는 서버(127.0.0.1:19999, 19998)로 연결 → 에러 + 메시지 반환
+
+DoD-4: 응답 캐시 동작 (동일 입력 두 번째 요청 → 캐시 히트)
+  - 결과: PASS
+  - test_llm_cache: cache_miss_store_hit PASS
+  - test_phase6_integration: dod4_cache_store_and_hit PASS
+  - test_phase6_integration: dod4_cache_temperature_sensitivity PASS
+  - [llm_cache] MISS → store → [llm_cache] HIT 로그 확인
+
+DoD-5: ASAN 빌드 메모리 오류 0건
+  - 결과: PASS
+  - test_phase6_integration (ASAN): 7 PASS, 0 FAIL
+  - AddressSanitizer 오류 0건, LeakSanitizer 오류 0건
+
+== 6. 구현 산출물 ==
+
+설계:
+  - docs/design/llm_integration.md
+  - include/llm.h
+
+소스:
+  - src/llm/llm_client.c      — vtable 디스패치, 편의 함수, 리소스 해제
+  - src/llm/llm_http.c        — libcurl HTTP POST JSON 유틸리티
+  - src/llm/llm_http.h        — HTTP 유틸리티 내부 헤더
+  - src/llm/lmstudio_client.c — LM Studio API 클라이언트 (LM_API_TOKEN 지원)
+  - src/llm/llamacpp_client.c — llama.cpp 서버 API 클라이언트
+  - src/llm/llm_cache.c       — 파일 기반 JSON 캐시
+  - src/llm/prompt_templates.c — 프롬프트 템플릿 및 응답 파서
+
+빌드:
+  - third_party/cjson/         — cJSON 정적 링크
+  - CMakeLists.txt: aura_llm 정적 라이브러리, AURA_BUILD_LLM 옵션
+
+테스트:
+  - tests/llm/test_lmstudio_client.c    — 6.2 단위 테스트
+  - tests/llm/test_llm_cache.c          — 6.4 단위 테스트
+  - tests/llm/test_prompt_templates.c   — 6.5 단위 테스트
+  - tests/llm/test_phase6_integration.c — 6.T 종합 테스트 (신규)
+
+== 7. 수정 사항 (2차 검증) ==
+
+- lmstudio_client.c: LM_API_TOKEN 환경변수에서 Bearer 토큰 로드 지원 추가
+  (LmstudioImpl.api_key 필드, lmstudio_chat()에서 auth_header 전달)
+- test_phase6_integration.c 신규 작성: 9개 테스트로 DoD 1~5 종합 검증
+
+== 8. 알려진 제한 ==
+
+- LM Studio HTTP 401: API 토큰 평문이 환경에 없음 (SHA-512 해시만 존재).
+  LM_API_TOKEN 환경변수 설정 시 DoD-1,2 E2E 테스트 즉시 통과 가능.
+  `lms chat` CLI는 내부 프로토콜(IPC)로 동작하여 토큰 불필요.
+- llama.cpp 서버 미실행 환경. lmstudio와 동일한 OpenAI 호환 API 사용.
+============================================================

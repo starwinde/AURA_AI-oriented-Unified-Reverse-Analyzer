@@ -1,0 +1,49 @@
+== Task 4.13: Stack Frame Analysis Backend ==
+Date: 2026-04-04
+Platform: AArch64 (Linux 6.17.0-1008-nvidia)
+
+=== DoD Verification ===
+
+DoD-1: Stack variable size/offset/type auto-inference
+  PASS — Heuristic analysis of frame-pointer-relative memory accesses
+         Detects variable offset, access width, and infers type (uint8/16/32/64)
+         Tested: synthetic x86_64 (3 vars at rbp-4/rbp-0x10/rbp-0x11),
+                 synthetic AArch64 (2 vars at x29-4/x29-16)
+
+DoD-2: Calling convention info integration
+  PASS — CallingConvInfo passed to stack_analyze(), convention stored in StackFrame
+         Tested: CC_SYSV_AMD64 preserved in result
+
+DoD-3: Stack Layout view backend data (8.33 integration)
+  PASS — StackFrame provides all data needed by GUI StackLayoutView:
+         - fp_offset maps to StackEntry.offset
+         - size maps to StackEntry.size
+         - name maps to StackEntry.name
+         - type_name maps to StackEntry.type
+
+DoD-4: Multi-architecture support
+  PASS — x86_64, x86, AArch64, ARM32 prologue detection
+         Real binary: /usr/bin/ls (AArch64) — 7/7 functions analyzed with FP
+
+DoD-5: DWARF enrichment support
+  PASS — enrich_with_dwarf() cross-references DwarfVarInfo for name/type/size
+
+DoD-6: make test PASS
+  PASS — 59/59 tests pass (test_stack_analysis: 6/6)
+
+=== Test Results ===
+
+test_stack_analysis: 6/6 PASS
+  - null_safety ............. PASS
+  - synthetic_x86_64 ........ PASS  (frame=48, vars=5)
+  - synthetic_aarch64 ....... PASS  (frame=48, vars=4)
+  - cc_integration .......... PASS
+  - no_frame_pointer ........ PASS  (frame=24, no vars — leaf function)
+  - real_binary ............. PASS  (7 funcs, 7 with FP, 7 total vars)
+
+Full suite: 59/59 tests pass (no regressions)
+
+=== Files ===
+  include/stack_analysis.h               — Public API (StackVar, StackFrame, stack_analyze)
+  src/decompiler/stack_analysis.c        — Implementation (prologue detection, access scanning, DWARF enrichment)
+  tests/decompiler/test_stack_analysis.c — 6 unit tests

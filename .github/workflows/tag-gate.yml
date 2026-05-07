@@ -1,0 +1,71 @@
+name: Tag Gate
+
+# rules.md §11.3 이중 방어의 CI layer.
+# tag push 시 Tasks.md 에 해당 버전 heading 이 존재하는지 기계 검증한다.
+# Skill layer (aura-acceptance-rule Rule 11) 우회 시 최종 안전망.
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'          # final: v2.3.0
+      - 'v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+' # rc: v2.3.0-rc1
+      - 'v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+.[0-9]+' # rc patch: v2.3.0-rc1.1
+
+jobs:
+  verify-tasks-md:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse tag version
+        id: parse
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          # Strip leading v, then strip -rcN(.M)? suffix for heading lookup.
+          full="${tag#v}"              # 2.3.0-rc1.1
+          base="${full%-rc*}"          # 2.3.0
+          echo "tag=$tag"   >> "$GITHUB_OUTPUT"
+          echo "full=$full" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "Parsed: tag=$tag full=$full base=$base"
+
+      - name: Verify Tasks.md or Tasks_archive/ has version section
+        env:
+          BASE: ${{ steps.parse.outputs.base }}
+          TAG:  ${{ steps.parse.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ ! -f Tasks.md ]; then
+            echo "::error::Tasks.md 가 repo 루트에 없다."
+            exit 1
+          fi
+
+          # Match any `## ... v<base> ...` heading in active Tasks.md or archived releases.
+          # rules.md §11.5 에 따라 archive 파일의 heading 도 유효.
+          # Examples allowed:
+          #   Tasks.md:                "## v2.3.0 CFG Quality Improvement [-]"
+          #   Tasks_archive/v2_2_0.md: "# Tasks Archive — v2.2.0 ..."
+          #   Tasks_archive/v2_2_0.md: "## v2.2.0 Phase G ..."
+          search_files="Tasks.md"
+          if compgen -G "Tasks_archive/*.md" > /dev/null; then
+            search_files="$search_files $(ls Tasks_archive/*.md)"
+          fi
+
+          # Allow vX.Y when patch==0 (릴리스 명명 관례: v1.1 = v1.1.0).
+          MINOR="${BASE%.0}"
+          if [ "$MINOR" != "$BASE" ]; then
+            pat="v${BASE}|v${MINOR}"
+          else
+            pat="v${BASE}"
+          fi
+
+          # heading-line only (^#) — body 텍스트 언급 false positive 제거.
+          if ! grep -qE "^#.*(${pat})([^0-9]|$)" $search_files; then
+            echo "::error::Tasks.md 또는 Tasks_archive/*.md heading 에 'v${BASE}' (또는 minor-only 'v${MINOR}') 가 없다."
+            echo "::error::tag ${TAG} 를 push 하려면 해당 버전 섹션을 먼저 신설해야 한다 (rules.md §11.3, §11.5)."
+            echo "::error::aura-acceptance-rule Rule 11 (태스크 엔트리 존재 선행 검사) 위반."
+            exit 1
+          fi
+
+          hit="$(grep -lE "^#.*(${pat})([^0-9]|$)" $search_files | head -1)"
+          echo "v${BASE} heading 확인 (${hit}) — gate pass."

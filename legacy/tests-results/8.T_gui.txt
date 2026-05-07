@@ -1,0 +1,124 @@
+=== Phase 8 GUI MVP 종합 테스트 (8.T) 결과 ===
+실행 일시: 2026-04-04 (갱신)
+빌드: cmake Release + ASAN Debug, Qt6 6.4.2 (aarch64)
+
+---
+
+[DoD-1] Project Manager — New/Open/Recent
+  경로: project_manager_window.cpp → AuraProject::create/open
+  검증: New Project 생성 → .aura/ 디렉토리 생성, Open Project → 기존 프로젝트 열기
+  결과: PASS
+
+[DoD-2] 디스어셈블리 뷰 — 명령어 테이블 표시
+  경로: main_window.cpp::updateDisasmView() → 최대 100,000줄
+  검증: test_multi_func(AArch64, 65K 명령어), LM Studio AppImage(AArch64, 795 명령어)
+  수정: .text 섹션 이름 우선 탐색, 표시 제한 10K→100K
+  결과: PASS
+
+[DoD-3] 디컴파일 뷰 — Pseudo-C 자동 표시
+  경로: main_window.cpp::updateDecompileView() → 함수 범위 추출 → CFG→DFG→IR→SSA→Pseudo-C
+  수정: 전체 결과→함수 범위만 추출 (크래시 해결)
+  결과: PASS
+
+[DoD-4] 뷰 동기화 — 양방향 자동 + ON/OFF
+  경로: navigateToAddress() → disasm 배열 인덱스 검색 → findBlockByLineNumber → 줄 이동
+  검증: Fn 클릭 → 디스어셈블리 이동 + 디컴파일 갱신
+  수정: 텍스트 검색→배열 인덱스 방식 전환, 문서 시작부터 검색
+  결과: PASS
+
+[DoD-5] 좌측 패널 5개 — 토글 전환
+  경로: sidebar.cpp → addPanel(Fn/Aa/Ty/Se/Bk)
+  검증: 아이콘 클릭 토글, 재클릭 닫힘
+  결과: PASS
+
+[DoD-6] 심볼 클릭 → 주소 이동
+  경로: panels.cpp SymbolPanel::populate() → 심볼 + 함수탐지 결과 통합
+  검증: 클릭/더블클릭 → navigateToAddress
+  수정: 함수탐지 결과도 Fn 패널에 추가, 싱글+더블클릭 모두 지원
+  결과: PASS
+
+[DoD-7] 북마크 DB 저장/로드
+  경로: panels.cpp BookmarkPanel → SQLite bookmarks 테이블
+  결과: PASS
+
+[DoD-8] 리네이밍 + 주석 DB 저장
+  경로: edit_handlers.cpp + undo_manager.cpp → renames/comments 테이블
+  결과: PASS
+
+[DoD-9] Navigation Back/Forward
+  경로: nav_history.cpp → goBack/goForward → addressChanged → navigateToAddress
+  검증: 메뉴 Alt+Left/Right + 툴바 ◀/▶ 연결
+  결과: PASS
+
+[DoD-10] 검색 (주소/심볼/문자열)
+  경로: search_dialog.cpp → 3탭 SearchDialog
+  검증: Ctrl+G → SearchDialog, 결과 클릭 → navigateToAddress
+  결과: PASS
+
+[DoD-11] Export (ASM/JSON/C bytes/Hex dump)
+  경로: export_dialog.cpp → 4개 형식
+  결과: PASS
+
+[DoD-12] 명령 팔레트 (Ctrl+P)
+  경로: command_palette.cpp → 증분 필터 + 액션 트리거
+  결과: PASS
+
+[DoD-13] LLM 패널 — SKIP (6.5 블로킹)
+  UI 껍데기: Summarize/Suggest Name 버튼, 클릭 시 placeholder 메시지
+  연결: Phase 6.5 완료 후
+
+[DoD-14] 상태바 정보 표시
+  경로: setupStatusBar() + navigateToAddress() 동적 갱신
+  표시: 주소, 오프셋, 심볼릭 위치(함수명+오프셋), 파일 정보, 분석 상태
+  결과: PASS
+
+[DoD-15] 프로젝트 저장/복원
+  경로: session_manager.cpp → saveSession/loadSession
+  연결: Save 메뉴(Ctrl+S) + 툴바 Save → SessionManager
+  결과: PASS
+
+[DoD-16] 테마 다크/라이트
+  경로: theme_manager.cpp → Catppuccin 스타일시트
+  연결: Edit > Toggle Theme
+  결과: PASS
+
+[DoD-17] 레이아웃 리사이즈
+  경로: QSplitter 3분할 (좌측/중앙/우측)
+  결과: PASS
+
+[DoD-18] ASAN 메모리 오류
+  빌드: cmake -DCMAKE_BUILD_TYPE=Debug -fsanitize=address
+  결과: 16/16 PASS, 오류 0건
+
+---
+
+버그 수정 이력:
+1. file_info_create()→elf_parser_load() 파서 호출 누락
+2. .text 섹션: 이름 우선 탐색 (.init 먼저 잡히는 문제)
+3. 디스어셈블 표시 10K→100K
+4. 함수 범위 추출 디컴파일 (전체→함수만, 크래시 해결)
+5. nullptr 안전성 10곳 (panels/search_dialog/main_window)
+6. loaded 시그널→직접 호출 (뷰 갱신 누락)
+7. Undo/Redo/Save/Console 빈 lambda→실제 연결
+8. Fn 패널에 함수탐지 결과 추가
+9. navigateToAddress: disasm 배열 인덱스→줄 이동 방식
+10. QFileDialog: DontUseNativeDialog 적용 — VNC 환경 안정화 (8.7)
+11. navigateToAddress: binary search 전환 + 경계 처리 개선 (8.10)
+12. updateDecompileView: FuncEntry 범위 기반 함수 범위 추출, ret 스캔 폴백 (8.12)
+13. loadBinary: main()/entry point 자동 디컴파일 활성화 (8.12)
+14. navigateToAddress: 중복 뷰 동기화 블록 제거 (8.13)
+
+---
+
+생성 파일:
+  src/gui/ — 17 cpp + 16 h (33파일)
+  third_party/sqlite/ — sqlite3.c, sqlite3.h
+  docs/design/gui.md
+  tests/disasm/data/test_multi_func (다중 함수 테스트 바이너리)
+
+빌드 산출물:
+  build/aura     — CLI (기존 무수정)
+  build/aura-gui — Qt6 GUI
+
+전체: 17/18 PASS, 1 SKIP (DoD-13)
+ctest: 16/16 PASS (Release + ASAN)

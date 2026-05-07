@@ -1,0 +1,57 @@
+Task 5.3 — 변수 타입 추론 로직 구현 DoD 검증 결과
+===================================================
+날짜: 2026-04-01
+
+## 빌드 검증
+cmake --build build -j$(nproc)
+결과: SUCCESS (에러 0건)
+
+## ctest 전체 통과 (13/13)
+1/13  test_disasm          PASS
+2/13  test_elf_parser      PASS
+3/13  test_pipeline        PASS
+4/13  test_4T_symbolic     PASS
+5/13  test_pe_parser       PASS
+6/13  test_macho_parser    PASS
+7/13  test_demangle        PASS
+8/13  test_symbolic        PASS
+9/13  test_cfg             PASS
+10/13 test_dfg             PASS
+11/13 test_func_detect     PASS
+12/13 test_decompiler      PASS
+13/13 test_type_inference  PASS
+
+100% tests passed, 0 tests failed out of 13
+
+## test_type_inference 세부 결과
+=== test_type_inference (Task 5.3) ===
+  int32 reg (eax) COPY -> dst.type == INT32        PASS
+  int8 reg (al) COPY -> dst.type == INT8           PASS
+  CMP_EQ dst.type == IR_TYPE_BOOL                  PASS
+  ADD(INT32, INT32) -> result.type == INT32        PASS
+  COPY src=INT32 -> dst.type propagated to INT32   PASS
+  ir_emit_pseudoc output contains typed cast/sig   PASS
+--- Results: 6 PASS, 0 FAIL ---
+RESULT: PASS
+
+## ASAN 빌드 (13/13)
+make -j$(nproc) (build-asan)
+ctest --output-on-failure
+결과: 100% tests passed, 0 tests failed out of 13 (ASAN 오류 0건)
+
+## 타입 추론 검증 항목
+- 레지스터 크기 기반 타입: al→INT8, eax→INT32, rax→INT64 ✅
+- 산술 전파: ADD(INT32,INT32)→INT32 ✅
+- COPY 전파: src=INT32 → dst=INT32 ✅
+- BOOL 보존: CMP_EQ dst.type == BOOL ✅
+- emit 반영: ir_emit_pseudoc 출력에 타입 문자열 포함 ✅
+
+## 산출물
+- src/decompiler/type_inference.c  (ir_infer_types 구현)
+- include/decompiler.h             (ir_infer_types 선언)
+- src/decompiler/codegen.c         (ir_type_str + emit_pseudoc 타입 반영)
+- CMakeLists.txt                   (type_inference.c → AURA_CORE_SOURCES)
+- tests/decompiler/test_type_inference.c  (6개 테스트)
+- tests/CMakeLists.txt             (test_type_inference 등록)
+
+VERDICT: PASS — 모든 DoD 항목 충족

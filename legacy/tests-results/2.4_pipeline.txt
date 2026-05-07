@@ -1,0 +1,23 @@
+태스크: 2.4 메모리 매핑 및 섹션 분석 기능 구현
+검증 날짜: 2026-03-26
+상태: [x] 완전 완료
+
+== make test ==
+test_pipeline: 4/4 PASS
+  - [TC-1] Pipeline 전체 흐름 (ELF load → .text map → disasm): PASS
+  - [TC-2] .text 섹션 데이터 매핑 정확성 (첫 명령어 디코딩): PASS
+  - [TC-3] NOBITS 섹션(.bss) → NULL 반환: PASS
+  - [TC-4] 에러 처리 (NULL/비존재 경로): PASS
+
+== ASAN ==
+exit code: 0 (메모리 오류 없음)
+
+== CLI 검증 ==
+명령: aura --disasm /bin/ls
+결과:
+  Disassembly of .text from '/bin/ls' [AArch64]:
+  0x0000000000003e80 .. 0x000000000001817c  (82684 bytes)
+  0x0000000000003e80: paciasp / sub sp, sp, #0x150 / ...
+- objdump -d /bin/ls 출력과 주소·니모닉·오퍼랜드 일치 확인
+- 청크 단위(256 insn) 루프 + byte_count offset 누산 정상 동작
+- elf_get_section_data() SHT_NOBITS 가드 동작 확인

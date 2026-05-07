@@ -1,0 +1,28 @@
+Task 1.7 Python Script Interface — DoD Verification
+Date: 2026-04-04
+
+== Build ==
+cmake --build build --target aura_python test_python: SUCCESS
+Python version: 3.12.3
+
+== ctest ==
+ctest -R test_python: 1/1 PASS (0.10s)
+
+== Test Details (5 tests) ==
+1. test_init_destroy   — PASS: init, double-init, destroy, double-destroy
+2. test_version        — PASS: aura.version() returns "0.1.0"
+3. test_exec_str       — PASS: arithmetic, module introspection (5 methods found)
+4. test_errors         — PASS: exec before init, NULL args, missing file, exception
+5. test_info_on_self   — PASS: aura.info('/usr/bin/ls') -> ELF/AArch64/28 sections/130 symbols
+
+== Python 'aura' module methods ==
+- aura.version()              -> str
+- aura.info(path)             -> dict (format, arch, entry_point, section_count, symbol_count)
+- aura.sections(path)         -> list of dicts (name, vaddr, size, offset, flags)
+- aura.symbols(path)          -> list of dicts (name, demangled, address, size, type)
+- aura.disasm(path, addr, count) -> list of dicts (address, mnemonic, operand, size, bytes)
+
+== Files ==
+- include/aura_python.h       — Public API header
+- src/core/aura_python.c      — CPython embedding + 'aura' module bindings
+- tests/python/test_python.c  — 5-test suite
