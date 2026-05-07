@@ -1,0 +1,69 @@
+태스크: 3.T Phase 3 종합 테스트 (파일 포맷 파서 통합 검증)
+검증 날짜: 2026-03-29
+상태: [x] 완전 완료
+
+== ctest (Debug 빌드) ==
+6/6 PASS
+  - test_disasm:        4/4 PASS
+  - test_elf_parser:    7/7 PASS
+  - test_pipeline:      7/7 PASS
+  - test_pe_parser:     5/5 PASS
+  - test_macho_parser:  6/6 PASS
+  - test_demangle:     11/11 PASS
+
+== ASAN 빌드 (ctest) ==
+6/6 PASS — AddressSanitizer/UBSanitizer 오류 0건
+
+== ELF64 교차 검증 (/bin/ls, AArch64) ==
+readelf -h /bin/ls:
+  Class: ELF64 / Machine: AArch64 / Entry: 0x5dc0
+
+aura --info /bin/ls:
+  Format: ELF / Arch: AArch64 / Entry: 0x0000000000005dc0
+
+섹션 일치 (대표 항목):
+  .text   readelf vaddr=0x3e80   aura vaddr=0x3e80   ✓
+  .rodata readelf vaddr=0x18190  aura vaddr=0x18190  ✓
+  .data   readelf vaddr=0x40000  aura vaddr=0x40000  ✓
+  .bss    readelf vaddr=0x402a0  aura vaddr=0x402a0  ✓
+
+== ELF32 교차 검증 (/usr/lib/arm-linux-gnueabihf/libvdpau.so.1.0.0, ARM) ==
+readelf -h: Class: ELF32 / Machine: ARM / Entry: 0x0
+
+aura --info:
+  Format: ELF / Arch: ARM / Entry: 0x0000000000000000 ✓
+
+== PE32+ 검증 (합성 바이너리, AMD64) ==
+생성: Python3 인라인 빌더 (Machine=0x8664, Magic=0x020B)
+aura --info:
+  Format: PE / Arch: x86_64
+  Entry:  0x0000000140001000 (= IMAGE_BASE 0x140000000 + TEXT_RVA 0x1000) ✓
+  Sections: .text (r-x), .idata (rw-)
+  Symbols:  ExitProcess (IMPORT)
+
+구조 검증 (python3 struct):
+  Machine=0x8664 (AMD64) ✓
+  Magic=0x020B (PE32+) ✓
+
+== Mach-O 검증 (합성 바이너리, x86_64) ==
+생성: Python3 인라인 빌더 (MH_MAGIC_64, cputype=x86_64)
+aura --info:
+  Format: Mach-O / Arch: x86_64
+  Entry:  0x0000000000001000 (= __TEXT vmaddr 0x1000 + LC_MAIN entryoff 0) ✓
+  Sections: __TEXT.__text (r-x, size=0x10)
+  Symbols:  _main (FUNC, GLOBAL, addr=0x1000)
+
+== JSON 출력 검증 ==
+명령: ./build/aura --info --json /bin/ls | python3 -c "import json,sys; d=json.load(sys.stdin); ..."
+결과: arch=AArch64, format=ELF, entry_point=0x5dc0, sections=28, symbols=130
+JSON 파싱 성공 ✓
+
+== 손상 파일 오류 처리 ==
+/dev/null               → exit=1, 에러 메시지 출력 (크래시 없음) ✓
+/nonexistent_file_xyz   → exit=1, 에러 메시지 출력 (크래시 없음) ✓
+4-byte zero file        → exit=1, 에러 메시지 출력 (크래시 없음) ✓
+'NOTABIN' text file     → exit=1, 에러 메시지 출력 (크래시 없음) ✓
+
+== D-7 결정 ==
+PRD D-7 (분석 결과 영속 캐시 구조): ✅ 확정 (2026-03-29)
+결정: 캐시 미사용 — Phase 4~5는 항상 재분석. 성능 문제 확인 시 Phase 8 이후 재결정.

@@ -1,0 +1,35 @@
+Task 1.8 CLI Headless Mode — DoD Verification
+Date: 2026-04-04
+
+== Build ==
+cmake --build build --target aura test_headless: SUCCESS
+
+== ctest ==
+ctest -R test_headless: 1/1 PASS (0.07s)
+
+== Test Details (4 tests) ==
+1. test_json_output     — PASS: JSON has format, arch, sections, symbols, functions, stats keys
+2. test_markdown_output — PASS: MD has title, File Info, Sections, Symbols, Functions, Call Graph
+3. test_errors          — PASS: NULL path -> INVALID_ARG, nonexistent file -> parse error
+4. test_stdout_output   — PASS: output to arbitrary FILE* stream
+
+== CLI Usage ==
+  aura --headless <file>          # Markdown output
+  aura --headless <file> --json   # JSON output
+
+== Pipeline Stages ==
+1. File format detection (ELF/PE/Mach-O)
+2. Section & symbol extraction
+3. Disassembly of executable sections (up to 200K instructions)
+4. Function detection + call graph
+5. Output (JSON or Markdown)
+
+== Tested on /usr/bin/ls ==
+- Format: ELF, Arch: AArch64
+- 28 sections, 130 symbols, 20671 instructions, 7 functions
+
+== Files ==
+- include/headless.h               — Public API header
+- src/core/headless.c              — Full analysis pipeline + JSON/MD output
+- src/core/aura.c                  — --headless CLI flag handler added
+- tests/headless/test_headless.c   — 4-test suite

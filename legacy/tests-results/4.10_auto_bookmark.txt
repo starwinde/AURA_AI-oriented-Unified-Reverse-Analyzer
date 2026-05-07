@@ -1,0 +1,13 @@
+=== test_auto_bookmark (Task 4.10) ===
+  [1] Entry point bookmark                               PASS
+  [2] Anti-debug: INT3 detection                         PASS
+  [3] Anti-debug: rdtsc + cpuid detection                PASS
+  [4] Xref hotspot detection                             PASS
+  [5] Duplicate address suppression                      PASS
+  [6] Config skip flags                                  PASS
+  [7] NULL/empty input handling                          PASS
+  [8] Print output (smoke test)                          === Auto-Bookmarks (1) ===
+  [anti-debug  ] 0x1000 -- INT3 breakpoint instruction
+PASS
+
+  Result: 8 / 8 passed

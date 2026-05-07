@@ -1,0 +1,74 @@
+Task 4.4 — Data Flow Graph (DFG) 분석 DoD 검증 기록
+=======================================================
+날짜: 2026-03-31
+검증자: Claude Code (claude-sonnet-4-6)
+
+## 산출물
+
+- include/dfg.h          (DfgInsnInfo, DfgBlockInfo, DfgResult, 공개 API)
+- src/symbolic/dfg.c     (dfg_analyze, dfg_destroy, dfg_get_def, dfg_get_use)
+- tests/core/test_dfg.c  (5 TC)
+
+## ctest (Debug 빌드)
+
+$ cd build && ctest -R test_dfg --verbose
+
+[TC-1: NULL 안전성 + T** destroy]
+  PASS
+[TC-2: 직선 코드 Def/Use 정확성]
+  PASS
+[TC-3: Reaching Def 블록 간 전파]
+  PASS
+[TC-4: Gen/Kill 집합 (동일 레지스터 재정의)]
+  PASS
+[TC-5: 조건 분기 In/Out 수렴]
+  PASS
+
+5/5 PASS
+1/1 Test #9: test_dfg .........................   Passed    0.00 sec
+
+## ctest (ASAN 빌드 — AddressSanitizer + UBSanitizer)
+
+$ cd build-asan && ctest -R test_dfg --verbose
+
+[TC-1: NULL 안전성 + T** destroy]
+  PASS
+[TC-2: 직선 코드 Def/Use 정확성]
+  PASS
+[TC-3: Reaching Def 블록 간 전파]
+  PASS
+[TC-4: Gen/Kill 집합 (동일 레지스터 재정의)]
+  PASS
+[TC-5: 조건 분기 In/Out 수렴]
+  PASS
+
+5/5 PASS
+1/1 Test #9: test_dfg .........................   Passed    0.01 sec
+AddressSanitizer/UBSanitizer 오류: 0건
+
+## 전체 회귀 (Debug 빌드)
+
+9/9 PASS (test_dfg 포함 전체 통과)
+
+## TC 상세 설명
+
+TC-1: dfg_analyze(NULL) → NULL 반환, dfg_destroy() T** 모델 검증
+      (이중 해제, NULL 포인터 안전 처리)
+TC-2: 직선 5개 명령어 블록에서 명령어별 Def/Use 비트셋 검증
+      - mov rax, rbx  → def=RAX(bit0),   use=RBX(bit3)
+      - add rcx, rdx  → def=RCX(bit1),   use=RCX|RDX
+      - xor rsi, rsi  → def=RSI(bit6),   use=0 (self-clear 특수 처리)
+      - cmp rax, rbx  → def=0,           use=RAX|RBX
+      - ret           → def=0,           use=RAX(bit0)
+TC-3: 2-블록 함수(jmp)에서 block0.out → block1.in 전파 확인
+TC-4: 동일 레지스터 재정의 시 gen_mask=kill_mask=RAX(bit0) 확인
+TC-5: 조건 분기(jne) 3-블록 함수에서 모든 후행 블록 in_mask에 RAX 전파 확인
+
+## DoD 체크리스트
+
+[x] 각 BasicBlock의 명령어를 순회하여 명령어별 Def/Use 비트셋 계산
+[x] 블록별 Gen/Kill 집합 계산
+[x] Worklist 반복 알고리즘으로 In/Out 수렴
+[x] tests/core/test_dfg.c 작성 및 ctest 통과 (5/5 PASS)
+[x] AddressSanitizer/UBSanitizer 오류 0건
+[x] 전체 회귀 테스트 통과 (9/9 PASS)

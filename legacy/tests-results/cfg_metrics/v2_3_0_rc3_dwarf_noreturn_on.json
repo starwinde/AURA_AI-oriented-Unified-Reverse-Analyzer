@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "commit": "ff9214a",
+  "date": "2026-04-20",
+  "per_func_count": 88,
+  "aggregate": {
+    "cfg": {
+      "cap_hits_512": 82,
+      "indirect_call_skipped": 0,
+      "indirect_jmp_skipped": 0,
+      "funcs_built": 88
+    },
+    "sa": {
+      "funcs": 88,
+      "aborts": 0
+    },
+    "hir": {
+      "gotos_emitted": 20,
+      "funcs_with_goto": 20,
+      "noreturn_truncations": 0
+    }
+  },
+  "per_func_lines_file": "v2_3_0_rc3_dwarf_noreturn_on.jsonl"
+}

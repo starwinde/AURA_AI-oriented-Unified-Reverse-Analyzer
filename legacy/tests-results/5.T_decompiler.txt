@@ -1,0 +1,70 @@
+=== Phase 5 종합 테스트 (5.T) 결과 ===
+실행 일시: 2026-04-04 (최종 재검증)
+빌드: cmake Release + ASAN Debug
+
+---
+
+[DoD-1] x86_64 함수 Pseudo-C 출력 생성
+  검증 수단: test_decompiler, test_type_inference
+  test_decompiler:     5/5 PASS  (ir_lift, ir_build_ssa, CONST_FOLD, ir_emit_pseudoc)
+  test_type_inference: 13/13 PASS
+    - Task 5.3: int32/int8/bool 타입 추론, COPY 전파, cast 출력 (6/6)
+    - Task 5.8: xmm movss→FLOAT, movsd→DOUBLE, emit float, emit double (4/4)
+    - Task 5.9: x87 fld+fadd→LONG_DOUBLE, emit long double, fdiv 전파 (3/3)
+  결과: PASS
+
+[DoD-2] if/loop/switch 제어 구조 복원
+  검증 수단: test_control_flow
+  test_control_flow: 6/6 PASS
+    - test_cf_straight [no if/while]    PASS
+    - test_cf_if ["if" in output]       PASS
+    - test_cf_if_else ["if"+"else"]     PASS
+    - test_cf_while ["while"]           PASS
+    - test_cf_dowhile ["do"+"while"]    PASS
+    - test_cf_switch ["switch"]         PASS
+  결과: PASS
+
+[DoD-3] Zydis 패치 → 재디스어셈 round-trip
+  검증 수단: test_patch
+  test_patch: 5/5 PASS
+    - nop  → 0x90            PASS
+    - ret  → 0xC3            PASS
+    - int3 → 0xCC            PASS
+    - jmp 0x401050 → E9...   PASS
+    - patch_apply NOP        PASS
+  결과: PASS
+
+[DoD-4] 함수 호출 그래프 생성
+  검증 수단: test_callgraph
+  test_callgraph: 5/5 PASS
+    - test_cg_empty                PASS
+    - test_cg_dot_nodes            PASS
+    - test_cg_dot_edges            PASS
+    - test_cg_external             PASS
+    - test_call_emit               PASS
+  결과: PASS
+
+[DoD-5] ctest 전체 통과, ASAN 오류 0건
+  Release ctest: 18/18 PASS (0.15s)
+  ASAN ctest:    17/17 PASS (0.53s), 오류 0건
+  결과: PASS
+
+[DoD-6] 디컴파일 뷰 UI 통합 (5.6)
+  상태: RESOLVED (2026-04-04, Task 5.6 완료)
+  검증 항목:
+    - src/gui/pseudoc_highlighter.h/.cpp 존재 확인 ✓
+    - PseudoCHighlighter: QSyntaxHighlighter 서브클래스, 키워드/타입/주석/숫자/함수 하이라이팅 ✓
+    - 타입 하이라이팅: float, double, int8_t~int64_t, void, bool 등 포함 ✓
+    - long 키워드 포함 (long double 복합 타입 지원) ✓
+    - CMakeLists.txt에 pseudoc_highlighter.cpp 포함 확인 (line 207) ✓
+    - aura-gui 빌드 성공 ✓
+  결과: PASS
+
+---
+전체 결과 요약:
+  DoD-1: PASS   DoD-2: PASS   DoD-3: PASS
+  DoD-4: PASS   DoD-5: PASS   DoD-6: PASS
+
+ctest: 18/18 PASS (Release), 17/17 PASS (ASAN)
+ASAN 오류: 0건
+Phase 5 전체: ALL PASS — Phase 6 진입 가능

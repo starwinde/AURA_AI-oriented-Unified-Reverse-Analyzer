@@ -1,0 +1,32 @@
+{
+  "date": "2026-04-16",
+  "binary": "build-rel/aura (stripped)",
+  "binary_size_bytes": 5180760,
+  "aura_commit": "1d43d98",
+  "ghidra_version": "12.0.4",
+  "ground_truth_source": "AURA --functions on unstripped binary (self-derived; biased but internally consistent)",
+  "ground_truth_count": 1106,
+  "aura": {
+    "detected": 1098,
+    "time_ms": 155,
+    "precision": 1.0000,
+    "recall": 0.9928,
+    "f1": 0.9964,
+    "tp": 1098, "fp": 0, "fn": 8
+  },
+  "ghidra": {
+    "detected": 1046,
+    "time_ms": 29454,
+    "precision": 0.9120,
+    "recall": 0.8626,
+    "f1": 0.8866,
+    "tp": 954, "fp": 92, "fn": 152,
+    "note": "GT derived from AURA's own unstripped output, so Ghidra may detect legitimate functions that AURA missed. F1 advantage is overstated by this circularity."
+  },
+  "speedup": 190,
+  "notes": [
+    "Measurement performed with Ghidra 12.0.4 aarch64 (self-built) on DGX Spark.",
+    "AURA binary freshly built at 1d43d98 (post E-1+E-2 gap_analyzer integration).",
+    "Self-derived GT is CIRCULAR: AURA trivially achieves high F1. Use official baselines/aura_stripped.json (F1 0.9728) as the canonical figure; treat this as internal-consistency sanity check only."
+  ]
+}

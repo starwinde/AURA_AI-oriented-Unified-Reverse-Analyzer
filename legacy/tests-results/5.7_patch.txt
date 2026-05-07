@@ -1,0 +1,10 @@
+=== test_patch (Task 5.7) ===
+  test_nop_encode ["nop" -> 0x90]                      PASS
+  test_ret_encode ["ret" -> 0xC3]                      PASS
+  test_int3_encode ["int3" -> 0xCC]                    PASS
+  test_jmp_encode ["jmp 0x401050" -> E9...]            PASS
+  test_patch_apply [buffer[0] == 0x90 after NOP]       PASS
+
+Results: 5/5 PASS
+
+ctest (full suite): 16/16 PASS

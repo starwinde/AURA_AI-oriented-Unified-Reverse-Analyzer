@@ -1,0 +1,8 @@
+=== test_dex_parser (Task 3.7) ===
+  [1] TC-1: Load and basic fields                        PASS
+  [2] TC-2: Section list                                 PASS
+  [3] TC-3: Method symbols                               PASS
+  [4] TC-4: Error handling                               PASS
+  [5] TC-5: dex_parse_buf direct                         PASS
+
+  Result: 5 / 5 passed

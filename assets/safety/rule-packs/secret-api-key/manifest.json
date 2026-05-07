@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "pack_id": "secret-api-key",
+  "version": "0.1.0",
+  "locale": ["und"],
+  "description": "Small default secret, token, URL, and local path rule pack.",
+  "rules_file": "rules.json"
+}

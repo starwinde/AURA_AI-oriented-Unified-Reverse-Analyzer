@@ -1,0 +1,3059 @@
+{
+  "baseline": "/home/str_dgx_spark/Desktop/AURA/tests/results/phase_f_step3_f1g/ls/parity.json",
+  "current": "/home/str_dgx_spark/Desktop/AURA/tests/results/v2_3_0_rc6_covered_avg/ls/parity.json",
+  "binary": "ls",
+  "common_functions": 301,
+  "scored_common": 301,
+  "new_in_current": 0,
+  "removed_from_baseline": 0,
+  "summary": {
+    "sig_delta": {
+      "pos": 50,
+      "neg": 1,
+      "zero": 250,
+      "mean": 3.874
+    },
+    "ctrl_delta": {
+      "pos": 171,
+      "neg": 86,
+      "zero": 44,
+      "mean": 8.807
+    },
+    "mem_delta": {
+      "pos": 156,
+      "neg": 127,
+      "zero": 18,
+      "mean": 3.488
+    },
+    "ops_delta": {
+      "pos": 1,
+      "neg": 2,
+      "zero": 298,
+      "mean": 0.01
+    },
+    "naming_delta": {
+      "pos": 191,
+      "neg": 0,
+      "zero": 110,
+      "mean": 2.96
+    },
+    "total_delta": {
+      "pos": 151,
+      "neg": 123,
+      "zero": 27,
+      "mean": 19.14
+    }
+  },
+  "deltas": {
+    "FUN_00103780_0x103780": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 16,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 76,
+      "base_total": 0,
+      "current_total": 76
+    },
+    "FUN_00103e80_0x103e80": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": 5,
+      "ops_delta": 0,
+      "naming_delta": 2,
+      "total_delta": 7,
+      "base_total": 38,
+      "current_total": 45
+    },
+    "FUN_00105df4_0x105df4": {
+      "sig_delta": -8,
+      "ctrl_delta": 2,
+      "mem_delta": -9,
+      "ops_delta": 5,
+      "naming_delta": 0,
+      "total_delta": -10,
+      "base_total": 73,
+      "current_total": 63
+    },
+    "FUN_00105e10_0x105e10": {
+      "sig_delta": 0,
+      "ctrl_delta": -6,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -6,
+      "base_total": 80,
+      "current_total": 74
+    },
+    "FUN_00105e40_0x105e40": {
+      "sig_delta": 0,
+      "ctrl_delta": -6,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -6,
+      "base_total": 80,
+      "current_total": 74
+    },
+    "FUN_00105ee0_0x105ee0": {
+      "sig_delta": 0,
+      "ctrl_delta": -7,
+      "mem_delta": -3,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -9,
+      "base_total": 68,
+      "current_total": 59
+    },
+    "FUN_00105f04_0x105f04": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 3,
+      "base_total": 69,
+      "current_total": 72
+    },
+    "FUN_00105f50_0x105f50": {
+      "sig_delta": 0,
+      "ctrl_delta": -1,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -2,
+      "base_total": 71,
+      "current_total": 69
+    },
+    "FUN_00105f80_0x105f80": {
+      "sig_delta": 0,
+      "ctrl_delta": -1,
+      "mem_delta": -3,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -4,
+      "base_total": 59,
+      "current_total": 55
+    },
+    "FUN_00105fc0_0x105fc0": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -3,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -3,
+      "base_total": 54,
+      "current_total": 51
+    },
+    "FUN_00105fe0_0x105fe0": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -4,
+      "base_total": 17,
+      "current_total": 13
+    },
+    "FUN_00106300_0x106300": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 71,
+      "current_total": 71
+    },
+    "FUN_00106370_0x106370": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 71,
+      "current_total": 71
+    },
+    "FUN_001063d4_0x1063d4": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 62,
+      "current_total": 61
+    },
+    "FUN_001064a0_0x1064a0": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 62,
+      "current_total": 61
+    },
+    "FUN_00106574_0x106574": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 71,
+      "current_total": 71
+    },
+    "FUN_001065e4_0x1065e4": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 71,
+      "current_total": 71
+    },
+    "FUN_00106650_0x106650": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 62,
+      "current_total": 61
+    },
+    "FUN_00106720_0x106720": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 62,
+      "current_total": 61
+    },
+    "FUN_001067f4_0x1067f4": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 71,
+      "current_total": 71
+    },
+    "FUN_00106860_0x106860": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 71,
+      "current_total": 71
+    },
+    "FUN_001068d0_0x1068d0": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 62,
+      "current_total": 61
+    },
+    "FUN_001069a0_0x1069a0": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 62,
+      "current_total": 61
+    },
+    "FUN_00106a74_0x106a74": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 71,
+      "current_total": 71
+    },
+    "FUN_00106ae0_0x106ae0": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 71,
+      "current_total": 71
+    },
+    "FUN_00106b44_0x106b44": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 62,
+      "current_total": 61
+    },
+    "FUN_00106c14_0x106c14": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 62,
+      "current_total": 61
+    },
+    "FUN_00106ce4_0x106ce4": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 74,
+      "current_total": 74
+    },
+    "FUN_00106d40_0x106d40": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 74,
+      "current_total": 74
+    },
+    "FUN_00106d90_0x106d90": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 63,
+      "current_total": 62
+    },
+    "FUN_00106e50_0x106e50": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 63,
+      "current_total": 62
+    },
+    "FUN_00106f10_0x106f10": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -3,
+      "base_total": 61,
+      "current_total": 58
+    },
+    "FUN_00106f30_0x106f30": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -3,
+      "base_total": 61,
+      "current_total": 58
+    },
+    "FUN_00106f54_0x106f54": {
+      "sig_delta": 0,
+      "ctrl_delta": 2,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 2,
+      "base_total": 64,
+      "current_total": 66
+    },
+    "FUN_00106ff0_0x106ff0": {
+      "sig_delta": 0,
+      "ctrl_delta": 2,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 2,
+      "base_total": 64,
+      "current_total": 66
+    },
+    "FUN_00107090_0x107090": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -6,
+      "base_total": 69,
+      "current_total": 63
+    },
+    "FUN_00107110_0x107110": {
+      "sig_delta": 0,
+      "ctrl_delta": -7,
+      "mem_delta": -5,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -11,
+      "base_total": 73,
+      "current_total": 62
+    },
+    "FUN_00107140_0x107140": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -3,
+      "base_total": 85,
+      "current_total": 82
+    },
+    "FUN_00107160_0x107160": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 0,
+      "base_total": 62,
+      "current_total": 62
+    },
+    "FUN_001071b4_0x1071b4": {
+      "sig_delta": 0,
+      "ctrl_delta": -1,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -4,
+      "base_total": 71,
+      "current_total": 67
+    },
+    "FUN_00107220_0x107220": {
+      "sig_delta": 0,
+      "ctrl_delta": 2,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -2,
+      "base_total": 66,
+      "current_total": 64
+    },
+    "FUN_00107250_0x107250": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": 3,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 7,
+      "base_total": 41,
+      "current_total": 48
+    },
+    "FUN_00107340_0x107340": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 2,
+      "total_delta": 2,
+      "base_total": 37,
+      "current_total": 39
+    },
+    "FUN_00107430_0x107430": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -5,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -5,
+      "base_total": 65,
+      "current_total": 60
+    },
+    "FUN_00107470_0x107470": {
+      "sig_delta": 0,
+      "ctrl_delta": -1,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 34,
+      "current_total": 34
+    },
+    "FUN_00107570_0x107570": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": 3,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 28,
+      "current_total": 28
+    },
+    "FUN_00107b10_0x107b10": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -4,
+      "base_total": 49,
+      "current_total": 45
+    },
+    "FUN_00107c20_0x107c20": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 0,
+      "base_total": 40,
+      "current_total": 40
+    },
+    "FUN_00107ec0_0x107ec0": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": -3,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -4,
+      "base_total": 64,
+      "current_total": 60
+    },
+    "FUN_00107f74_0x107f74": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -3,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -7,
+      "base_total": 52,
+      "current_total": 45
+    },
+    "FUN_00108000_0x108000": {
+      "sig_delta": 0,
+      "ctrl_delta": 5,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 5,
+      "base_total": 44,
+      "current_total": 49
+    },
+    "FUN_001087a4_0x1087a4": {
+      "sig_delta": 0,
+      "ctrl_delta": 2,
+      "mem_delta": -5,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -3,
+      "base_total": 74,
+      "current_total": 71
+    },
+    "FUN_001087c0_0x1087c0": {
+      "sig_delta": 0,
+      "ctrl_delta": 2,
+      "mem_delta": -6,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -4,
+      "base_total": 74,
+      "current_total": 70
+    },
+    "FUN_00108820_0x108820": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -1,
+      "base_total": 49,
+      "current_total": 48
+    },
+    "FUN_00108970_0x108970": {
+      "sig_delta": 0,
+      "ctrl_delta": -1,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -2,
+      "base_total": 52,
+      "current_total": 50
+    },
+    "FUN_00108b10_0x108b10": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -3,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -2,
+      "base_total": 73,
+      "current_total": 71
+    },
+    "FUN_00108b40_0x108b40": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -9,
+      "base_total": 51,
+      "current_total": 42
+    },
+    "FUN_00108be0_0x108be0": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -5,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -5,
+      "base_total": 62,
+      "current_total": 57
+    },
+    "FUN_00108c00_0x108c00": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -5,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -4,
+      "base_total": 79,
+      "current_total": 75
+    },
+    "FUN_00108c30_0x108c30": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 5,
+      "base_total": 58,
+      "current_total": 63
+    },
+    "FUN_00108cd0_0x108cd0": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 5,
+      "base_total": 58,
+      "current_total": 63
+    },
+    "FUN_00108d80_0x108d80": {
+      "sig_delta": 0,
+      "ctrl_delta": 2,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -2,
+      "base_total": 73,
+      "current_total": 71
+    },
+    "FUN_00108de0_0x108de0": {
+      "sig_delta": 0,
+      "ctrl_delta": -1,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -3,
+      "base_total": 66,
+      "current_total": 63
+    },
+    "FUN_00108ea0_0x108ea0": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -1,
+      "base_total": 68,
+      "current_total": 67
+    },
+    "FUN_00108f20_0x108f20": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 5,
+      "base_total": 58,
+      "current_total": 63
+    },
+    "FUN_00108fb4_0x108fb4": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -1,
+      "base_total": 68,
+      "current_total": 67
+    },
+    "FUN_00109030_0x109030": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 5,
+      "base_total": 58,
+      "current_total": 63
+    },
+    "FUN_001090c4_0x1090c4": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -1,
+      "base_total": 68,
+      "current_total": 67
+    },
+    "FUN_00109140_0x109140": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 5,
+      "base_total": 58,
+      "current_total": 63
+    },
+    "FUN_001091d4_0x1091d4": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -1,
+      "base_total": 68,
+      "current_total": 67
+    },
+    "FUN_00109250_0x109250": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 5,
+      "base_total": 58,
+      "current_total": 63
+    },
+    "FUN_001092e4_0x1092e4": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -1,
+      "base_total": 68,
+      "current_total": 67
+    },
+    "FUN_00109360_0x109360": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 5,
+      "base_total": 58,
+      "current_total": 63
+    },
+    "FUN_001093f4_0x1093f4": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -1,
+      "base_total": 68,
+      "current_total": 67
+    },
+    "FUN_00109470_0x109470": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 5,
+      "base_total": 58,
+      "current_total": 63
+    },
+    "FUN_00109504_0x109504": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -1,
+      "base_total": 68,
+      "current_total": 67
+    },
+    "FUN_00109580_0x109580": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 5,
+      "base_total": 58,
+      "current_total": 63
+    },
+    "FUN_00109614_0x109614": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -1,
+      "base_total": 68,
+      "current_total": 67
+    },
+    "FUN_00109690_0x109690": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 5,
+      "base_total": 58,
+      "current_total": 63
+    },
+    "FUN_00109724_0x109724": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -1,
+      "base_total": 70,
+      "current_total": 69
+    },
+    "FUN_00109790_0x109790": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -1,
+      "base_total": 70,
+      "current_total": 69
+    },
+    "FUN_001097f4_0x1097f4": {
+      "sig_delta": 0,
+      "ctrl_delta": 2,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 1,
+      "base_total": 60,
+      "current_total": 61
+    },
+    "FUN_001098c4_0x1098c4": {
+      "sig_delta": 0,
+      "ctrl_delta": 2,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 1,
+      "base_total": 60,
+      "current_total": 61
+    },
+    "FUN_00109994_0x109994": {
+      "sig_delta": 0,
+      "ctrl_delta": 2,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -1,
+      "base_total": 54,
+      "current_total": 53
+    },
+    "FUN_001099d0_0x1099d0": {
+      "sig_delta": 0,
+      "ctrl_delta": 2,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -1,
+      "base_total": 54,
+      "current_total": 53
+    },
+    "FUN_00109a10_0x109a10": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 2,
+      "base_total": 62,
+      "current_total": 64
+    },
+    "FUN_00109ac4_0x109ac4": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 2,
+      "base_total": 62,
+      "current_total": 64
+    },
+    "FUN_00109b80_0x109b80": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -9,
+      "base_total": 63,
+      "current_total": 54
+    },
+    "FUN_00109c24_0x109c24": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 5,
+      "base_total": 58,
+      "current_total": 63
+    },
+    "FUN_00109cc0_0x109cc0": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -9,
+      "base_total": 63,
+      "current_total": 54
+    },
+    "FUN_00109d70_0x109d70": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 5,
+      "base_total": 58,
+      "current_total": 63
+    },
+    "FUN_00109e04_0x109e04": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -8,
+      "base_total": 59,
+      "current_total": 51
+    },
+    "FUN_00109e54_0x109e54": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -8,
+      "base_total": 59,
+      "current_total": 51
+    },
+    "FUN_00109ea4_0x109ea4": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 3,
+      "base_total": 55,
+      "current_total": 58
+    },
+    "FUN_00109f70_0x109f70": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 3,
+      "base_total": 55,
+      "current_total": 58
+    },
+    "FUN_0010a040_0x10a040": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 1,
+      "base_total": 35,
+      "current_total": 36
+    },
+    "FUN_0010a130_0x10a130": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -5,
+      "base_total": 44,
+      "current_total": 39
+    },
+    "FUN_0010a1e4_0x10a1e4": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 67,
+      "current_total": 67
+    },
+    "FUN_0010a280_0x10a280": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 5,
+      "base_total": 58,
+      "current_total": 63
+    },
+    "FUN_0010a314_0x10a314": {
+      "sig_delta": 0,
+      "ctrl_delta": 2,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 1,
+      "base_total": 65,
+      "current_total": 66
+    },
+    "FUN_0010a3c4_0x10a3c4": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 5,
+      "base_total": 58,
+      "current_total": 63
+    },
+    "FUN_0010a460_0x10a460": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 67,
+      "current_total": 67
+    },
+    "FUN_0010a500_0x10a500": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 5,
+      "base_total": 58,
+      "current_total": 63
+    },
+    "FUN_0010a594_0x10a594": {
+      "sig_delta": 0,
+      "ctrl_delta": 2,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 1,
+      "base_total": 65,
+      "current_total": 66
+    },
+    "FUN_0010a644_0x10a644": {
+      "sig_delta": 0,
+      "ctrl_delta": 3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 5,
+      "base_total": 58,
+      "current_total": 63
+    },
+    "FUN_0010a6e0_0x10a6e0": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": 2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -3,
+      "base_total": 40,
+      "current_total": 37
+    },
+    "FUN_0010a830_0x10a830": {
+      "sig_delta": 0,
+      "ctrl_delta": -4,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -7,
+      "base_total": 60,
+      "current_total": 53
+    },
+    "FUN_0010a940_0x10a940": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -8,
+      "base_total": 58,
+      "current_total": 50
+    },
+    "FUN_0010a9b0_0x10a9b0": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -9,
+      "base_total": 50,
+      "current_total": 41
+    },
+    "FUN_0010aa54_0x10aa54": {
+      "sig_delta": 0,
+      "ctrl_delta": -4,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -4,
+      "base_total": 60,
+      "current_total": 56
+    },
+    "FUN_0010ab50_0x10ab50": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -4,
+      "base_total": 41,
+      "current_total": 37
+    },
+    "FUN_0010aca0_0x10aca0": {
+      "sig_delta": 0,
+      "ctrl_delta": -1,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 55,
+      "current_total": 55
+    },
+    "FUN_0010ad30_0x10ad30": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -9,
+      "base_total": 55,
+      "current_total": 46
+    },
+    "FUN_0010ae30_0x10ae30": {
+      "sig_delta": 0,
+      "ctrl_delta": -4,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -3,
+      "base_total": 40,
+      "current_total": 37
+    },
+    "FUN_0010af10_0x10af10": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": -5,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -8,
+      "base_total": 68,
+      "current_total": 60
+    },
+    "FUN_0010b000_0x10b000": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 1,
+      "base_total": 51,
+      "current_total": 52
+    },
+    "FUN_0010b1e0_0x10b1e0": {
+      "sig_delta": 0,
+      "ctrl_delta": -4,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -3,
+      "base_total": 49,
+      "current_total": 46
+    },
+    "FUN_0010b310_0x10b310": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 0,
+      "base_total": 66,
+      "current_total": 66
+    },
+    "FUN_0010b430_0x10b430": {
+      "sig_delta": 0,
+      "ctrl_delta": -1,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 45,
+      "current_total": 44
+    },
+    "FUN_0010b550_0x10b550": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -4,
+      "base_total": 35,
+      "current_total": 31
+    },
+    "FUN_0010b8d0_0x10b8d0": {
+      "sig_delta": 0,
+      "ctrl_delta": -1,
+      "mem_delta": -3,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -3,
+      "base_total": 58,
+      "current_total": 55
+    },
+    "FUN_0010b970_0x10b970": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -1,
+      "base_total": 55,
+      "current_total": 54
+    },
+    "FUN_0010ba30_0x10ba30": {
+      "sig_delta": 0,
+      "ctrl_delta": -4,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -7,
+      "base_total": 52,
+      "current_total": 45
+    },
+    "FUN_0010bb04_0x10bb04": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 54,
+      "current_total": 54
+    },
+    "FUN_0010bbf0_0x10bbf0": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -5,
+      "base_total": 38,
+      "current_total": 33
+    },
+    "FUN_0010bd00_0x10bd00": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 2,
+      "base_total": 38,
+      "current_total": 40
+    },
+    "FUN_0010beb0_0x10beb0": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": 2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 0,
+      "base_total": 37,
+      "current_total": 37
+    },
+    "FUN_0010c730_0x10c730": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -2,
+      "base_total": 55,
+      "current_total": 53
+    },
+    "FUN_0010c920_0x10c920": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -4,
+      "base_total": 43,
+      "current_total": 39
+    },
+    "FUN_0010cce0_0x10cce0": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -2,
+      "base_total": 51,
+      "current_total": 49
+    },
+    "FUN_0010ce80_0x10ce80": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -4,
+      "base_total": 46,
+      "current_total": 42
+    },
+    "FUN_0010cfd4_0x10cfd4": {
+      "sig_delta": 0,
+      "ctrl_delta": -1,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -4,
+      "base_total": 60,
+      "current_total": 56
+    },
+    "FUN_0010d080_0x10d080": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -3,
+      "base_total": 56,
+      "current_total": 53
+    },
+    "FUN_0010d1e4_0x10d1e4": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -7,
+      "base_total": 53,
+      "current_total": 46
+    },
+    "FUN_0010d304_0x10d304": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -7,
+      "base_total": 56,
+      "current_total": 49
+    },
+    "FUN_0010d394_0x10d394": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": -3,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -5,
+      "base_total": 61,
+      "current_total": 56
+    },
+    "FUN_0010d454_0x10d454": {
+      "sig_delta": 0,
+      "ctrl_delta": 2,
+      "mem_delta": -6,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -4,
+      "base_total": 74,
+      "current_total": 70
+    },
+    "FUN_0010d4a0_0x10d4a0": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -7,
+      "base_total": 56,
+      "current_total": 49
+    },
+    "FUN_0010d4f0_0x10d4f0": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": 2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 51,
+      "current_total": 51
+    },
+    "FUN_0010d770_0x10d770": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -3,
+      "base_total": 43,
+      "current_total": 40
+    },
+    "FUN_0010d8c0_0x10d8c0": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -4,
+      "base_total": 31,
+      "current_total": 27
+    },
+    "FUN_0010dc40_0x10dc40": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": 2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 47,
+      "current_total": 46
+    },
+    "FUN_0010e040_0x10e040": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -5,
+      "base_total": 57,
+      "current_total": 52
+    },
+    "FUN_0010e300_0x10e300": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": -5,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -4,
+      "base_total": 55,
+      "current_total": 51
+    },
+    "FUN_0010e3f0_0x10e3f0": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -4,
+      "base_total": 69,
+      "current_total": 65
+    },
+    "FUN_0010e474_0x10e474": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 2,
+      "base_total": 49,
+      "current_total": 51
+    },
+    "FUN_0010e560_0x10e560": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -2,
+      "base_total": 38,
+      "current_total": 36
+    },
+    "FUN_0010f220_0x10f220": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 1,
+      "base_total": 46,
+      "current_total": 47
+    },
+    "FUN_0010f680_0x10f680": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 43,
+      "current_total": 42
+    },
+    "FUN_0010f784_0x10f784": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -8,
+      "base_total": 62,
+      "current_total": 54
+    },
+    "FUN_0010f7d0_0x10f7d0": {
+      "sig_delta": 0,
+      "ctrl_delta": -6,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -7,
+      "base_total": 57,
+      "current_total": 50
+    },
+    "FUN_0010f860_0x10f860": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": -3,
+      "ops_delta": -1,
+      "naming_delta": 1,
+      "total_delta": -5,
+      "base_total": 54,
+      "current_total": 49
+    },
+    "FUN_0010fc40_0x10fc40": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -3,
+      "base_total": 25,
+      "current_total": 22
+    },
+    "FUN_00110350_0x110350": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -3,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -2,
+      "base_total": 61,
+      "current_total": 59
+    },
+    "FUN_001103e4_0x1103e4": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -1,
+      "base_total": 32,
+      "current_total": 31
+    },
+    "FUN_00110864_0x110864": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -6,
+      "base_total": 40,
+      "current_total": 34
+    },
+    "FUN_001108c4_0x1108c4": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -3,
+      "base_total": 49,
+      "current_total": 46
+    },
+    "FUN_001109d0_0x1109d0": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -2,
+      "base_total": 11,
+      "current_total": 9
+    },
+    "FUN_00110ea0_0x110ea0": {
+      "sig_delta": 0,
+      "ctrl_delta": -1,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 53,
+      "current_total": 52
+    },
+    "FUN_001110a0_0x1110a0": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": 2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 2,
+      "base_total": 39,
+      "current_total": 41
+    },
+    "FUN_00111270_0x111270": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -2,
+      "base_total": 12,
+      "current_total": 10
+    },
+    "FUN_00112640_0x112640": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": 2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -3,
+      "base_total": 39,
+      "current_total": 36
+    },
+    "FUN_00112820_0x112820": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -4,
+      "base_total": 46,
+      "current_total": 42
+    },
+    "FUN_001129a0_0x1129a0": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": -6,
+      "ops_delta": -1,
+      "naming_delta": 0,
+      "total_delta": -12,
+      "base_total": 73,
+      "current_total": 61
+    },
+    "FUN_00112a50_0x112a50": {
+      "sig_delta": 0,
+      "ctrl_delta": -4,
+      "mem_delta": 3,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 39,
+      "current_total": 38
+    },
+    "FUN_00112c20_0x112c20": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": 2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 27,
+      "current_total": 27
+    },
+    "FUN_00113110_0x113110": {
+      "sig_delta": 0,
+      "ctrl_delta": -1,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 16,
+      "current_total": 16
+    },
+    "FUN_00114b40_0x114b40": {
+      "sig_delta": 0,
+      "ctrl_delta": 4,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 5,
+      "base_total": 35,
+      "current_total": 40
+    },
+    "FUN_00114c30_0x114c30": {
+      "sig_delta": 0,
+      "ctrl_delta": -5,
+      "mem_delta": 0,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -5,
+      "base_total": 47,
+      "current_total": 42
+    },
+    "FUN_00114d14_0x114d14": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 27,
+      "current_total": 26
+    },
+    "FUN_00115420_0x115420": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": 4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 3,
+      "base_total": 44,
+      "current_total": 47
+    },
+    "FUN_001168f0_0x1168f0": {
+      "sig_delta": 0,
+      "ctrl_delta": -1,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 55,
+      "current_total": 55
+    },
+    "FUN_00116b70_0x116b70": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -3,
+      "base_total": 35,
+      "current_total": 32
+    },
+    "FUN_001174c0_0x1174c0": {
+      "sig_delta": 0,
+      "ctrl_delta": 1,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -1,
+      "base_total": 59,
+      "current_total": 58
+    },
+    "FUN_001175d0_0x1175d0": {
+      "sig_delta": 0,
+      "ctrl_delta": -1,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -3,
+      "base_total": 60,
+      "current_total": 57
+    },
+    "FUN_00117730_0x117730": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": -3,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -5,
+      "base_total": 41,
+      "current_total": 36
+    },
+    "FUN_00117ec0_0x117ec0": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -5,
+      "base_total": 57,
+      "current_total": 52
+    },
+    "FUN_00117f30_0x117f30": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": -3,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -6,
+      "base_total": 67,
+      "current_total": 61
+    },
+    "FUN_00118040_0x118040": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": -3,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": -4,
+      "base_total": 56,
+      "current_total": 52
+    },
+    "FUN_001180e0_0x1180e0": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": -6,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -8,
+      "base_total": 81,
+      "current_total": 73
+    },
+    "FUN_00118160_0x118160": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -5,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -5,
+      "base_total": 62,
+      "current_total": 57
+    },
+    "_DT_FINI_0x11817c": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 16,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 76,
+      "base_total": 0,
+      "current_total": 76
+    },
+    "_DT_INIT_0x103768": {
+      "sig_delta": 30,
+      "ctrl_delta": 23,
+      "mem_delta": 15,
+      "ops_delta": 0,
+      "naming_delta": 3,
+      "total_delta": 71,
+      "base_total": 0,
+      "current_total": 71
+    },
+    "_FINI_0_0x105e80": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": -3,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -6,
+      "base_total": 62,
+      "current_total": 56
+    },
+    "_INIT_0_0x105ed0": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -2,
+      "base_total": 80,
+      "current_total": 78
+    },
+    "__assert_fail_0x103df0": {
+      "sig_delta": 12,
+      "ctrl_delta": 25,
+      "mem_delta": 9,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 51,
+      "base_total": 0,
+      "current_total": 51
+    },
+    "__ctype_b_loc_0x103c40": {
+      "sig_delta": 18,
+      "ctrl_delta": 25,
+      "mem_delta": 10,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 60,
+      "base_total": 0,
+      "current_total": 60
+    },
+    "__ctype_get_mb_cur_max_0x103c70": {
+      "sig_delta": 18,
+      "ctrl_delta": 25,
+      "mem_delta": 16,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 68,
+      "base_total": 0,
+      "current_total": 68
+    },
+    "__ctype_tolower_loc_0x103960": {
+      "sig_delta": 18,
+      "ctrl_delta": 25,
+      "mem_delta": 10,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 60,
+      "base_total": 0,
+      "current_total": 60
+    },
+    "__ctype_toupper_loc_0x103af0": {
+      "sig_delta": 18,
+      "ctrl_delta": 25,
+      "mem_delta": 10,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 60,
+      "base_total": 0,
+      "current_total": 60
+    },
+    "__cxa_atexit_0x103900": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__cxa_finalize_0x1038d0": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__errno_location_0x103e00": {
+      "sig_delta": 18,
+      "ctrl_delta": 25,
+      "mem_delta": 9,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 59,
+      "base_total": 0,
+      "current_total": 59
+    },
+    "__fpending_0x103950": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__fprintf_chk_0x103c00": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__freading_0x103d90": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__gmon_start___0x103b50": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__isoc23_strtoumax_0x103b90": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__libc_start_main_0x103860": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__mbstowcs_chk_0x103da0": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__memcpy_chk_0x1039a0": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__mempcpy_chk_0x103d50": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__overflow_0x103bb0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "__printf_chk_0x103a80": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__readlink_chk_0x103930": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__snprintf_chk_0x1039c0": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__sprintf_chk_0x103810": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__stack_chk_fail_0x103b10": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "__strcpy_chk_0x103a30": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "_exit_0x1037d0": {
+      "sig_delta": 12,
+      "ctrl_delta": 25,
+      "mem_delta": 16,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 58,
+      "base_total": 0,
+      "current_total": 58
+    },
+    "_obstack_allocated_p_0x10cd40": {
+      "sig_delta": 0,
+      "ctrl_delta": -1,
+      "mem_delta": -3,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -4,
+      "base_total": 64,
+      "current_total": 60
+    },
+    "_obstack_begin_0x10cb20": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 0,
+      "base_total": 53,
+      "current_total": 53
+    },
+    "_obstack_begin_1_0x10cb50": {
+      "sig_delta": 0,
+      "ctrl_delta": 0,
+      "mem_delta": -1,
+      "ops_delta": 0,
+      "naming_delta": 1,
+      "total_delta": 0,
+      "base_total": 52,
+      "current_total": 52
+    },
+    "_obstack_free_0x10cd94": {
+      "sig_delta": 0,
+      "ctrl_delta": -2,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -6,
+      "base_total": 51,
+      "current_total": 45
+    },
+    "_obstack_memory_used_0x10ce40": {
+      "sig_delta": 0,
+      "ctrl_delta": 2,
+      "mem_delta": -2,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": 0,
+      "base_total": 69,
+      "current_total": 69
+    },
+    "_obstack_newchunk_0x10cb80": {
+      "sig_delta": 0,
+      "ctrl_delta": -3,
+      "mem_delta": 1,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -2,
+      "base_total": 47,
+      "current_total": 45
+    },
+    "_setjmp_0x103840": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "abort_0x103b80": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "bindtextdomain_0x103a70": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "calloc_0x103ab0": {
+      "sig_delta": 4,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 44,
+      "base_total": 0,
+      "current_total": 44
+    },
+    "clock_gettime_0x103920": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "closedir_0x103b00": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "dcgettext_0x103d60": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "dirfd_0x103cf0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "entry_0x105dc0": {
+      "sig_delta": 0,
+      "ctrl_delta": 2,
+      "mem_delta": -4,
+      "ops_delta": 0,
+      "naming_delta": 0,
+      "total_delta": -2,
+      "base_total": 56,
+      "current_total": 54
+    },
+    "error_0x103870": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "exit_0x103830": {
+      "sig_delta": 12,
+      "ctrl_delta": 25,
+      "mem_delta": 16,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 58,
+      "base_total": 0,
+      "current_total": 58
+    },
+    "fclose_0x1039d0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "fflush_0x103ce0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "fflush_unlocked_0x103cd0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "fileno_0x103990": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "fnmatch_0x103cc0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "fputc_unlocked_0x103d40": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "fputs_unlocked_0x103d70": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "free_0x103c60": {
+      "sig_delta": 12,
+      "ctrl_delta": 25,
+      "mem_delta": 10,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 52,
+      "base_total": 0,
+      "current_total": 52
+    },
+    "freecon_0x103a00": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "fseeko_0x103c50": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "fwrite_0x103cb0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "fwrite_unlocked_0x1037f0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "getcwd_0x1037e0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 40,
+      "base_total": 0,
+      "current_total": 40
+    },
+    "getenv_0x103e20": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 40,
+      "base_total": 0,
+      "current_total": 40
+    },
+    "getfilecon_0x103dd0": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "getgrgid_0x103e30": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 40,
+      "base_total": 0,
+      "current_total": 40
+    },
+    "gethostname_0x103d30": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "getopt_long_0x103bf0": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "getpwuid_0x103c30": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 40,
+      "base_total": 0,
+      "current_total": 40
+    },
+    "getxattr_0x103bc0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 9,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 43,
+      "base_total": 0,
+      "current_total": 43
+    },
+    "gmtime_r_0x103aa0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 40,
+      "base_total": 0,
+      "current_total": 40
+    },
+    "ioctl_0x103e50": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 14,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 48,
+      "base_total": 0,
+      "current_total": 48
+    },
+    "isatty_0x103d10": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 14,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 48,
+      "base_total": 0,
+      "current_total": 48
+    },
+    "iswcntrl_0x103910": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 14,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 48,
+      "base_total": 0,
+      "current_total": 48
+    },
+    "iswprint_0x103de0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 14,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 48,
+      "base_total": 0,
+      "current_total": 48
+    },
+    "lgetfilecon_0x103e10": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "listxattr_0x103ac0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 9,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 43,
+      "base_total": 0,
+      "current_total": 43
+    },
+    "localeconv_0x103980": {
+      "sig_delta": 18,
+      "ctrl_delta": 25,
+      "mem_delta": 10,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 60,
+      "base_total": 0,
+      "current_total": 60
+    },
+    "localtime_r_0x103890": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 40,
+      "base_total": 0,
+      "current_total": 40
+    },
+    "lseek_0x103940": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 14,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 48,
+      "base_total": 0,
+      "current_total": 48
+    },
+    "malloc_0x1039f0": {
+      "sig_delta": 4,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 44,
+      "base_total": 0,
+      "current_total": 44
+    },
+    "mbrtoc32_0x103db0": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "mbrtowc_0x1037a0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "mbsinit_0x103ba0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "mbstowcs_0x103820": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "memcmp_0x103bd0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "memcpy_0x1037b0": {
+      "sig_delta": 4,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 44,
+      "base_total": 0,
+      "current_total": 44
+    },
+    "memmove_0x1037c0": {
+      "sig_delta": 4,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 44,
+      "base_total": 0,
+      "current_total": 44
+    },
+    "memset_0x103a90": {
+      "sig_delta": 4,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 44,
+      "base_total": 0,
+      "current_total": 44
+    },
+    "mktime_0x103b70": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "nl_langinfo_0x1039e0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 40,
+      "base_total": 0,
+      "current_total": 40
+    },
+    "opendir_0x1038e0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 40,
+      "base_total": 0,
+      "current_total": 40
+    },
+    "raise_0x103850": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 14,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 48,
+      "base_total": 0,
+      "current_total": 48
+    },
+    "rawmemchr_0x103c80": {
+      "sig_delta": 4,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 44,
+      "base_total": 0,
+      "current_total": 44
+    },
+    "readdir_0x103ad0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 40,
+      "base_total": 0,
+      "current_total": 40
+    },
+    "readlink_0x1038c0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 9,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 43,
+      "base_total": 0,
+      "current_total": 43
+    },
+    "realloc_0x103ae0": {
+      "sig_delta": 4,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 44,
+      "base_total": 0,
+      "current_total": 44
+    },
+    "reallocarray_0x1038b0": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "setenv_0x1038a0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "setlocale_0x103e60": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 40,
+      "base_total": 0,
+      "current_total": 40
+    },
+    "sigaction_0x103b20": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "sigaddset_0x103dc0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "sigemptyset_0x103a50": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "sigismember_0x103c10": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "signal_0x1039b0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 14,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 48,
+      "base_total": 0,
+      "current_total": 48
+    },
+    "sigprocmask_0x103880": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "snprintf_0x103970": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "stat_0x103b60": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "statx_0x103ca0": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "strchr_0x103c90": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 40,
+      "base_total": 0,
+      "current_total": 40
+    },
+    "strcmp_0x103c20": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "strcoll_0x103d80": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "strftime_0x1038f0": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "strlen_0x103800": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "strncmp_0x103a60": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "strrchr_0x103b30": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 7,
+      "total_delta": 40,
+      "base_total": 0,
+      "current_total": 40
+    },
+    "tcgetpgrp_0x103b40": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 14,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 48,
+      "base_total": 0,
+      "current_total": 48
+    },
+    "textdomain_0x103be0": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "timegm_0x103e40": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "tzset_0x103a20": {
+      "sig_delta": 30,
+      "ctrl_delta": 25,
+      "mem_delta": 18,
+      "ops_delta": 0,
+      "naming_delta": 5,
+      "total_delta": 78,
+      "base_total": 0,
+      "current_total": 78
+    },
+    "unsetenv_0x103d00": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "wcstombs_0x103d20": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "wcswidth_0x103a40": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 8,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 42,
+      "base_total": 0,
+      "current_total": 42
+    },
+    "wcwidth_0x103a10": {
+      "sig_delta": 0,
+      "ctrl_delta": 25,
+      "mem_delta": 14,
+      "ops_delta": 0,
+      "naming_delta": 9,
+      "total_delta": 48,
+      "base_total": 0,
+      "current_total": 48
+    }
+  }
+}

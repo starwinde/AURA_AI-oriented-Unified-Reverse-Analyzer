@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "pack_id": "korean-sensitive",
+  "version": "0.1.0",
+  "locale": ["ko-KR"],
+  "description": "Small default Korean-sensitive PII rule pack.",
+  "rules_file": "rules.json"
+}

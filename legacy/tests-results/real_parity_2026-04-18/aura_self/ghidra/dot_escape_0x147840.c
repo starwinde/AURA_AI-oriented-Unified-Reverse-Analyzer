@@ -1,0 +1,48 @@
+
+void dot_escape(FILE *param_1,byte *param_2)
+
+{
+  uint __c;
+  
+  __c = (uint)*param_2;
+  if (*param_2 == 0) {
+    return;
+  }
+  do {
+    while (__c == 0x3c) {
+      fwrite(&DAT_001f76e8,1,2,param_1);
+LAB_0014789c:
+      param_2 = param_2 + 1;
+      __c = (uint)*param_2;
+      if (__c == 0) {
+        return;
+      }
+    }
+    if (__c < 0x3d) {
+      if (__c == 10) {
+        fwrite(&DAT_001f76e0,1,2,param_1);
+      }
+      else {
+        if (__c != 0x22) goto LAB_00147920;
+        fwrite(&DAT_001f76d0,1,2,param_1);
+      }
+      goto LAB_0014789c;
+    }
+    if (__c == 0x3e) {
+      fwrite(&DAT_001f76f0,1,2,param_1);
+      goto LAB_0014789c;
+    }
+    if (__c != 0x5c) {
+LAB_00147920:
+      fputc(__c,param_1);
+      goto LAB_0014789c;
+    }
+    fwrite(&DAT_001f76d8,1,2,param_1);
+    param_2 = param_2 + 1;
+    __c = (uint)*param_2;
+    if (__c == 0) {
+      return;
+    }
+  } while( true );
+}
+

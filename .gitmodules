@@ -1,0 +1,6 @@
+[submodule "capstone"]
+	path = third_party/capstone
+	url = https://github.com/capstone-engine/capstone.git
+[submodule "third_party/zydis"]
+	path = third_party/zydis
+	url = https://github.com/zyantific/zydis.git

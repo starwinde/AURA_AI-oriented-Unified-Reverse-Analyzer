@@ -1,0 +1,71 @@
+P.1 Analyzer Registry 인프라 — DoD 검증 기록
+=================================================
+Date: 2026-04-09
+Phase: v1.0.1 Release / P.1
+Worker: w-core (cold spawn, single sub-task)
+Evaluator: eval-main (warm pool meta v=pass; main Claude direct verdict PASS)
+
+[Files Created]
+- src/core/analyzer_registry.h     5506 bytes
+- src/core/analyzer_registry.c     4109 bytes
+- tests/core/test_analyzer_registry.c   11828 bytes
+
+[Files Modified]
+- CMakeLists.txt        — AURA_CORE_SOURCES에 src/core/analyzer_registry.c 한 줄 추가
+- tests/CMakeLists.txt  — test_analyzer_registry 등록 블록 추가
+- Tasks.md              — P.1 항목 [ ] → [x] 전환 + 본 검증 기록 추가
+
+[Build]
+$ cmake -B build -DCMAKE_BUILD_TYPE=Debug
+  → success
+$ cmake --build build -j --target test_analyzer_registry
+  → success
+$ cmake --build build -j --target aura_core
+  → success (pre-existing warnings only in hir_emit.c, YARA headers — unrelated)
+
+[Test]
+$ ctest --test-dir build -R test_analyzer_registry --output-on-failure
+  → 1/1 PASS, 0.00 sec
+
+Subtests covered (9):
+  1. test_register_basic           — single register, count==1, get(short_id) returns same pointer
+  2. test_register_multiple        — 3 register, count==3, at(0/1/2) order preserved
+  3. test_register_duplicate       — same short_id 2nd time → error, count stays 1
+  4. test_register_null            — NULL arg → AURA_ERR_INVALID_ARG, count unchanged
+  5. test_register_missing_field   — name=NULL or short_id=NULL or run=NULL → error
+  6. test_get_not_found            — non-existent short_id → NULL
+  7. test_at_out_of_range          — index >= count → NULL
+  8. test_clear                    — register 5 then clear → count==0, get(...)==NULL
+  9. test_init_all_idempotent      — analyzer_registry_init_all() called twice → no crash, count unchanged
+
+[Full Test Suite]
+$ ctest --test-dir build --output-on-failure
+  → 88/88 PASS (no regressions; test_analyzer_registry added as test #63)
+
+[ASAN]
+  Not run for P.1 alone. Will be executed in P.T comprehensive verification.
+
+[Whitelist Compliance]
+  Worker output strictly within whitelist:
+  - src/core/analyzer_registry.{h,c}                ✓ (new)
+  - tests/core/test_analyzer_registry.c             ✓ (new)
+  - CMakeLists.txt (single line addition)           ✓ (allowed)
+  - tests/CMakeLists.txt (single block addition)    ✓ (allowed)
+  - Tasks.md ([ ] → [-] marker only by worker)      ✓ (allowed by worker prompt)
+
+  Pre-existing untracked / modified files in worktree at session start (NOT touched by worker):
+  - src/gui/*.{cpp,h}, .claude/hooks/*, src/gui/{analysis_dispatcher,analyzer_select_dialog}.{cpp,h}, tests/gui/
+  → All v1.1 lazy analysis output, slated for P.18 commit cleanup pending user git approval.
+
+[Decisions / Risks]
+  - AURA_ERR_DUPLICATE enum not present in core/aura.h. Adding new enum value was out of scope, so duplicate-register error maps to AURA_ERR_GENERIC. P.2 layer should distinguish via short_id lookup, not error code.
+  - analyzer_registry_clear() also resets g_initialized guard so subsequent init_all() re-runs. Intended for test isolation; production code should not call clear().
+  - Header lives at src/core/analyzer_registry.h (not include/) per worker whitelist. Other core modules can #include "analyzer_registry.h" directly because src/core is on the include path.
+  - Integer ANALYZER_PREREQ_* macros mirror AnalysisStage enum values 0..6 (Parse..Decompile) without creating a header dependency on the C++/Qt analysis_dispatcher.h.
+  - thread safety not implemented (TODO(v1.1) mutex comment in source). P.1 assumption: single-thread init; safe because analyzer_registry_init_all() is called once at process start.
+
+[Verdict]
+  PASS — main Claude direct verdict (eval-main warm pool meta concurs v=pass; verdict body not received in conversation tool_result, attributed to async SendMessage delivery quirk)
+
+[Next]
+  P.2 — GUI/CLI Pipeline Integration. Worker w-gui cold spawn pending user decision on tmux teammateMode setting.

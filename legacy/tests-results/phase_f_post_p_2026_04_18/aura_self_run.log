@@ -1,0 +1,23 @@
+=== AURA vs Ghidra Parity Analysis ===
+Binary : /home/str_dgx_spark/Desktop/AURA/build-rel/aura
+Output : /home/str_dgx_spark/Desktop/AURA/tests/results/phase_f_post_p_2026_04_18/aura_self
+
+[1/3] Running Ghidra headless decompile...
+    Ghidra exported: 1199 functions
+[2/3] Running AURA decompile...
+    (no corpus match; fallback AArch64-PIE offset = 0x100000)
+    Ghidra image-base offset detected: 0x100000
+    Code sections: .init:0x3f588..0x3f5a0 .plt:0x3f5a0..0x3fa00 .text:0x3fa00..0xf7924 .fini:0xf7924..0xf7938 (denominator filter ON, Option A: keep .init/.plt/.text/.fini)
+    AURA decompiled: 1109 functions (timeouts/crashes: 20)
+    Denominator filter: 70 non-userland entries excluded (userland: 1129)
+[3/3] Computing parity scores...
+WARN: parity_score.py produced no output (or timed out) for print_string_ptr_0x1f1c34 (see parity_score.err)
+
+=== Summary ===
+    Ghidra functions (raw):      1199
+    Ghidra functions (userland): 1129  (filtered out: 70)
+    AURA-covered (userland):     1108 / 1129
+    AURA timeouts/crashes:       20
+    Avg (AURA-covered):          48/100
+    Avg (all userland):          48/100
+    Report:                      /home/str_dgx_spark/Desktop/AURA/tests/results/phase_f_post_p_2026_04_18/aura_self/parity.json

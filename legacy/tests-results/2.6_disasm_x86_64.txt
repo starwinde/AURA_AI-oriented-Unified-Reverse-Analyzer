@@ -1,0 +1,55 @@
+태스크: 2.6 — x86/x86_64 기본 명령어 디스어셈블링 검증
+날짜: 2026-03-26
+상태: [-] (구현 완료, 검증 완료)
+
+=== 환경 ===
+Host: AArch64 (NVIDIA DGX Spark), Linux 6.17
+Compiler: GCC (AArch64)
+Capstone: 5.0.1
+
+=== 테스트 바이너리 생성 ===
+$ gcc tests/disasm/data/gen_x86_64_elf.c -o /tmp/gen_x86_64_elf
+$ /tmp/gen_x86_64_elf > tests/disasm/data/test_x86_64.elf
+$ file tests/disasm/data/test_x86_64.elf
+→ ELF 64-bit LSB executable, x86-64, version 1 (SYSV), no program header, stripped
+
+=== 명령어 정확도 검증 ===
+$ ./build/aura --disasm tests/disasm/data/test_x86_64.elf
+
+출력:
+  0x0000000000400040:  55                       push       rbp
+  0x0000000000400041:  48 89 e5                 mov        rbp, rsp
+  0x0000000000400044:  b8 2a 00 00 00           mov        eax, 0x2a
+  0x0000000000400049:  5d                       pop        rbp
+  0x000000000040004a:  c3                       ret
+  0x000000000040004b:  48 01 d8                 add        rax, rbx
+  0x000000000040004e:  48 83 e8 01              sub        rax, 1
+  0x0000000000400052:  48 f7 d8                 neg        rax
+  0x0000000000400055:  c3                       ret
+  0x0000000000400056:  48 85 c0                 test       rax, rax
+  0x0000000000400059:  74 02                    je         0x40005d
+  0x000000000040005b:  ff c0                    inc        eax
+  0x000000000040005d:  c3                       ret
+  0x000000000040005e:  48 8b 07                 mov        rax, qword ptr [rdi]
+  0x0000000000400061:  48 89 06                 mov        qword ptr [rsi], rax
+  0x0000000000400064:  c3                       ret
+  0x0000000000400065:  90                       nop
+  0x0000000000400066:  90                       nop
+  0x0000000000400067:  90                       nop
+  0x0000000000400068:  90                       nop
+
+결과: 20/20 명령어 100% 일치 (예상 바이트열과 gen_x86_64_elf.c 비교)
+
+=== 성능 벤치마크 ===
+테스트: 1MB x86_64 ELF (반복 패턴, gen_large_x86_64.c 생성)
+$ time ./build/aura --disasm /tmp/bench_x86_64.elf > /dev/null
+real    0m0.204s   ← 목표 < 1초 달성
+user    0m0.188s
+sys     0m0.016s
+
+처리량: ~5.1 MB/s, 명령어 수: ~483,963개
+
+=== 판정 ===
+- 정확도: PASS (100%)
+- 성능: PASS (0.204s < 1s)
+- 상세: docs/benchmark.md 참조

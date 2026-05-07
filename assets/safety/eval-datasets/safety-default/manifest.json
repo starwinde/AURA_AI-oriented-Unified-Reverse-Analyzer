@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "dataset_id": "safety-default",
+  "version": "0.1.0",
+  "locale": ["ko-KR", "und"],
+  "description": "Small default eval dataset for rule-only/model-only/rule+model safety checks.",
+  "cases_file": "cases.jsonl"
+}

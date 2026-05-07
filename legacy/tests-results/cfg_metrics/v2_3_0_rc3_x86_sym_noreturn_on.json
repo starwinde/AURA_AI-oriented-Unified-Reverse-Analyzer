@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "commit": "1315d6b",
+  "date": "2026-04-20",
+  "corpus": "x86",
+  "per_func_count": 8,
+  "aggregate": {
+    "cfg": {
+      "cap_hits_512": 1,
+      "indirect_call_skipped": 0,
+      "indirect_jmp_skipped": 0,
+      "funcs_built": 8
+    },
+    "sa": {
+      "funcs": 8,
+      "aborts": 0
+    },
+    "hir": {
+      "gotos_emitted": 0,
+      "funcs_with_goto": 0,
+      "noreturn_truncations": 0
+    }
+  },
+  "per_func_lines_file": "v2_3_0_rc3_x86_sym_noreturn_on.jsonl"
+}

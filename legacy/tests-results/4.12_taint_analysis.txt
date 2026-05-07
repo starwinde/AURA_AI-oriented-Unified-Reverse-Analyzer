@@ -1,0 +1,46 @@
+== Task 4.12: Taint Analysis ==
+Date: 2026-04-04
+Platform: AArch64 (Linux 6.17.0-1008-nvidia)
+
+=== DoD Verification ===
+
+DoD-1: User input source identification
+  PASS — 28 built-in source functions: read, recv, recvfrom, scanf,
+         fscanf, fgets, gets, getenv, fread, mmap, accept, etc.
+         PLT suffix stripping (read@plt -> read)
+
+DoD-2: Dangerous sink identification
+  PASS — 36 built-in sink functions: strcpy, system, execv, sprintf,
+         memcpy, send, printf, dlopen, sql_query, etc.
+
+DoD-3: Taint propagation through data flow
+  PASS — Forward propagation through COPY, PHI, LOAD, STORE,
+         arithmetic (ADD/SUB/AND/OR/XOR/SHL/SHR), CALL return values
+         Fixed-point iteration (up to 100 rounds)
+
+DoD-4: Source-to-sink finding detection
+  PASS — Detects when tainted value reaches CALL argument
+         Tested: synthetic IR with CALL source -> COPY -> sink CALL argument
+
+DoD-5: Alias-aware taint propagation
+  PASS — Integrates with AliasResult for LOAD/STORE alias-based propagation
+
+DoD-6: make test PASS
+  PASS — 65/67 tests pass (2 "Not Run" are unrelated teammate tests)
+         test_taint_analysis: 7/7 PASS
+
+=== Test Results ===
+
+test_taint_analysis: 7/7 PASS
+  - null_safety ............. PASS
+  - db_operations ........... PASS  (64 source/sink entries)
+  - taint_copy .............. PASS  (3 tainted)
+  - taint_phi ............... PASS
+  - taint_arithmetic ........ PASS
+  - sink_detection .......... PASS  (1 finding, 3 tainted)
+  - no_taint ................ PASS  (clean function, 0 tainted)
+
+=== Files ===
+  include/taint_analysis.h        — Public API (TaintDb, TaintResult, TaintFinding)
+  src/core/taint_analysis.c       — Forward taint propagation on SSA IR
+  tests/core/test_taint_analysis.c — 7 unit tests

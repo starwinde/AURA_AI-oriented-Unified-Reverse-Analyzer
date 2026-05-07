@@ -1,0 +1,20 @@
+Task: 5.4 제어 구조 복원 (if, loop, switch)
+Date: 2026-04-01
+Build: SUCCESS
+ctest: 14/14 PASS
+ASAN: 0 errors
+
+세부 결과:
+  [PASS] test_cf_straight    — 직선 코드 (JUMP): 출력에 if/while 없음
+  [PASS] test_cf_if          — one-armed if (BRANCH, false=join): "if" 포함
+  [PASS] test_cf_if_else     — full if-else (양쪽 수렴): "if"+"else" 포함
+  [PASS] test_cf_while       — while 루프 (역방향 엣지, BRANCH header): "while" 포함
+  [PASS] test_cf_dowhile     — do-while 루프 (JUMP header, BRANCH latch): "do"+"while" 포함
+  [PASS] test_cf_switch      — switch-case (succ_count ≥ 3): "switch" 포함
+
+산출물:
+  src/decompiler/control_flow.c     (패턴 1~5 구현, cf_emit_structured 공개 진입점)
+  src/decompiler/codegen.c          (ir_emit_pseudoc → cf_emit_structured 위임)
+  tests/decompiler/test_control_flow.c
+  CMakeLists.txt                    (control_flow.c 추가)
+  tests/CMakeLists.txt              (test_control_flow 타겟 추가)

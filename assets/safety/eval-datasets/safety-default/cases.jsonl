@@ -1,0 +1,3 @@
+{"case_id":"email-001","input_text":"문의: hong@example.com","expected_findings":[{"kind":"email","start":4,"end":20}],"expected_masked_text":"문의: [EMAIL_1]","tags":["email","ko-KR"]}
+{"case_id":"phone-001","input_text":"연락처 010-1234-5678","expected_findings":[{"kind":"phone_number","start":4,"end":17}],"expected_masked_text":"연락처 [PHONE_NUMBER_1]","tags":["phone","ko-KR"]}
+{"case_id":"negative-symbol-001","input_text":"함수명 sub_401000","expected_findings":[],"expected_masked_text":"함수명 sub_401000","tags":["negative","symbol"]}

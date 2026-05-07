@@ -1,0 +1,8 @@
+=== test_dotnet_parser (Task 3.8) ===
+  [1] TC-1: Load and basic fields                        PASS
+  [2] TC-2: Section list                                 PASS
+  [3] TC-3: Symbol extraction                            PASS
+  [4] TC-4: Error handling                               PASS
+  [5] TC-5: dotnet_parse_buf with NULL                   PASS
+
+  Result: 5 / 5 passed

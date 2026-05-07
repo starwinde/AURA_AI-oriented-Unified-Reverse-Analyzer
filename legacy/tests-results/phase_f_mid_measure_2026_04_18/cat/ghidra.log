@@ -1,0 +1,174 @@
+openjdk version "21.0.10" 2026-01-20
+OpenJDK Runtime Environment (build 21.0.10+7-Ubuntu-124.04)
+OpenJDK 64-Bit Server VM (build 21.0.10+7-Ubuntu-124.04, mixed mode)
+INFO  Using log config file: jar:file:/home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: /home/str_dgx_spark/.config/ghidra/ghidra_12.0.4_PUBLIC/application.log (LoggingInitialization)  
+INFO  Loading user preferences: /home/str_dgx_spark/.config/ghidra/ghidra_12.0.4_PUBLIC/preferences (Preferences)  
+INFO  Loading previous preferences: /home/str_dgx_spark/.config/ghidra/ghidra_11.3.1_PUBLIC/preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (544 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: NativePRNGNonBlocking (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Headless startup complete (1065 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 58 extension points (18 false positives) (ClassSearcher)  
+INFO  HEADLESS Script Paths:
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Features/PDB/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Features/Decompiler/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Processors/JVM/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Features/BytePatterns/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts
+    /home/str_dgx_spark/Desktop/AURA/tests/benchmark
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Features/FileFormats/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Features/SwiftDemangler/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Features/WildcardAssembler/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Features/SystemEmulation/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Processors/Atmel/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Features/DecompilerDependent/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Features/FunctionID/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Features/GnuDemangler/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Features/VersionTracking/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Processors/8051/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Processors/PIC/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Features/Base/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Features/PyGhidra/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Processors/DATA/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Features/Jython/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Debug/Debugger-rmi-trace/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Debug/Debugger/ghidra_scripts
+    /home/str_dgx_spark/tools/ghidra_12.0.4_PUBLIC/Ghidra/Features/BSim/ghidra_scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Creating temporary project: /tmp/tmp.977dTTADX7/GapAnalyzer (HeadlessAnalyzer)  
+INFO  Creating project: /tmp/tmp.977dTTADX7/GapAnalyzer (DefaultProject)  
+INFO  REPORT: Processing input files:  (HeadlessAnalyzer)  
+INFO       project: /tmp/tmp.977dTTADX7/GapAnalyzer (HeadlessAnalyzer)  
+INFO  IMPORTING: file:///usr/bin/cat (HeadlessAnalyzer)  
+INFO  Using Loader: Executable and Linking Format (ELF) (ProgramLoader)  
+INFO  Using Language/Compiler: AARCH64:LE:64:v8A:default (ProgramLoader)  
+INFO  Using Library Search Path: [., /bin, /lib, /lib64, /lib/x86_64-linux-gnu, /lib/aarch64-linux-gnu, /usr/bin, /usr/lib, /usr/X11R6/bin, /usr/X11R6/lib, /usr/java/packages/lib, /usr/lib/aarch64-linux-gnu/jni, /usr/lib/aarch64-linux-gnu, /usr/lib/jni] (ProgramLoader)  
+INFO  Additional info:
+Loading file:///usr/bin/cat?MD5=bde04ad62d9536ab8d713619ece88fc8...
+Failed to properly markup GNU Hash table at 00100298: Insufficent memory at address 001002b4 (length: 284 bytes)
+Setting block .init_array to read-only
+Setting block .fini_array to read-only
+Setting block .data.rel.ro to read-only
+Setting block .dynamic to read-only
+------------------------------------------------
+
+Linking the External Programs of 'cat' to imported libraries...
+  [libc.so.6] -> not found in project
+  [ld-linux-aarch64.so.1] -> not found in project
+------------------------------------------------
+
+Resolving External Symbols of [/cat] - 59 unresolved symbols, no external libraries configured - skipping
+ (ProgramLoader)  
+INFO  IMPORTING: Loaded 0 additional files (HeadlessAnalyzer)  
+INFO  ANALYZING all memory and code: file:///usr/bin/cat (HeadlessAnalyzer)  
+INFO  DWARF external debug information found: ExternalDebugInfo [filename=91f73555514c14ceb1ac7cb10fd6a1b58562a3.debug, crc=d4170170, hash=2f91f73555514c14ceb1ac7cb10fd6a1b58562a3] (ExternalDebugFileSectionProvider)  
+INFO  Unable to find DWARF information, skipping DWARF analysis (DWARFAnalyzer)  
+INFO  Packed database cache: /var/tmp/str_dgx_spark-ghidra/packed-db-cache (PackedDatabaseCache)  
+INFO  Applied data type archive: generic_clib_64 (ApplyDataArchiveAnalyzer)  
+INFO  -----------------------------------------------------
+    AARCH64 ELF PLT Thunks                     0.038 secs
+    ASCII Strings                              0.151 secs
+    Apply Data Archives                        0.304 secs
+    Basic Constant Reference Analyzer          0.198 secs
+    Call Convention ID                         0.001 secs
+    Call-Fixup Installer                       0.002 secs
+    Create Address Tables                      0.009 secs
+    Create Address Tables - One Time           0.002 secs
+    Create Function                            0.000 secs
+    DWARF                                      0.005 secs
+    Data Reference                             0.017 secs
+    Decompiler Switch Analysis                 0.973 secs
+    Demangler GNU                              0.020 secs
+    Disassemble Entry Points                   0.143 secs
+    Embedded Media                             0.005 secs
+    External Entry References                  0.000 secs
+    Function ID                                0.018 secs
+    Function Start Search                      0.013 secs
+    Function Start Search After Code           0.003 secs
+    Function Start Search After Data           0.002 secs
+    Function Start Search delayed - One Time   0.000 secs
+    GCC Exception Handlers                     0.027 secs
+    Non-Returning Functions - Discovered       0.010 secs
+    Non-Returning Functions - Known            0.002 secs
+    Reference                                  0.034 secs
+    Shared Return Calls                        0.009 secs
+    Stack                                      0.322 secs
+    Subroutine References                      0.008 secs
+-----------------------------------------------------
+     Total Time   2 secs
+-----------------------------------------------------
+ (AutoAnalysisManager)  
+INFO  REPORT: Analysis succeeded for file: file:///usr/bin/cat (HeadlessAnalyzer)  
+INFO  REPORT: Execute script: ExportDecompile.java 'tests/results/phase_f_mid_measure_2026_04_18/cat/ghidra'  (HeadlessAnalyzer)  
+INFO  SCRIPT: /home/str_dgx_spark/Desktop/AURA/tests/benchmark/ExportDecompile.java (HeadlessAnalyzer)  
+WARN  Decompiling 00121000, pcode error at 00121000: Unable to disassemble EXTERNAL block location: 00121000 (DecompileCallback)  
+WARN  Decompiling 00121008, pcode error at 00121008: Unable to disassemble EXTERNAL block location: 00121008 (DecompileCallback)  
+WARN  Decompiling 00121010, pcode error at 00121010: Unable to disassemble EXTERNAL block location: 00121010 (DecompileCallback)  
+WARN  Decompiling 00121018, pcode error at 00121018: Unable to disassemble EXTERNAL block location: 00121018 (DecompileCallback)  
+WARN  Decompiling 00121020, pcode error at 00121020: Unable to disassemble EXTERNAL block location: 00121020 (DecompileCallback)  
+WARN  Decompiling 00121028, pcode error at 00121028: Unable to disassemble EXTERNAL block location: 00121028 (DecompileCallback)  
+WARN  Decompiling 00121038, pcode error at 00121038: Unable to disassemble EXTERNAL block location: 00121038 (DecompileCallback)  
+WARN  Decompiling 00121040, pcode error at 00121040: Unable to disassemble EXTERNAL block location: 00121040 (DecompileCallback)  
+WARN  Decompiling 00121048, pcode error at 00121048: Unable to disassemble EXTERNAL block location: 00121048 (DecompileCallback)  
+WARN  Decompiling 00121058, pcode error at 00121058: Unable to disassemble EXTERNAL block location: 00121058 (DecompileCallback)  
+WARN  Decompiling 00121060, pcode error at 00121060: Unable to disassemble EXTERNAL block location: 00121060 (DecompileCallback)  
+WARN  Decompiling 00121068, pcode error at 00121068: Unable to disassemble EXTERNAL block location: 00121068 (DecompileCallback)  
+WARN  Decompiling 00121070, pcode error at 00121070: Unable to disassemble EXTERNAL block location: 00121070 (DecompileCallback)  
+WARN  Decompiling 00121080, pcode error at 00121080: Unable to disassemble EXTERNAL block location: 00121080 (DecompileCallback)  
+WARN  Decompiling 00121088, pcode error at 00121088: Unable to disassemble EXTERNAL block location: 00121088 (DecompileCallback)  
+WARN  Decompiling 00121090, pcode error at 00121090: Unable to disassemble EXTERNAL block location: 00121090 (DecompileCallback)  
+WARN  Decompiling 001210a0, pcode error at 001210a0: Unable to disassemble EXTERNAL block location: 001210a0 (DecompileCallback)  
+WARN  Decompiling 001210a8, pcode error at 001210a8: Unable to disassemble EXTERNAL block location: 001210a8 (DecompileCallback)  
+WARN  Decompiling 001210b0, pcode error at 001210b0: Unable to disassemble EXTERNAL block location: 001210b0 (DecompileCallback)  
+WARN  Decompiling 001210c0, pcode error at 001210c0: Unable to disassemble EXTERNAL block location: 001210c0 (DecompileCallback)  
+WARN  Decompiling 001210c8, pcode error at 001210c8: Unable to disassemble EXTERNAL block location: 001210c8 (DecompileCallback)  
+WARN  Decompiling 001210d0, pcode error at 001210d0: Unable to disassemble EXTERNAL block location: 001210d0 (DecompileCallback)  
+WARN  Decompiling 001210d8, pcode error at 001210d8: Unable to disassemble EXTERNAL block location: 001210d8 (DecompileCallback)  
+WARN  Decompiling 001210e0, pcode error at 001210e0: Unable to disassemble EXTERNAL block location: 001210e0 (DecompileCallback)  
+WARN  Decompiling 001210e8, pcode error at 001210e8: Unable to disassemble EXTERNAL block location: 001210e8 (DecompileCallback)  
+WARN  Decompiling 001210f0, pcode error at 001210f0: Unable to disassemble EXTERNAL block location: 001210f0 (DecompileCallback)  
+WARN  Decompiling 001210f8, pcode error at 001210f8: Unable to disassemble EXTERNAL block location: 001210f8 (DecompileCallback)  
+WARN  Decompiling 00121100, pcode error at 00121100: Unable to disassemble EXTERNAL block location: 00121100 (DecompileCallback)  
+WARN  Decompiling 00121108, pcode error at 00121108: Unable to disassemble EXTERNAL block location: 00121108 (DecompileCallback)  
+WARN  Decompiling 00121118, pcode error at 00121118: Unable to disassemble EXTERNAL block location: 00121118 (DecompileCallback)  
+WARN  Decompiling 00121120, pcode error at 00121120: Unable to disassemble EXTERNAL block location: 00121120 (DecompileCallback)  
+WARN  Decompiling 00121128, pcode error at 00121128: Unable to disassemble EXTERNAL block location: 00121128 (DecompileCallback)  
+WARN  Decompiling 00121130, pcode error at 00121130: Unable to disassemble EXTERNAL block location: 00121130 (DecompileCallback)  
+WARN  Decompiling 00121138, pcode error at 00121138: Unable to disassemble EXTERNAL block location: 00121138 (DecompileCallback)  
+WARN  Decompiling 00121140, pcode error at 00121140: Unable to disassemble EXTERNAL block location: 00121140 (DecompileCallback)  
+WARN  Decompiling 00121148, pcode error at 00121148: Unable to disassemble EXTERNAL block location: 00121148 (DecompileCallback)  
+WARN  Decompiling 00121150, pcode error at 00121150: Unable to disassemble EXTERNAL block location: 00121150 (DecompileCallback)  
+WARN  Decompiling 00121158, pcode error at 00121158: Unable to disassemble EXTERNAL block location: 00121158 (DecompileCallback)  
+WARN  Decompiling 00121160, pcode error at 00121160: Unable to disassemble EXTERNAL block location: 00121160 (DecompileCallback)  
+WARN  Decompiling 00121168, pcode error at 00121168: Unable to disassemble EXTERNAL block location: 00121168 (DecompileCallback)  
+WARN  Decompiling 00121170, pcode error at 00121170: Unable to disassemble EXTERNAL block location: 00121170 (DecompileCallback)  
+WARN  Decompiling 00121178, pcode error at 00121178: Unable to disassemble EXTERNAL block location: 00121178 (DecompileCallback)  
+WARN  Decompiling 00121180, pcode error at 00121180: Unable to disassemble EXTERNAL block location: 00121180 (DecompileCallback)  
+WARN  Decompiling 00121188, pcode error at 00121188: Unable to disassemble EXTERNAL block location: 00121188 (DecompileCallback)  
+WARN  Decompiling 00121190, pcode error at 00121190: Unable to disassemble EXTERNAL block location: 00121190 (DecompileCallback)  
+WARN  Decompiling 00121198, pcode error at 00121198: Unable to disassemble EXTERNAL block location: 00121198 (DecompileCallback)  
+WARN  Decompiling 001211a0, pcode error at 001211a0: Unable to disassemble EXTERNAL block location: 001211a0 (DecompileCallback)  
+WARN  Decompiling 001211a8, pcode error at 001211a8: Unable to disassemble EXTERNAL block location: 001211a8 (DecompileCallback)  
+WARN  Decompiling 001211b8, pcode error at 001211b8: Unable to disassemble EXTERNAL block location: 001211b8 (DecompileCallback)  
+WARN  Decompiling 001211c8, pcode error at 001211c8: Unable to disassemble EXTERNAL block location: 001211c8 (DecompileCallback)  
+WARN  Decompiling 001211d0, pcode error at 001211d0: Unable to disassemble EXTERNAL block location: 001211d0 (DecompileCallback)  
+WARN  Decompiling 001211d8, pcode error at 001211d8: Unable to disassemble EXTERNAL block location: 001211d8 (DecompileCallback)  
+WARN  Decompiling 001211e0, pcode error at 001211e0: Unable to disassemble EXTERNAL block location: 001211e0 (DecompileCallback)  
+WARN  Decompiling 001211e8, pcode error at 001211e8: Unable to disassemble EXTERNAL block location: 001211e8 (DecompileCallback)  
+WARN  Decompiling 001211f0, pcode error at 001211f0: Unable to disassemble EXTERNAL block location: 001211f0 (DecompileCallback)  
+WARN  Decompiling 001211f8, pcode error at 001211f8: Unable to disassemble EXTERNAL block location: 001211f8 (DecompileCallback)  
+WARN  Decompiling 00121200, pcode error at 00121200: Unable to disassemble EXTERNAL block location: 00121200 (DecompileCallback)  
+WARN  Decompiling 00121208, pcode error at 00121208: Unable to disassemble EXTERNAL block location: 00121208 (DecompileCallback)  
+WARN  Decompiling 00121210, pcode error at 00121210: Unable to disassemble EXTERNAL block location: 00121210 (DecompileCallback)  
+WARN  Decompiling 00121218, pcode error at 00121218: Unable to disassemble EXTERNAL block location: 00121218 (DecompileCallback)  
+WARN  Decompiling 00121220, pcode error at 00121220: Unable to disassemble EXTERNAL block location: 00121220 (DecompileCallback)  
+INFO  ExportDecompile: exported 146 functions to tests/results/phase_f_mid_measure_2026_04_18/cat/ghidra (GhidraScript)  
+INFO  ANALYZING changes made by post scripts: file:///usr/bin/cat (HeadlessAnalyzer)  
+INFO  REPORT: Post-analysis succeeded for file: file:///usr/bin/cat (HeadlessAnalyzer)  
+INFO  /cat: file created (str_dgx_spark) (LocalFileSystem)  
+INFO  REPORT: Save succeeded for: /cat (GapAnalyzer:/cat) (HeadlessAnalyzer)  
+INFO  REPORT: Import succeeded (HeadlessAnalyzer)  

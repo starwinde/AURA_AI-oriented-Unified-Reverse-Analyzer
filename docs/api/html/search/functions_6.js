@@ -1,0 +1,23 @@
+var searchData=
+[
+  ['llm_5fcache_5fdestroy_0',['llm_cache_destroy',['../llm_8h.html#aca146b7ee009297f445d6043e47cb57f',1,'llm.h']]],
+  ['llm_5fcache_5finit_1',['llm_cache_init',['../llm_8h.html#a2da6dba0d7825ee60efd60d848ad1791',1,'llm.h']]],
+  ['llm_5fcache_5flookup_2',['llm_cache_lookup',['../llm_8h.html#a19ccd0bc99f0b7e068339e1043dd2f1f',1,'llm.h']]],
+  ['llm_5fcache_5fmake_5fkey_3',['llm_cache_make_key',['../llm_8h.html#ac2dfb7f2b17e602a02fb65229943843a',1,'llm.h']]],
+  ['llm_5fcache_5fstore_4',['llm_cache_store',['../llm_8h.html#a5d897cd38cf7be8ec7aa22c544e3b78d',1,'llm.h']]],
+  ['llm_5fclient_5fbackend_5fname_5',['llm_client_backend_name',['../llm_8h.html#ae16e9bfab885cf54ea2e6013da038a01',1,'llm.h']]],
+  ['llm_5fclient_5fchat_6',['llm_client_chat',['../llm_8h.html#a924dcae9e6e0c1711f80f73098a4d8bb',1,'llm.h']]],
+  ['llm_5fclient_5fcreate_5fgroq_7',['llm_client_create_groq',['../llm_8h.html#ac22f5a563b5bd696c652ef3e0b130848',1,'llm.h']]],
+  ['llm_5fclient_5fcreate_5fllamacpp_8',['llm_client_create_llamacpp',['../llm_8h.html#a9a1f49fbd439712d91330e96173d9b8d',1,'llm.h']]],
+  ['llm_5fclient_5fcreate_5flmstudio_9',['llm_client_create_lmstudio',['../llm_8h.html#a12b073abfa45959fb4e573e625f9f6dd',1,'llm.h']]],
+  ['llm_5fclient_5fcreate_5fopenai_10',['llm_client_create_openai',['../llm_8h.html#a1b671c0480e8a832236755d6ad2c2277',1,'llm.h']]],
+  ['llm_5fclient_5fdestroy_11',['llm_client_destroy',['../llm_8h.html#a421455b1d891e7ef860f0d70efd2cae0',1,'llm.h']]],
+  ['llm_5fglobal_5fcleanup_12',['llm_global_cleanup',['../llm_8h.html#a24f7374e3290aa299455d333def7025f',1,'llm.h']]],
+  ['llm_5fglobal_5finit_13',['llm_global_init',['../llm_8h.html#ac443cdfbda32d301d5d09621b945468c',1,'llm.h']]],
+  ['llm_5fprompt_5fbuild_14',['llm_prompt_build',['../llm_8h.html#a57cd36aac0dbeb5b0e48d4d0eef9ffbe',1,'llm.h']]],
+  ['llm_5fprompt_5fparse_5ffunc_5fname_15',['llm_prompt_parse_func_name',['../llm_8h.html#a88eb6e2c2700778e903bd5ede44fe2b1',1,'llm.h']]],
+  ['llm_5fprompt_5fparse_5fsummary_16',['llm_prompt_parse_summary',['../llm_8h.html#a5b7ede72192318568504989bacb16aa4',1,'llm.h']]],
+  ['llm_5fquery_17',['llm_query',['../llm_8h.html#acbf1b934192631fcc76445bf3220368c',1,'llm.h']]],
+  ['llm_5frequest_5fcleanup_18',['llm_request_cleanup',['../llm_8h.html#a00c37bb9af9297df934cde21e4ebcc30',1,'llm.h']]],
+  ['llm_5fresponse_5fcleanup_19',['llm_response_cleanup',['../llm_8h.html#ace61521103d55b5a711734d8d4fd8b95',1,'llm.h']]]
+];

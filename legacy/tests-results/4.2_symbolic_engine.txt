@@ -1,0 +1,34 @@
+태스크: 4.2 추상적 실행 엔진 구현
+검증 날짜: 2026-03-31 (원래 완료: 2026-03-29, 결과 파일 소급 기록)
+상태: [x] 완전 완료
+
+== ctest (Debug 빌드) ==
+test_symbolic: 10/10 PASS
+  - [TC-1]  engine create/destroy T** model             PASS
+  - [TC-2]  engine unsupported arch → NULL              PASS
+  - [TC-3]  state create: regs=SYMBOLIC, pc=0           PASS
+  - [TC-4]  state clone: deep copy                      PASS
+  - [TC-5]  step mov rax, rbx (SYMBOLIC 전파)           PASS
+  - [TC-6]  step mov rax, 0x42 (IMM → CONCRETE)        PASS
+  - [TC-7]  step add rax, rbx (CONCRETE 연산)           PASS
+  - [TC-8]  step xor rax, rax → CONCRETE 0             PASS
+  - [TC-9]  step unsupported (imul) → NOT_SUPPORTED     PASS
+  - [TC-10] queue push/run + 중복 방지                  PASS
+
+== ASAN 빌드 ==
+test_symbolic: 10/10 PASS — AddressSanitizer/UBSanitizer 오류 0건
+
+== DoD 충족 여부 ==
+레지스터 32개를 CONCRETE/SYMBOLIC 추상 값으로 표현 (TC-3, TC-5, TC-6) ✓
+x86_64 기본 산술 명령어 처리:
+  MOV reg←reg  (SYMBOLIC 전파, TC-5)  ✓
+  MOV reg←imm  (IMM → CONCRETE, TC-6) ✓
+  ADD reg,reg  (CONCRETE 연산, TC-7)  ✓
+  XOR reg,reg  (→ CONCRETE 0, TC-8)  ✓
+미지원 명령어(imul) → AURA_ERR_NOT_SUPPORTED 반환 (TC-9) ✓
+큐 인터페이스 (sym_queue_push/run) + 중복 주소 방지 (TC-10) ✓
+
+== 산출물 확인 ==
+- src/symbolic/symbolic_engine.c  존재 ✓
+- include/symbolic.h              존재 ✓  (4.1에서 정의, 4.2에서 구현)
+- tests/core/test_symbolic.c      존재 ✓  (10개 케이스)

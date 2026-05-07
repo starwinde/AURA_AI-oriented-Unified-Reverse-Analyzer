@@ -1,0 +1,53 @@
+태스크: 2.7 — ARM 아키텍처 지원 추가
+날짜: 2026-03-26
+상태: [x] (구현 완료, 검증 완료)
+
+=== 환경 ===
+Host: AArch64 (NVIDIA DGX Spark), Linux 6.17
+Capstone: 5.0.1
+
+=== 구현 확인 ===
+이미 구현되어 있었음:
+- elf_loader.c: EM_AARCH64(183) → AURA_ARCH_ARM64 매핑 존재
+- capstone_wrapper.c: AURA_ARCH_ARM64 → CS_ARCH_ARM64 / CS_MODE_ARM 분기 존재
+- pipeline.c: info->arch 기반 자동 선택으로 별도 변경 불필요
+
+=== 단위 테스트 추가 (test_disasm.c) ===
+AArch64 알려진 바이트열 4종:
+  1f 20 03 d5 → nop
+  00 00 80 d2 → mov x0, #0
+  e0 03 01 aa → mov x0, x1
+  c0 03 5f d6 → ret
+
+$ /build/tests/test_disasm
+=== Disassembler Unit Tests ===
+[TEST] Basic disassembly...     PASS
+[TEST] Architecture conversion... PASS
+[TEST] Error handling...        PASS
+[TEST] AArch64 disassembly...   PASS
+=== Results: 4/4 tests passed ===
+
+=== 실제 바이너리 검증 (/bin/ls, AArch64 ELF) ===
+$ ./build/aura --disasm /bin/ls | head -6
+Disassembly of .text from '/bin/ls' [AArch64]:
+  0x3e80 .. 0x1817c  (82684 bytes)
+  0x3e80:  3f 23 03 d5   paciasp
+  0x3e84:  ff 43 05 d1   sub sp, sp, #0x150
+  0x3e88:  fd 7b 0f a9   stp x29, x30, [sp, #0xf0]
+
+objdump -d /bin/ls 비교:
+  3e80: d503233f → paciasp    ← 3f 23 03 d5 (LE) ✅
+  3e84: d10543ff → sub sp, sp, #0x150 ✅
+  3e88: a90f7bfd → stp x29, x30, [sp, #240] ✅
+
+=== 회귀 테스트 ===
+$ ctest --output-on-failure
+1/3 test_disasm   PASS
+2/3 test_elf_loader PASS
+3/3 test_pipeline  PASS
+100% tests passed, 0 tests failed
+
+=== 판정 ===
+- ARM/AArch64 ELF 디스어셈블: PASS
+- 아키텍처 자동 감지 (e_machine 기반): PASS
+- 기존 x86 테스트 회귀 없음: PASS (3/3)

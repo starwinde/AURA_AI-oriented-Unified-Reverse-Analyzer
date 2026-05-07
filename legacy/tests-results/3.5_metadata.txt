@@ -1,0 +1,35 @@
+태스크: 3.5 메타데이터 추출 기능 (--info CLI)
+검증 날짜: 2026-03-31
+상태: [x] 완전 완료
+
+== ctest (test_pipeline 포함) ==
+test_pipeline: 7/7 PASS
+  - [TC-5] aura_info_file: text mode (ELF)... PASS
+  - [TC-6] aura_info_file: JSON mode (ELF)... PASS
+  - [TC-7] aura_info_file: error handling...  PASS
+
+== ASAN 빌드 ==
+test_pipeline: 7/7 PASS — AddressSanitizer/UBSanitizer 오류 0건
+
+== CLI 수동 검증 ==
+
+aura --info /bin/ls (ELF, AArch64):
+  Format: ELF / Arch: AArch64 / Entry: 0x5dc0
+  Sections: 28개 출력 ✓
+
+aura --info --json /bin/ls | python3 파싱:
+  arch=AArch64, format=ELF, entry=0x5dc0, sections=28, symbols=130 ✓
+
+포맷 자동 감지 (format_detector → 파서 선택):
+  ELF  → elf_parser 자동 선택  ✓
+  PE   → pe_parser 자동 선택   ✓
+  Mach-O → macho_parser 자동 선택 ✓
+
+== 손상 파일 오류 처리 ==
+/dev/null                 → exit=1, 에러 메시지 출력 (크래시 없음) ✓
+/nonexistent              → exit=1, 에러 메시지 출력 (크래시 없음) ✓
+"hello world" 텍스트 파일 → "unsupported or unknown file format" exit=1 ✓
+
+== 산출물 확인 ==
+- src/core/pipeline.c  aura_info_file() 구현 ✓
+- CLI --info, --json 플래그 동작 ✓

@@ -1,0 +1,19 @@
+
+=== FLIRT Signature Matching Tests ===
+
+PASS: test_db_lifecycle
+[INFO ] flirt: loaded 9 built-in signatures
+  loaded 9 built-in signatures
+PASS: test_builtin
+[INFO ] flirt: 0 matches found
+PASS: test_pattern_match
+[INFO ] flirt: loaded 9 built-in signatures
+[INFO ] flirt: 0 matches found
+  /usr/bin/ls: 20671 instructions, 0 FLIRT matches
+PASS: test_real_binary
+[INFO ] flirt: loaded 3 signatures from /tmp/aura_test_flirt.sig
+PASS: test_load_file
+PASS: test_errors
+
+=== Results: 6 passed, 0 failed ===
+

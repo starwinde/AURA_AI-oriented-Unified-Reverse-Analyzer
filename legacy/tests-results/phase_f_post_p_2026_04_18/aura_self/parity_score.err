@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/home/str_dgx_spark/Desktop/AURA/tests/benchmark/parity_score.py", line 400, in <module>
+    main()
+  File "/home/str_dgx_spark/Desktop/AURA/tests/benchmark/parity_score.py", line 391, in main
+    a_code = f.read()
+             ^^^^^^^^
+  File "<frozen codecs>", line 322, in decode
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0x88 in position 227: invalid start byte

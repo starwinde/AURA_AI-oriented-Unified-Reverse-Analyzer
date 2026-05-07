@@ -1,0 +1,53 @@
+== Task 4.11: Alias Analysis ==
+Date: 2026-04-04
+Platform: AArch64 (Linux 6.17.0-1008-nvidia)
+
+=== DoD Verification ===
+
+DoD-1: Pointer aliasing tracking (Steensgaard algorithm)
+  PASS — Flow-insensitive union-find alias analysis on SSA IR
+         Handles COPY, PHI, LOAD/STORE, pointer arithmetic (ADD/SUB)
+
+DoD-2: Alias results queryable
+  PASS — alias_may_alias() returns ALIAS_MUST/ALIAS_MAY/ALIAS_NO
+         alias_get_partition() returns partition ID for SSA values
+         alias_partition_count() returns distinct partition count
+
+DoD-3: COPY unification
+  PASS — v0=CONST, v1=COPY v0, v2=COPY v1 → all three alias (transitive)
+
+DoD-4: PHI unification
+  PASS — v2=PHI(v0,v1) → v0,v1,v2 all alias
+
+DoD-5: LOAD/STORE aliasing
+  PASS — STORE [addr]=v1; v2=LOAD [addr] → v1 and v2 alias
+
+DoD-6: Pointer arithmetic
+  PASS — v2 = ADD(ptr, offset) → v2 aliases ptr, not offset
+
+DoD-7: Independent values
+  PASS — Unrelated constants in separate partitions
+
+DoD-8: Real binary analysis
+  PASS — /usr/bin/ls entry function: 212 values → 143 partitions
+
+DoD-9: make test PASS
+  PASS — 64/64 tests pass (test_alias_analysis: 7/7)
+
+=== Test Results ===
+
+test_alias_analysis: 7/7 PASS
+  - null_safety ............. PASS
+  - copy_alias .............. PASS  (1 partition — all unified)
+  - phi_alias ............... PASS
+  - load_store_alias ........ PASS
+  - ptr_arithmetic .......... PASS
+  - no_alias ................ PASS  (3 partitions)
+  - real_binary ............. PASS  (212 vals, 143 partitions)
+
+Full suite: 64/64 tests pass (no regressions)
+
+=== Files ===
+  include/alias_analysis.h               — Public API (AliasResult, AliasKind)
+  src/decompiler/alias_analysis.c        — Steensgaard union-find implementation
+  tests/decompiler/test_alias_analysis.c — 7 unit tests

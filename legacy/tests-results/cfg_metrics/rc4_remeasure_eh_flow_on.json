@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "commit": "a6ff6dc",
+  "date": "2026-04-24",
+  "corpus": "smoke",
+  "per_func_count": 88,
+  "aggregate": {
+    "cfg": {
+      "cap_hits_512": 82,
+      "indirect_call_skipped": 7,
+      "indirect_jmp_skipped": 188,
+      "funcs_built": 88
+    },
+    "sa": {
+      "funcs": 88,
+      "aborts": 0
+    },
+    "hir": {
+      "gotos_emitted": 20,
+      "funcs_with_goto": 20,
+      "noreturn_truncations": 0
+    }
+  },
+  "per_func_lines_file": "rc4_remeasure_eh_flow_on.jsonl"
+}

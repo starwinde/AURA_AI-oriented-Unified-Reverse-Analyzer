@@ -1,0 +1,160 @@
+name: orchestrator-smoke
+
+# Phase 10/11.1 reference engine + CLI v1 integration gate.
+# Locks: Phase 10 orchestrator_smoke (commits 5de85fcf..3879a03f) + Phase
+# 11.1 cli_smoke (CLI invariant gate over `aura analyze|info|llm-context`).
+# References: ADR-0030 (Tier policy), ADR-0031 (reference engine),
+# ADR-0032 (external tool acquisition), ADR-0033 (frontend topology).
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'tests/integration/**'
+      - 'tests/fixtures/**'
+      - 'third_party/rizin/manifest.json'
+      - 'third_party/doctest/**'
+      - 'third_party/CLI11/**'
+      - 'scripts/fetch_external_tools.sh'
+      - 'scripts/fetch_external_tools.ps1'
+      - 'CMakeLists.txt'
+      - '.github/workflows/orchestrator-smoke.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'tests/integration/**'
+      - 'tests/fixtures/**'
+      - 'third_party/rizin/manifest.json'
+      - 'third_party/doctest/**'
+      - 'third_party/CLI11/**'
+      - 'scripts/fetch_external_tools.sh'
+      - 'scripts/fetch_external_tools.ps1'
+      - 'CMakeLists.txt'
+      - '.github/workflows/orchestrator-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  ubuntu:
+    name: Ubuntu / Rizin reference engine
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake python3 curl xz-utils ca-certificates \
+            libcurl4-openssl-dev \
+            qt6-base-dev libgl1-mesa-dev libxkbcommon-dev
+
+      - name: Cache Rizin prebuilt
+        id: rizin-cache
+        uses: actions/cache@v4
+        with:
+          path: third_party/rizin/0.8.2
+          key: rizin-${{ hashFiles('third_party/rizin/manifest.json') }}-linux-x86_64
+
+      - name: Fetch external tools (Rizin)
+        run: bash scripts/fetch_external_tools.sh
+
+      - name: Verify Rizin binary
+        run: |
+          test -x third_party/rizin/0.8.2/bin/rizin
+          third_party/rizin/0.8.2/bin/rizin -v
+
+      - name: Configure CMake (Rizin + GUI ON)
+        run: |
+          cmake -S . -B build-smoke \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DAURA_ENABLE_RIZIN=ON \
+            -DAURA_BUILD_GUI=ON \
+            -DAURA_BUILD_TESTS=ON
+
+      - name: Build orchestrator_smoke + cli_smoke + gui_smoke
+        run: |
+          cmake --build build-smoke --target orchestrator_smoke -j$(nproc)
+          cmake --build build-smoke --target cli_smoke -j$(nproc)
+          cmake --build build-smoke --target probe_engines_smoke -j$(nproc)
+          cmake --build build-smoke --target gui_smoke -j$(nproc)
+
+      - name: Run ctest (all integration labels)
+        env:
+          AURA_RIZIN_BIN: ${{ github.workspace }}/third_party/rizin/0.8.2/bin/rizin
+          AURA_RIZIN_PATH: ${{ github.workspace }}/third_party/rizin/0.8.2/bin/rizin
+        run: |
+          ctest --test-dir build-smoke --output-on-failure \
+            -L 'integration'
+
+  windows:
+    name: Windows MSVC / Rizin reference engine
+    runs-on: windows-2022
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt6 (Windows)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.2'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2019_64'
+          cache: true
+
+      - name: Cache Rizin prebuilt
+        id: rizin-cache
+        uses: actions/cache@v4
+        with:
+          path: third_party/rizin/0.8.2
+          key: rizin-${{ hashFiles('third_party/rizin/manifest.json') }}-windows-x86_64
+
+      - name: Fetch external tools (Rizin)
+        shell: pwsh
+        run: ./scripts/fetch_external_tools.ps1
+
+      - name: Verify Rizin binary
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "third_party/rizin/0.8.2/bin/rizin.exe")) {
+            throw "rizin.exe not found after fetch"
+          }
+          & ./third_party/rizin/0.8.2/bin/rizin.exe -v
+
+      # AURA_ENABLE_RIZIN_HUB defaults ON when AURA_ENABLE_RIZIN=ON. The
+      # MSVC `<io.h>` macro collision (`#define open _open`, `#define close
+      # _close`) was resolved by renaming the tp_adapter struct members to
+      # `open_fn` / `close_fn`. Both gates now build with the hub enabled.
+      - name: Configure CMake (MSVC, Rizin + GUI + Hub ON)
+        run: >
+          cmake -S . -B build-smoke
+          -G "Visual Studio 17 2022" -A x64
+          -DAURA_ENABLE_RIZIN=ON
+          -DAURA_BUILD_GUI=ON
+          -DAURA_BUILD_TESTS=ON
+
+      - name: Build orchestrator_smoke + cli_smoke + gui_smoke (Debug)
+        run: |
+          cmake --build build-smoke --target orchestrator_smoke --config Debug -- /m
+          cmake --build build-smoke --target cli_smoke --config Debug -- /m
+          cmake --build build-smoke --target probe_engines_smoke --config Debug -- /m
+          cmake --build build-smoke --target gui_smoke --config Debug -- /m
+
+      - name: Set AURA_RIZIN_BIN for CLI invocation
+        shell: pwsh
+        run: |
+          $bin = (Resolve-Path "third_party/rizin/0.8.2/bin/rizin.exe").Path
+          "AURA_RIZIN_BIN=$bin" | Out-File -Append $env:GITHUB_ENV
+          "AURA_RIZIN_PATH=$bin" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Run ctest (all integration labels)
+        run: ctest --test-dir build-smoke --output-on-failure -C Debug -L integration

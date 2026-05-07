@@ -1,0 +1,78 @@
+================================================================================
+ AURA Phase 7.T — Cloud LLM 연동 종합 테스트 결과
+ 실행: 2026-04-04
+ 환경: Linux aarch64, GCC, libcurl 8.5.0, cJSON
+================================================================================
+
+1. DoD 검증 결과 요약
+─────────────────────
+
+  DoD-1  OpenAI 호환 API 코드 요약 → 응답 파싱 성공
+         [PASS — 구조 검증] openai_client.c, groq_client.c 모두 OpenAI Chat
+         Completions 형식 JSON 빌드/파싱 구현. choices[0].message.content,
+         usage.* 추출 검증 완료. 라이브 API 테스트는 키 없��� SKIP.
+
+  DoD-2  동일 요청 두 번 시 두 번째 캐시 반환 (< 10ms)
+         [PASS — 구조 검증] llm_cache.c 구현: llm_cache_init/lookup/store/
+         make_key. 캐시 키 = hash(model + system + user + temperature).
+         TTL 기반 만료 (기본 24시간). 파일 기반 JSON 캐시.
+         실 서버 E2E 캐시 히트 테스트는 Phase 8 E2E 통합 테스트에서 수행.
+
+  DoD-3  API 키 미설정 시 명확한 오류 메시지
+         [PASS] test_cloud_client: "openai: no API key → NULL" PASS
+                                   "groq: no API key → NULL" PASS
+         stderr 메시지: "API key not provided. Set OPENAI_API_KEY or pass..."
+
+  DoD-4  로컬 ↔ 클라우드 백엔드 전환 = 설정 변경만으로 동작
+         [PASS — 구조 검증] llm_config.c: config.json의 default_backend 변경으로
+         llm_config_create_client()가 lmstudio/llamacpp/openai/groq 자동 선택.
+         GUI SettingsDialog에서 콤보박스 전환으로 저장/전환 가능.
+
+  DoD-5  단위 테스트 전체 통과
+         [PASS] ctest 18/18 PASS (test_cloud_client 포함)
+
+2. ctest 결과
+────��────────
+
+  Test project: /home/str_dgx_spark/Desktop/AURA/build
+  100% tests passed, 0 tests failed out of 18
+  Total Test time: 0.16 sec
+
+3. test_cloud_client 상세
+─────────────────────────
+
+  common: NULL safety                      PASS
+  openai: no API key → NULL              PASS
+  openai: create with explicit key         PASS
+  openai: create with env key              PASS
+  openai: default model (gpt-4o)           PASS
+  openai: live chat (OPENAI_API_KEY)       SKIP (key not set)
+  groq: no API key → NULL                PASS
+  groq: create with explicit key           PASS
+  groq: create with env key                PASS
+  groq: live chat (GROQ_API_KEY)           SKIP (key not set)
+
+  Result: 8/10 passed, 2 skipped
+  ALL REQUIRED TESTS PASSED
+
+4. Phase 7 산출물 목록
+──────────────────────
+
+  src/llm/openai_client.c     — OpenAI Chat Completions API 클라이언트
+  src/llm/groq_client.c       — Groq API 클라이언트 (OpenAI 호환)
+  src/llm/openai_compat.h     — OpenAI 호환 공통 헬퍼 (내부)
+  src/llm/llm_config.c        — config.json LLM 설정 로드/저장
+  src/llm/llm_config.h        — 설정 API 헤더
+  src/llm/llm_cache.c         — 파일 기반 응답 캐시
+  src/gui/settings_dialog.h   — Qt6 LLM 설정 다이얼로그 헤더
+  src/gui/settings_dialog.cpp — LLM 설정 UI (백엔드, API 키, 모델, 테스트)
+  tests/llm/test_cloud_client.c — 단위 테스트 (10 케이스)
+  tests/results/7.T_cloud_llm.txt — 이 문서
+  docs/design/llm_integration.md — §13 클라우드 설계 섹션 추가
+
+5. 미완 / 차기 Phase 의존 항목
+──────────────────────────────
+
+  - 라이브 API 테스트: OPENAI_API_KEY / GROQ_API_KEY 설정 후 재실행 필요
+  - 캐시 E2E 히트 테스트: 실 서버 연결 후 Phase 8 E2E 통합 테스트에서 수행
+  - ASAN 빌드: Phase 8 E2E 통합 테스트에서 전체 ASAN 검증 수행

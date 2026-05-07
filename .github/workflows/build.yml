@@ -1,0 +1,57 @@
+name: Build
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake gcc g++
+
+      - name: Build Capstone 5.0 (static)
+        run: |
+          cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCAPSTONE_BUILD_TESTS=OFF \
+            -DCAPSTONE_BUILD_CSTOOL=OFF \
+            -DCAPSTONE_ARCHITECTURE_DEFAULT=OFF \
+            -DCAPSTONE_X86_SUPPORT=ON \
+            -DCAPSTONE_ARM_SUPPORT=ON \
+            -DCAPSTONE_ARM64_SUPPORT=ON \
+            -B third_party/capstone/build \
+            third_party/capstone
+          make -C third_party/capstone/build -j$(nproc)
+
+      - name: Build Zydis (static)
+        run: |
+          cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DZYDIS_BUILD_EXAMPLES=OFF \
+            -DZYDIS_BUILD_TOOLS=OFF \
+            -B third_party/zydis/build \
+            third_party/zydis
+          cmake --build third_party/zydis/build -j$(nproc)
+
+      - name: Configure AURA
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DAURA_ENABLE_RIZIN=ON
+
+      - name: Build AURA
+        run: cmake --build build -j$(nproc)
+
+      - name: Verify binary
+        run: build/src/cli/aura --version
+
+      - name: Run tests
+        run: cd build && ctest --output-on-failure -LE integration

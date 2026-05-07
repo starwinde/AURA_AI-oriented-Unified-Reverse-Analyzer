@@ -1,0 +1,251 @@
+{
+  "binary": "basic_O2_linked.elf",
+  "ghidra_count": 30,
+  "aura_count": 15,
+  "functions": [
+    {"function": "FUN_00100660_0x100660", "score": {
+  "total": 0,
+  "signature": 0,
+  "control_flow": 0,
+  "memory": 0,
+  "ops_consts": 0,
+  "naming": 0
+}},
+    {"function": "_ITM_deregisterTMCloneTable_0x121008", "score": {
+  "total": 0,
+  "signature": 0,
+  "control_flow": 0,
+  "memory": 0,
+  "ops_consts": 0,
+  "naming": 0
+}},
+    {"function": "_ITM_registerTMCloneTable_0x121038", "score": {
+  "total": 0,
+  "signature": 0,
+  "control_flow": 0,
+  "memory": 0,
+  "ops_consts": 0,
+  "naming": 0
+}},
+    {"function": "__cxa_finalize_0x100690", "score": {
+  "total": 0,
+  "signature": 0,
+  "control_flow": 0,
+  "memory": 0,
+  "ops_consts": 0,
+  "naming": 0
+}},
+    {"function": "__cxa_finalize_0x121010", "score": {
+  "total": 0,
+  "signature": 0,
+  "control_flow": 0,
+  "memory": 0,
+  "ops_consts": 0,
+  "naming": 0
+}},
+    {"function": "__do_global_dtors_aux_0x1008c0", "score": {
+  "total": 71,
+  "signature": 30,
+  "control_flow": 21,
+  "memory": 12,
+  "ops_consts": 5,
+  "naming": 3
+}},
+    {"function": "__gmon_start___0x1006b0", "score": {
+  "total": 0,
+  "signature": 0,
+  "control_flow": 0,
+  "memory": 0,
+  "ops_consts": 0,
+  "naming": 0
+}},
+    {"function": "__gmon_start___0x121020", "score": {
+  "total": 0,
+  "signature": 0,
+  "control_flow": 0,
+  "memory": 0,
+  "ops_consts": 0,
+  "naming": 0
+}},
+    {"function": "__libc_start_main_0x100680", "score": {
+  "total": 0,
+  "signature": 0,
+  "control_flow": 0,
+  "memory": 0,
+  "ops_consts": 0,
+  "naming": 0
+}},
+    {"function": "__libc_start_main_0x121000", "score": {
+  "total": 0,
+  "signature": 0,
+  "control_flow": 0,
+  "memory": 0,
+  "ops_consts": 0,
+  "naming": 0
+}},
+    {"function": "__stack_chk_fail_0x1006a0", "score": {
+  "total": 0,
+  "signature": 0,
+  "control_flow": 0,
+  "memory": 0,
+  "ops_consts": 0,
+  "naming": 0
+}},
+    {"function": "__stack_chk_fail_0x121018", "score": {
+  "total": 0,
+  "signature": 0,
+  "control_flow": 0,
+  "memory": 0,
+  "ops_consts": 0,
+  "naming": 0
+}},
+    {"function": "_fini_0x1009fc", "score": {
+  "total": 0,
+  "signature": 0,
+  "control_flow": 0,
+  "memory": 0,
+  "ops_consts": 0,
+  "naming": 0
+}},
+    {"function": "_init_0x100640", "score": {
+  "total": 0,
+  "signature": 0,
+  "control_flow": 0,
+  "memory": 0,
+  "ops_consts": 0,
+  "naming": 0
+}},
+    {"function": "_start_0x100800", "score": {
+  "total": 71,
+  "signature": 30,
+  "control_flow": 25,
+  "memory": 14,
+  "ops_consts": 0,
+  "naming": 2
+}},
+    {"function": "abort_0x1006c0", "score": {
+  "total": 0,
+  "signature": 0,
+  "control_flow": 0,
+  "memory": 0,
+  "ops_consts": 0,
+  "naming": 0
+}},
+    {"function": "abort_0x121030", "score": {
+  "total": 0,
+  "signature": 0,
+  "control_flow": 0,
+  "memory": 0,
+  "ops_consts": 0,
+  "naming": 0
+}},
+    {"function": "call_weak_fn_0x100834", "score": {
+  "total": 72,
+  "signature": 30,
+  "control_flow": 19,
+  "memory": 20,
+  "ops_consts": 0,
+  "naming": 3
+}},
+    {"function": "corpus_add_0x100920", "score": {
+  "total": 93,
+  "signature": 30,
+  "control_flow": 25,
+  "memory": 20,
+  "ops_consts": 10,
+  "naming": 8
+}},
+    {"function": "corpus_arr_sum_0x100990", "score": {
+  "total": 59,
+  "signature": 30,
+  "control_flow": 16,
+  "memory": 8,
+  "ops_consts": 0,
+  "naming": 5
+}},
+    {"function": "corpus_call_add_0x1009d0", "score": {
+  "total": 93,
+  "signature": 30,
+  "control_flow": 25,
+  "memory": 20,
+  "ops_consts": 10,
+  "naming": 8
+}},
+    {"function": "corpus_clamp_0x1009e0", "score": {
+  "total": 78,
+  "signature": 30,
+  "control_flow": 19,
+  "memory": 20,
+  "ops_consts": 3,
+  "naming": 6
+}},
+    {"function": "corpus_get_x_0x1009c4", "score": {
+  "total": 83,
+  "signature": 30,
+  "control_flow": 25,
+  "memory": 16,
+  "ops_consts": 3,
+  "naming": 9
+}},
+    {"function": "corpus_max_0x100930", "score": {
+  "total": 79,
+  "signature": 30,
+  "control_flow": 21,
+  "memory": 20,
+  "ops_consts": 0,
+  "naming": 8
+}},
+    {"function": "corpus_sum_0x100940", "score": {
+  "total": 66,
+  "signature": 30,
+  "control_flow": 16,
+  "memory": 14,
+  "ops_consts": 0,
+  "naming": 6
+}},
+    {"function": "corpus_swap_0x100974", "score": {
+  "total": 73,
+  "signature": 21,
+  "control_flow": 25,
+  "memory": 11,
+  "ops_consts": 8,
+  "naming": 8
+}},
+    {"function": "deregister_tm_clones_0x100850", "score": {
+  "total": 81,
+  "signature": 30,
+  "control_flow": 25,
+  "memory": 20,
+  "ops_consts": 0,
+  "naming": 6
+}},
+    {"function": "frame_dummy_0x100910", "score": {
+  "total": 48,
+  "signature": 0,
+  "control_flow": 25,
+  "memory": 20,
+  "ops_consts": 0,
+  "naming": 3
+}},
+    {"function": "main_0x100700", "score": {
+  "total": 57,
+  "signature": 21,
+  "control_flow": 19,
+  "memory": 6,
+  "ops_consts": 7,
+  "naming": 4
+}},
+    {"function": "register_tm_clones_0x100880", "score": {
+  "total": 81,
+  "signature": 30,
+  "control_flow": 25,
+  "memory": 20,
+  "ops_consts": 0,
+  "naming": 6
+}}
+  ],
+  "total_functions": 30,
+  "average_score": 36,
+  "covered_functions": 15,
+  "covered_average": 73
+}

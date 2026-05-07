@@ -1,0 +1,21 @@
+var searchData=
+[
+  ['patch_2eh_0',['patch.h',['../patch_8h.html',1,'']]],
+  ['patch_5fapply_1',['patch_apply',['../patch_8h.html#a2626f046de4857ab7143eeabb2ceee54',1,'patch.h']]],
+  ['patch_5fcontext_5fdestroy_2',['patch_context_destroy',['../patch_8h.html#af4f6b7a131430f8ef25a371fa25c288d',1,'patch.h']]],
+  ['patch_5fcontext_5fnew_3',['patch_context_new',['../patch_8h.html#a4908ef5ace88c08042c52304446d970c',1,'patch.h']]],
+  ['patch_5fencode_4',['patch_encode',['../patch_8h.html#af22f60fc77304a02012db64092e96ae0',1,'patch.h']]],
+  ['patchcontext_5',['PatchContext',['../patch_8h.html#ad4d6bbfec89886786a9eec793606b1ca',1,'patch.h']]],
+  ['patchresult_6',['PatchResult',['../structPatchResult.html',1,'']]],
+  ['path_7',['path',['../structMappedFile.html#abaeeb8677b6334ab84cfea61e8d74963',1,'MappedFile::path'],['../structSymState.html#aba25b1af6266b8fc7b777b45035361bf',1,'SymState::path']]],
+  ['pc_8',['pc',['../structSymState.html#a5fb23d488279c75373f1fb8909d6127d',1,'SymState']]],
+  ['pe_5fparser_2eh_9',['pe_parser.h',['../pe__parser_8h.html',1,'']]],
+  ['pe_5fparser_5fload_10',['pe_parser_load',['../pe__parser_8h.html#a7edd9a10c8c96f9050bf69aa290a6298',1,'pe_parser.h']]],
+  ['phi_5fcount_11',['phi_count',['../structIrInstr.html#a1596b99f018095b2d88e73b43b0e2433',1,'IrInstr']]],
+  ['phi_5fpred_5fids_12',['phi_pred_ids',['../structIrInstr.html#a17a4f56cb0097eeeb5e64c3fb63ab715',1,'IrInstr']]],
+  ['phi_5fsrcs_13',['phi_srcs',['../structIrInstr.html#a6b7bd674748a9fad9adf8b175692d500',1,'IrInstr']]],
+  ['pipeline_2eh_14',['pipeline.h',['../pipeline_8h.html',1,'']]],
+  ['pred_5fcount_15',['pred_count',['../structIrBlock.html#a6fe467ac9f8fff4819ed1412c6026bf6',1,'IrBlock']]],
+  ['pred_5fids_16',['pred_ids',['../structIrBlock.html#a6106513569ae7cce5911897214a993e5',1,'IrBlock']]],
+  ['prompt_5ftokens_17',['prompt_tokens',['../structLlmResponse.html#aabfdda2b27a8bc57d4fa711e9b42dd03',1,'LlmResponse']]]
+];

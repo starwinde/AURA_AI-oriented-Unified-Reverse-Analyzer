@@ -1,0 +1,60 @@
+== aura binary: AURA v2.2.0
+== fixture root: /home/str_dgx_spark/Desktop/AURA/tests/results/phase_f_complete_2026_04_18
+
+-- bucket: cat (20 funcs, bin=/bin/cat)
+-- bucket: ls (20 funcs, bin=/bin/ls)
+-- bucket: aura_self (50 funcs, bin=/home/str_dgx_spark/Desktop/AURA/build-rel/aura)
+
+== Per-function results (FAILures only) ==
+bucket     function                                                   fixture    current     addr_rel verdict
+cat        FUN_00102d10_0x102d10.c                                         11          8       0x2d10 FAIL -27.3%
+cat        FUN_00102d40_0x102d40.c                                         11          8       0x2d40 FAIL -27.3%
+ls         FUN_00105e10_0x105e10.c                                         11          8       0x5e10 FAIL -27.3%
+ls         FUN_00105e40_0x105e40.c                                         11          8       0x5e40 FAIL -27.3%
+aura_self  FUN_001b4b2c_0x1b4b2c.c                                        113         14      0xb4b2c FAIL -87.6%
+aura_self  decodeToMCInst_2.isra.0_0x19c4c4.c                              29         18      0x9c4c4 FAIL -37.9%
+aura_self  decodeToMCInst_4.constprop.0.isra.0_0x1be490.c                  24         18      0xbe490 FAIL -25.0%
+aura_self  decodeToMCInst_4.isra.0_0x1a5484.c                              24         18      0xa5484 FAIL -25.0%
+aura_self  printInstruction_0x1d0080.c                                     31         24      0xd0080 FAIL -22.6%
+aura_self  AArch64SysReg_genericRegisterString_0x1e7b04.c                  45         15      0xe7b04 FAIL -66.7%
+aura_self  AArch64_get_insn_id_0x1db9c0.c                                  65         25      0xdb9c0 FAIL -61.5%
+aura_self  AArch64_reg_access_0x1dbd44.c                                   35         90      0xdbd44 FAIL +157.1%
+aura_self  AArch64_getFeatureBits_0x1cb714.c                                8         12      0xcb714 FAIL +50.0%
+aura_self  AArch64_getInstruction_0x1cb720.c                               36         12      0xcb720 FAIL -66.7%
+aura_self  AArch64_get_op_access_0x1dbcf0.c                                22         37      0xdbcf0 FAIL +68.2%
+aura_self  AArch64_global_init_0x190b20.c                                  21         15      0x90b20 FAIL -28.6%
+aura_self  AArch64_group_name_0x1dbb20.c                                   11         18      0xdbb20 FAIL +63.6%
+aura_self  AArch64_init_0x1cbb90.c                                         28         11      0xcbb90 FAIL -60.7%
+aura_self  AArch64_insn_name_0x1dbb04.c                                    14         18      0xdbb04 FAIL +28.6%
+aura_self  AArch64_map_insn_0x1dbb40.c                                     19          7      0xdbb40 FAIL -63.2%
+aura_self  AArch64_map_sys_op_0x1dbbd4.c                                   22         17      0xdbbd4 FAIL -22.7%
+aura_self  AArch64_option_0x190bb4.c                                       14         22      0x90bb4 FAIL +57.1%
+aura_self  AArch64_post_printer_0x1db6b4.c                                 28         14      0xdb6b4 FAIL -50.0%
+aura_self  AArch64_printInst_0x1d8d60.c                                   224         23      0xd8d60 FAIL -89.7%
+aura_self  AArch64_reg_name_0x1db9a0.c                                     13         32      0xdb9a0 FAIL +146.2%
+aura_self  ARM_addReg_0x1bda40.c                                           33         23      0xbda40 FAIL -30.3%
+aura_self  ARM_addSysReg_0x1bdaa0.c                                        33         15      0xbdaa0 FAIL -54.5%
+aura_self  ARM_addUserMode.part.0.isra.0_0x1b34f0.c                        23         11      0xb34f0 FAIL -52.2%
+aura_self  ARM_addUserMode_0x1bda80.c                                      33         11      0xbda80 FAIL -66.7%
+aura_self  ARM_addVectorDataType_0x1bda00.c                                33         43      0xbda00 FAIL +30.3%
+aura_self  ARM_blx_to_arm_mode_0x1bddb0.c                                  11         18      0xbddb0 FAIL +63.6%
+aura_self  ARM_getFeatureBits_0x1b0080.c                                   13         18      0xb0080 FAIL +38.5%
+aura_self  ARM_getInstruction_0x1b08d0.c                                   18         10      0xb08d0 FAIL -44.4%
+aura_self  ARM_getRegName_0x1bba40.c                                       13         19      0xbba40 FAIL +46.2%
+aura_self  ARM_get_detail_op_0x1e7244.c                                    23         12      0xe7244 FAIL -47.8%
+aura_self  ARM_get_insn_id_0x1bdb30.c                                      58          8      0xbdb30 FAIL -86.2%
+aura_self  ARM_init_0x1b0100.c                                             28         12      0xb0100 FAIL -57.1%
+aura_self  ARM_post_printer_0x1bba80.c                                     27         19      0xbba80 FAIL -29.6%
+aura_self  ARM_printInst_0x1bbd10.c                                        72         30      0xbbd10 FAIL -58.3%
+aura_self  ARM_reg_name2_0x1bdb04.c                                        18         11      0xbdb04 FAIL -38.9%
+aura_self  ARM_reg_name_0x1bdae0.c                                         18         13      0xbdae0 FAIL -27.8%
+aura_self  AddThumb1SBit_0x1957c0.c                                        32          7      0x957c0 FAIL -78.1%
+aura_self  AddThumbPredicate_0x1958a0.c                                    37         11      0x958a0 FAIL -70.3%
+aura_self  DecodeAddrMode2IdxInstruction.isra.0_0x198900.c                 38         11      0x98900 FAIL -71.1%
+
+== Summary ==
+  total   : 90
+  pass    : 46
+  fail    : 44
+  threshold: 85 of 90 must pass (±20%)
+  RESULT  : RED (pass 46 < threshold 85)

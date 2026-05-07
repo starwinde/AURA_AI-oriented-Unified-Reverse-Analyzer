@@ -1,0 +1,33 @@
+Task 3.16: Relocation Complete Processing
+===========================================
+Date: 2026-04-04
+
+DoD Verification:
+  1. ELF .rela.dyn/.rela.plt relocation entry parsing: PASS
+     - Supports SHT_RELA and SHT_REL section types
+     - x86_64, AArch64, ARM32, i386 relocation type mapping
+     - Symbol name resolution via dynsym/symtab + strtab
+  2. PE .reloc section (BaseRelocationTable) parsing: PASS
+     - IMAGE_REL_BASED_HIGHLOW (32-bit) support
+     - IMAGE_REL_BASED_DIR64 (64-bit) support
+     - IMAGE_REL_BASED_ABSOLUTE (padding) correctly skipped
+  3. Disassembly output reflection: PASS
+     - reloc_lookup() O(log n) binary search by address
+     - RelocEntry includes sym_name for JUMP_SLOT/GLOB_DAT entries
+  4. make test: 54/54 PASS
+     - test_relocation: 6/6 PASS
+
+Test Details:
+  - test_null_safety: NULL arg safety verified
+  - test_type_names: All RelocType names correct
+  - test_elf_relocation: /usr/bin/ls → 349 entries (AArch64)
+    - Sorted by address verified
+    - Named JUMP_SLOT symbols confirmed (e.g., mbrtowc@0x3fc10)
+  - test_pe_relocation: SKIP (no PE test binary on this platform)
+  - test_empty_table_lookup: Empty table → NULL correctly
+  - test_disasm_reloc_annotation: JUMP_SLOT lookup integration verified
+
+Files:
+  - src/parser/relocation.c — implementation
+  - include/relocation.h — public API
+  - tests/parser/test_relocation.c — tests

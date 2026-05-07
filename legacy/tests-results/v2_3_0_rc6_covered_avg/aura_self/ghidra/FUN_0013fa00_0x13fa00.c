@@ -1,0 +1,460 @@
+
+ulong FUN_0013fa00(uint param_1,long param_2)
+
+{
+  uint uVar1;
+  undefined8 uVar2;
+  ulong uVar3;
+  undefined *puVar4;
+  bool bVar5;
+  int iVar6;
+  int iVar7;
+  int iVar8;
+  long lVar9;
+  long lVar10;
+  undefined8 uVar11;
+  ulong uVar12;
+  long lVar13;
+  char *pcVar14;
+  char *__s1;
+  ulong uVar15;
+  ulonglong uVar16;
+  long lVar17;
+  undefined4 uVar18;
+  ulonglong local_a0;
+  undefined8 local_90;
+  char *local_88;
+  undefined1 local_80 [16];
+  ulong local_70;
+  long local_68;
+  
+  local_68 = *(long *)PTR___stack_chk_guard_005ffe88;
+  if (1 < (int)param_1) {
+    uVar12 = 1;
+    iVar7 = 1;
+    do {
+      while( true ) {
+        pcVar14 = *(char **)(param_2 + uVar12 * 8);
+        iVar6 = strcmp(pcVar14,"--verbose");
+        if (iVar6 != 0) break;
+        FUN_001407f0();
+        uVar12 = uVar12 + 1;
+        FUN_00140820(0,"/tmp/aura_v2_1_0/src/core/aura.c",0x50,"verbose logging enabled");
+        if (param_1 == uVar12) goto LAB_0013fab0;
+      }
+      uVar12 = uVar12 + 1;
+      *(char **)(param_2 + (long)iVar7 * 8) = pcVar14;
+      iVar7 = iVar7 + 1;
+    } while (param_1 != uVar12);
+LAB_0013fab0:
+    if (1 < iVar7) {
+      pcVar14 = *(char **)(param_2 + 8);
+      iVar6 = strcmp(pcVar14,"--version");
+      if (iVar6 == 0) {
+        uVar12 = 0;
+        puts("AURA v2.0.0");
+        goto LAB_0013fd54;
+      }
+      if (iVar7 != 2) {
+        iVar6 = strcmp(pcVar14,"--disasm");
+        if (iVar6 == 0) {
+          iVar7 = FUN_00140e94(*(undefined8 *)(param_2 + 0x10));
+        }
+        else {
+          iVar6 = strcmp(pcVar14,"--info");
+          if (iVar6 == 0) {
+            pcVar14 = *(char **)(param_2 + 0x10);
+            uVar18 = 0;
+            if ((iVar7 != 3) && (iVar7 = strcmp(pcVar14,"--json"), iVar7 == 0)) {
+              pcVar14 = *(char **)(param_2 + 0x18);
+              uVar18 = 1;
+            }
+            iVar7 = FUN_00141200(pcVar14,uVar18);
+          }
+          else {
+            if ((5 < iVar7) && (iVar6 = strcmp(pcVar14,"--patch"), iVar6 == 0)) {
+              uVar12 = 3;
+              lVar17 = 0;
+              uVar16 = 0;
+              do {
+                uVar15 = -(uVar12 >> 0x1f) & 0xfffffff800000000 | uVar12 << 3;
+                iVar8 = (int)uVar12;
+                uVar1 = iVar8 + 1;
+                uVar12 = (ulong)uVar1;
+                pcVar14 = *(char **)(param_2 + uVar15);
+                iVar6 = strcmp(pcVar14,"--addr");
+                if (iVar6 == 0) {
+                  if ((int)uVar1 < iVar7) {
+                    uVar12 = (ulong)(iVar8 + 2);
+                    uVar16 = strtoull(*(char **)(param_2 + uVar15 + 8),(char **)0x0,0);
+                  }
+                  else {
+                    iVar6 = strcmp(pcVar14,"--asm");
+                    if (iVar6 == 0) break;
+                  }
+                }
+                else {
+                  iVar6 = strcmp(pcVar14,"--asm");
+                  if (iVar6 == 0) {
+                    if (iVar7 <= (int)uVar1) break;
+                    uVar12 = (ulong)(iVar8 + 2);
+                    lVar17 = *(long *)(param_2 + uVar15 + 8);
+                  }
+                }
+              } while ((int)uVar12 < iVar7);
+              if (uVar16 == 0 || lVar17 == 0) {
+                fwrite("usage: aura --patch <file> --addr <hex_addr> --asm \"<instr>\"\n",1,0x3d,
+                       *(FILE **)PTR_stderr_005fffd8);
+              }
+              else {
+                uVar15 = FUN_001661a0(lVar17,uVar16,local_80);
+                uVar12 = uVar15 & 0xffffffff;
+                if ((int)uVar15 == 0) {
+                  __printf_chk(2,"patch: %s @ 0x%lx =>",lVar17,uVar16);
+                  for (uVar15 = 0; uVar15 < local_70; uVar15 = uVar15 + 1) {
+                    __printf_chk(2," %02x",local_80[uVar15]);
+                  }
+                  putchar(10);
+                  goto LAB_0013fd54;
+                }
+                uVar11 = *(undefined8 *)PTR_stderr_005fffd8;
+                FUN_00140720(uVar15,PTR_stderr_005fffd8,"aura: patch encode failed: %s\n");
+                __fprintf_chk(uVar11,2);
+              }
+              uVar12 = 1;
+              goto LAB_0013fd54;
+            }
+            iVar6 = strcmp(pcVar14,"--recursive");
+            if (iVar6 == 0) {
+              iVar7 = FUN_00143f00(*(undefined8 *)(param_2 + 0x10));
+            }
+            else {
+              iVar6 = strcmp(pcVar14,"--strings");
+              if (iVar6 == 0) {
+                iVar7 = FUN_001441e0(*(undefined8 *)(param_2 + 0x10));
+              }
+              else {
+                iVar6 = strcmp(pcVar14,"--xref");
+                if (iVar6 == 0) {
+                  uVar11 = *(undefined8 *)(param_2 + 0x10);
+                  if (iVar7 != 3) {
+                    uVar12 = 3;
+                    uVar16 = 0;
+                    do {
+                      uVar15 = uVar12 << 3;
+                      uVar3 = uVar12 >> 0x1f;
+                      iVar6 = strcmp(*(char **)(param_2 + (long)(int)uVar12 * 8),"--addr");
+                      if (iVar6 == 0) {
+                        uVar1 = (int)uVar12 + 1;
+                        uVar12 = (ulong)uVar1;
+                        if (iVar7 <= (int)uVar1) break;
+                        uVar16 = strtoull(*(char **)(param_2 + (-uVar3 & 0xfffffff800000000 | uVar15
+                                                               ) + 8),(char **)0x0,0);
+                      }
+                      uVar1 = (int)uVar12 + 1;
+                      uVar12 = (ulong)uVar1;
+                    } while ((int)uVar1 < iVar7);
+                    if (uVar16 != 0) {
+                      iVar7 = FUN_001443e0(uVar11,uVar16);
+                      goto LAB_0013fd40;
+                    }
+                  }
+                  fwrite("usage: aura --xref <file> --addr <hex_addr>\n",1,0x2c,
+                         *(FILE **)PTR_stderr_005fffd8);
+LAB_0013ff48:
+                  uVar12 = 1;
+                  goto LAB_0013fd54;
+                }
+                iVar6 = strcmp(pcVar14,"--callgraph");
+                if (iVar6 == 0) {
+                  bVar5 = false;
+                  if (iVar7 != 3) {
+                    iVar7 = strcmp(*(char **)(param_2 + 0x18),"--dot");
+                    bVar5 = iVar7 == 0;
+                  }
+                  iVar7 = FUN_00143bf0(*(undefined8 *)(param_2 + 0x10),bVar5);
+                }
+                else {
+                  iVar6 = strcmp(pcVar14,"--functions");
+                  if (iVar6 != 0) {
+                    if (iVar7 == 3) {
+LAB_0013fc4c:
+                      iVar6 = strcmp(pcVar14,"--headless");
+                      if (iVar6 == 0) {
+                        lVar17 = 2;
+                        pcVar14 = (char *)0x0;
+                        uVar18 = 0;
+                        do {
+                          __s1 = *(char **)(param_2 + lVar17 * 8);
+                          iVar6 = strcmp(__s1,"--json");
+                          if (iVar6 == 0) {
+                            uVar18 = 1;
+                          }
+                          else if (pcVar14 == (char *)0x0) {
+                            pcVar14 = __s1;
+                          }
+                          lVar17 = lVar17 + 1;
+                        } while ((int)lVar17 < iVar7);
+                        if (pcVar14 != (char *)0x0) {
+                          iVar7 = FUN_001720f0(pcVar14,uVar18,*(undefined8 *)PTR_stdout_005fff40);
+                          goto LAB_0013fd40;
+                        }
+                        fwrite("usage: aura --headless <file> [--json]\n",1,0x27,
+                               *(FILE **)PTR_stderr_005fffd8);
+                      }
+                      else {
+                        iVar6 = strcmp(pcVar14,"--list-analyzers");
+                        if (iVar6 == 0) goto LAB_0013fdf0;
+                        if ((iVar7 == 3) || (iVar6 = strcmp(pcVar14,"--run-analyzer"), iVar6 != 0))
+                        {
+                          iVar7 = strcmp(pcVar14,"--run-all-analyzers");
+                          if (iVar7 != 0) goto LAB_0013fcb4;
+                          uVar11 = *(undefined8 *)(param_2 + 0x10);
+                          FUN_00140c44();
+                          lVar17 = FUN_001459e0(uVar11);
+                          puVar4 = PTR_stdout_005fff40;
+                          if (lVar17 != 0) {
+                            lVar9 = FUN_00140b34();
+                            for (lVar13 = 0; lVar13 != lVar9; lVar13 = lVar13 + 1) {
+                              lVar10 = FUN_00140b40(lVar13);
+                              if (lVar10 != 0) {
+                                local_90 = 0;
+                                local_88 = (char *)0x0;
+                                iVar7 = (**(code **)(lVar10 + 0x28))
+                                                  (lVar17,0,0,0,&local_90,&local_88);
+                                if (iVar7 == 0) {
+                                  __printf_chk(2,"[%s] %s\n",*(undefined8 *)(lVar10 + 8),
+                                               &DAT_001f8eb8);
+                                  if (*(code **)(lVar10 + 0x38) != (code *)0x0) {
+                                    (**(code **)(lVar10 + 0x38))(local_90,*(undefined8 *)puVar4);
+                                  }
+                                }
+                                else {
+                                  pcVar14 = "SKIPPED";
+                                  if (iVar7 != 1) {
+                                    pcVar14 = "ERROR";
+                                  }
+                                  __printf_chk(2,"[%s] %s\n",*(undefined8 *)(lVar10 + 8),pcVar14);
+                                }
+                                free(local_88);
+                                (**(code **)(lVar10 + 0x30))(local_90);
+                              }
+                            }
+                            uVar12 = 0;
+                            FUN_00144de4(lVar17);
+                            goto LAB_0013fd54;
+                          }
+                        }
+                        else {
+                          uVar2 = *(undefined8 *)(param_2 + 0x10);
+                          uVar11 = *(undefined8 *)(param_2 + 0x18);
+                          uVar12 = 4;
+                          uVar16 = 0;
+                          while (iVar6 = (int)uVar12, iVar6 < iVar7) {
+                            uVar15 = -(uVar12 >> 0x1f) & 0xfffffff800000000 | uVar12 << 3;
+                            uVar12 = (ulong)(iVar6 + 1U);
+                            iVar8 = strcmp(*(char **)(param_2 + uVar15),"--func");
+                            if ((iVar8 == 0) && ((int)(iVar6 + 1U) < iVar7)) {
+                              uVar12 = (ulong)(iVar6 + 2);
+                              uVar16 = strtoull(*(char **)(param_2 + uVar15 + 8),(char **)0x0,0);
+                            }
+                          }
+                          FUN_00140c44();
+                          lVar17 = FUN_00140b70(uVar2);
+                          if (lVar17 == 0) {
+                            __fprintf_chk(*(undefined8 *)PTR_stderr_005fffd8,2,
+                                          "aura: unknown analyzer \'%s\'\n",uVar2);
+                            goto LAB_0013ff48;
+                          }
+                          lVar13 = FUN_001459e0(uVar11);
+                          if (lVar13 != 0) {
+                            local_90 = 0;
+                            local_88 = (char *)0x0;
+                            iVar7 = (**(code **)(lVar17 + 0x28))
+                                              (lVar13,0,0,uVar16,&local_90,&local_88);
+                            if (iVar7 == 0) {
+                              if (*(code **)(lVar17 + 0x38) == (code *)0x0) {
+                                puts("OK (no text formatter)");
+                              }
+                              else {
+                                (**(code **)(lVar17 + 0x38))
+                                          (local_90,*(undefined8 *)PTR_stdout_005fff40);
+                              }
+                            }
+                            else if (iVar7 == 1) {
+                              puts("SKIPPED: not applicable to this binary");
+                            }
+                            else {
+                              pcVar14 = local_88;
+                              if (local_88 == (char *)0x0) {
+                                pcVar14 = "unknown";
+                              }
+                              __fprintf_chk(*(undefined8 *)PTR_stderr_005fffd8,2,"ERROR: %s\n",
+                                            pcVar14);
+                            }
+                            free(local_88);
+                            (**(code **)(lVar17 + 0x30))(local_90);
+                            FUN_00144de4(lVar13);
+                            uVar12 = (ulong)(iVar7 != 0);
+                            goto LAB_0013fd54;
+                          }
+                        }
+                        __fprintf_chk(*(undefined8 *)PTR_stderr_005fffd8,2,
+                                      "aura: failed to load \'%s\'\n",uVar11);
+                      }
+                    }
+                    else {
+                      iVar6 = strcmp(pcVar14,"--cfg");
+                      if (iVar6 == 0) {
+                        uVar11 = *(undefined8 *)(param_2 + 0x10);
+                        uVar18 = 0;
+                        uVar12 = 3;
+                        local_a0 = 0;
+                        bVar5 = false;
+                        do {
+                          uVar15 = -(uVar12 >> 0x1f) & 0xfffffff800000000 | uVar12 << 3;
+                          pcVar14 = *(char **)(param_2 + uVar15);
+                          iVar6 = strcmp(pcVar14,"--func");
+                          if (iVar6 == 0) {
+                            uVar1 = (int)uVar12 + 1;
+                            uVar12 = (ulong)uVar1;
+                            if (iVar7 <= (int)uVar1) {
+                              iVar7 = strcmp(pcVar14,"--dot");
+                              if (iVar7 == 0) {
+                                uVar18 = 1;
+                              }
+                              break;
+                            }
+                            bVar5 = true;
+                            local_a0 = strtoull(*(char **)(param_2 + uVar15 + 8),(char **)0x0,0);
+                          }
+                          else {
+                            iVar6 = strcmp(pcVar14,"--dot");
+                            if (iVar6 == 0) {
+                              uVar18 = 1;
+                            }
+                          }
+                          uVar1 = (int)uVar12 + 1;
+                          uVar12 = (ulong)uVar1;
+                        } while ((int)uVar1 < iVar7);
+                        if (bVar5) {
+                          iVar7 = FUN_00141920(uVar11,local_a0,uVar18);
+LAB_001400a8:
+                          uVar12 = (ulong)(iVar7 != 0);
+                          goto LAB_0013fd54;
+                        }
+                        fwrite("usage: aura --cfg <file> --func <addr> [--dot]\n",1,0x2f,
+                               *(FILE **)PTR_stderr_005fffd8);
+                      }
+                      else {
+                        iVar6 = strcmp(pcVar14,"--dfg");
+                        if (iVar6 == 0) {
+                          uVar11 = *(undefined8 *)(param_2 + 0x10);
+                          uVar18 = 0;
+                          uVar12 = 3;
+                          local_a0 = 0;
+                          bVar5 = false;
+                          do {
+                            uVar15 = -(uVar12 >> 0x1f) & 0xfffffff800000000 | uVar12 << 3;
+                            pcVar14 = *(char **)(param_2 + uVar15);
+                            iVar6 = strcmp(pcVar14,"--func");
+                            if (iVar6 == 0) {
+                              uVar1 = (int)uVar12 + 1;
+                              uVar12 = (ulong)uVar1;
+                              if (iVar7 <= (int)uVar1) {
+                                iVar7 = strcmp(pcVar14,"--json");
+                                if (iVar7 == 0) {
+                                  uVar18 = 1;
+                                }
+                                break;
+                              }
+                              bVar5 = true;
+                              local_a0 = strtoull(*(char **)(param_2 + uVar15 + 8),(char **)0x0,0);
+                            }
+                            else {
+                              iVar6 = strcmp(pcVar14,"--json");
+                              if (iVar6 == 0) {
+                                uVar18 = 1;
+                              }
+                            }
+                            uVar1 = (int)uVar12 + 1;
+                            uVar12 = (ulong)uVar1;
+                          } while ((int)uVar1 < iVar7);
+                          if (bVar5) {
+                            iVar7 = FUN_00141f74(uVar11,local_a0,uVar18);
+                            goto LAB_001400a8;
+                          }
+                          fwrite("usage: aura --dfg <file> --func <addr> [--json]\n",1,0x30,
+                                 *(FILE **)PTR_stderr_005fffd8);
+                        }
+                        else {
+                          iVar6 = strcmp(pcVar14,"--decompile");
+                          if (iVar6 != 0) goto LAB_0013fc4c;
+                          uVar11 = *(undefined8 *)(param_2 + 0x10);
+                          uVar12 = 3;
+                          uVar16 = 0;
+                          bVar5 = false;
+                          do {
+                            uVar15 = -(uVar12 >> 0x1f) & 0xfffffff800000000 | uVar12 << 3;
+                            iVar6 = strcmp(*(char **)(param_2 + uVar15),"--func");
+                            if (iVar6 == 0) {
+                              uVar1 = (int)uVar12 + 1;
+                              uVar12 = (ulong)uVar1;
+                              if (iVar7 <= (int)uVar1) break;
+                              bVar5 = true;
+                              uVar16 = strtoull(*(char **)(param_2 + uVar15 + 8),(char **)0x0,0);
+                            }
+                            uVar1 = (int)uVar12 + 1;
+                            uVar12 = (ulong)uVar1;
+                          } while ((int)uVar1 < iVar7);
+                          if (bVar5) {
+                            iVar7 = FUN_001435b0(uVar11,uVar16);
+                            goto LAB_0013fd40;
+                          }
+                          fwrite("usage: aura --decompile <file> --func <addr>\n",1,0x2d,
+                                 *(FILE **)PTR_stderr_005fffd8);
+                        }
+                      }
+                    }
+                    goto LAB_0013ff48;
+                  }
+                  iVar7 = FUN_00141c60(*(undefined8 *)(param_2 + 0x10));
+                }
+              }
+            }
+          }
+        }
+LAB_0013fd40:
+        uVar12 = (ulong)(iVar7 != 0);
+        goto LAB_0013fd54;
+      }
+      iVar7 = strcmp(pcVar14,"--list-analyzers");
+      if (iVar7 == 0) {
+LAB_0013fdf0:
+        FUN_00140c44();
+        lVar13 = FUN_00140b34();
+        __printf_chk(2,"Registered analyzers: %zu\n",lVar13);
+        for (lVar17 = 0; lVar17 != lVar13; lVar17 = lVar17 + 1) {
+          lVar9 = FUN_00140b40(lVar17);
+          if (lVar9 != 0) {
+            __printf_chk(2,&DAT_001f9278,*(undefined8 *)(lVar9 + 8),*(undefined8 *)(lVar9 + 0x10));
+          }
+        }
+        uVar12 = 0;
+        goto LAB_0013fd54;
+      }
+    }
+  }
+LAB_0013fcb4:
+  puts("AURA: AI-powered Unified Reverse Analyzer");
+  uVar12 = 0;
+  puts(&DAT_001f9370);
+LAB_0013fd54:
+  if (local_68 - *(long *)PTR___stack_chk_guard_005ffe88 == 0) {
+    return uVar12;
+  }
+                    /* WARNING: Subroutine does not return */
+  __stack_chk_fail(PTR___stack_chk_guard_005ffe88,0,
+                   local_68 - *(long *)PTR___stack_chk_guard_005ffe88);
+}
+

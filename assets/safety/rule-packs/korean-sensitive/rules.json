@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "rules": [
+    {
+      "id": "kr/email",
+      "kind": "email",
+      "pattern": "[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}",
+      "confidence": 0.98,
+      "flags": ["case_insensitive"]
+    },
+    {
+      "id": "kr/phone",
+      "kind": "phone_number",
+      "pattern": "\\b(?:\\+82[- .]?)?(?:(?:0?1[016789])[- .]?\\d{3,4}[- .]?\\d{4}|(?:0?(?:2|[3-6][1-5]|70))[- .]?\\d{3,4}[- .]?\\d{4})\\b",
+      "confidence": 0.86
+    },
+    {
+      "id": "kr/rrn-candidate",
+      "kind": "kr_rrn",
+      "pattern": "\\b\\d{6}[- ]?[1-4]\\d{6}\\b",
+      "confidence": 0.82,
+      "validator": "kr_rrn_checksum"
+    }
+  ]
+}

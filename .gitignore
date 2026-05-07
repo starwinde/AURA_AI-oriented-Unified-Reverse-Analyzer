@@ -1,0 +1,87 @@
+# Build output
+build/
+build-asan/
+build_asan/
+*.o
+*.a
+*.so
+*.out
+/aura
+/aura.exe
+
+# Legacy test result artifacts — re-mask after broad 'aura' rule was
+# narrowed to '/aura' (Phase 2A 2026-04-30). These per-binary `aura/`
+# subdirectories under legacy/tests-results/ are pre-built binary
+# snapshots from earlier measurement runs (Phase F / v2.1.0 / v2.3.0
+# regression baselines), not source.
+legacy/tests-results/**/aura/
+
+# Qt auto-generated
+.qt/
+*_autogen/
+
+# Out-of-source build directories
+build-rel/
+build-*/
+
+# CMake binary outputs in source tree
+aura-server
+tests/bench_pipeline
+
+# Backup files
+*.bak
+
+# CPack
+_CPack_Packages/
+*.deb
+*.rpm
+
+# CTest / CMake 빌드 산출물 (루트)
+CTestTestfile.cmake
+Testing/
+Makefile
+
+# CTest / CMake 빌드 산출물 (tests/)
+tests/test_*
+tests/Makefile
+tests/CTestTestfile.cmake
+tests/cmake_install.cmake
+tests/libaura_test.a
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Local MCP data
+.mcp.json
+.claude/settings.local.json
+.claude/memory.jsonl
+.claude/aura_data.db
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+home/
+_git_metadata_backup_*/
+
+# Third-party 빌드 산출물만 제외 (소스는 submodule로 관리)
+third_party/capstone/build/
+
+# External runtime tools fetched by scripts/fetch_external_tools.{sh,ps1}
+# (manifest.json is committed; extracted prebuilt is not). See ADR-0032.
+third_party/rizin/[0-9]*/
+
+# Python bytecode cache (bench tooling)
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db

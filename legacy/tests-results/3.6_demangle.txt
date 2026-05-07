@@ -1,0 +1,29 @@
+태스크: 3.6 C++ 심볼 Demangle 적용
+검증 날짜: 2026-03-31
+상태: [x] 완전 완료
+
+== ctest (Debug 빌드) ==
+test_demangle: 11/11 PASS
+  - [TC-1]  _ZN3FooC1Ev                    → Foo::Foo()                                    PASS
+  - [TC-2]  _ZN3Foo3barEv                  → Foo::bar()                                    PASS
+  - [TC-3]  _ZN3FooD1Ev                    → Foo::~Foo()                                   PASS
+  - [TC-4]  _Z3fooi                        → foo(int)                                      PASS
+  - [TC-5]  _ZN1A1B1CIiE3fooEv             → A::B::C<int>::foo()                           PASS
+  - [TC-6]  _ZSt4cout                      → std::cout                                     PASS
+  - [TC-7]  _ZNSt6vectorIiSaIiEEC1Ev       → std::vector<int, std::allocator<int> >::vector() PASS
+  - [TC-8]  _ZN3FooplERKS_                 → Foo::operator+(Foo const&)                    PASS
+  - [TC-9]  main (C 함수)                  → (null, 원본 반환)                              PASS
+  - [TC-10] 빈 문자열                       → (null)                                        PASS
+  - [TC-11] NULL 입력                       → (null, crash 없음)                            PASS
+
+== ASAN 빌드 ==
+test_demangle: 11/11 PASS — AddressSanitizer/UBSanitizer 오류 0건
+
+== 산출물 확인 ==
+- include/demangle.h       존재 ✓  (aura_demangle() 선언)
+- src/core/demangle.c      존재 ✓  (__cxa_demangle 래핑, 실패 시 NULL 반환)
+- tests/core/test_demangle.c 존재 ✓ (11개 케이스)
+- aura --info 출력에 demangled name 적용 ✓
+
+== 라이선스 ==
+cxxabi.h (__cxa_demangle): GCC Runtime Exception — 정적 링크 허용 (PRD §4.2, 2026-03-26 승인)
