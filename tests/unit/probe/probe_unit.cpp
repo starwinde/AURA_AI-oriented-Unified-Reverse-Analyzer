@@ -4,8 +4,8 @@
 // the tests do not need any real RE engine binary on disk. The two
 // tracer cases are:
 //
-//   1. `rizin -v` → "rizin 0.8.2 ..." → status=AVAILABLE,
-//      detected_version="0.8.2"
+//   1. `rizin -v` → "rizin 0.8.0 ..." → status=AVAILABLE,
+//      detected_version="0.8.0"
 //   2. `rizin` not found (spawn failed) → status=ENGINE_MISSING
 
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
@@ -132,7 +132,7 @@ TEST_CASE("rizin probe: AVAILABLE when `rizin -v` returns version") {
                 FakeResponse{
                     /*spawn_ok=*/true,
                     /*exit_code=*/0,
-                    /*stdout=*/  "rizin 0.8.2 @ linux-x86-64 git.0.8.2\n"
+                    /*stdout=*/  "rizin 0.8.0 @ linux-x86-64 git.0.8.0\n"
                                  "build: 2024-09-01__12:00:00\n",
                     /*stderr=*/  ""});
 
@@ -142,7 +142,7 @@ TEST_CASE("rizin probe: AVAILABLE when `rizin -v` returns version") {
     REQUIRE(rc == 0);
     CHECK(result.status == AURA_PROBE_AVAILABLE);
     CHECK(std::string(result.engine_id) == "rizin");
-    CHECK(std::string(result.detected_version) == "0.8.2");
+    CHECK(std::string(result.detected_version) == "0.8.0");
 }
 
 TEST_CASE("rizin probe: ENGINE_MISSING when binary not found") {
@@ -652,7 +652,7 @@ TEST_CASE("probe_cache: serves cached envelope within TTL, refreshes after expir
     FakeRunner fake;
     // Initial scripts: rizin AVAILABLE, others unscripted (= ENGINE_MISSING).
     fake.script("rizin", {"-v"},
-                FakeResponse{true, 0, "rizin 0.8.2 build\n", ""});
+                FakeResponse{true, 0, "rizin 0.8.0 build\n", ""});
 
     fake_now_ms = 1000;
     AuraProbeCache *cache =
@@ -662,7 +662,7 @@ TEST_CASE("probe_cache: serves cached envelope within TTL, refreshes after expir
     char *j1 = nullptr;
     REQUIRE(aura_probe_cache_get(cache, fake.runner(), &j1) == 0);
     REQUIRE(j1 != nullptr);
-    CHECK(std::string(j1).find("0.8.2") != std::string::npos);
+    CHECK(std::string(j1).find("0.8.0") != std::string::npos);
     free(j1);
 
     // Re-script rizin as missing. Within TTL → cache hit, old result.
@@ -671,14 +671,14 @@ TEST_CASE("probe_cache: serves cached envelope within TTL, refreshes after expir
     fake_now_ms = 4000;  // 3 s elapsed, still under 5 s TTL
     char *j2 = nullptr;
     REQUIRE(aura_probe_cache_get(cache, fake.runner(), &j2) == 0);
-    CHECK(std::string(j2).find("0.8.2") != std::string::npos);
+    CHECK(std::string(j2).find("0.8.0") != std::string::npos);
     free(j2);
 
     // Advance past TTL → cache miss → fresh probe sees the new script.
     fake_now_ms = 7000;
     char *j3 = nullptr;
     REQUIRE(aura_probe_cache_get(cache, fake.runner(), &j3) == 0);
-    CHECK(std::string(j3).find("0.8.2") == std::string::npos);
+    CHECK(std::string(j3).find("0.8.0") == std::string::npos);
     CHECK(std::string(j3).find("ENGINE_MISSING") != std::string::npos);
     free(j3);
 
@@ -815,7 +815,7 @@ TEST_CASE("aura_probe_status_str: stable wire identifiers for all 7 statuses") {
 TEST_CASE("probe_registry: probed_at_ms serializes as numeric JSON value") {
     FakeRunner fake;
     fake.script("rizin", {"-v"},
-                FakeResponse{true, 0, "rizin 0.8.2 build\n", ""});
+                FakeResponse{true, 0, "rizin 0.8.0 build\n", ""});
     fake.script("ghidra-decomp", {"--version"},
                 FakeResponse{false, -1, "", "ENOENT"});
     fake.script("java", {"-version"},
@@ -864,7 +864,7 @@ TEST_CASE("probe_registry: probed_at_ms serializes as numeric JSON value") {
 TEST_CASE("probe_registry: parent key matches child engine_id for all 5 engines") {
     FakeRunner fake;
     fake.script("rizin", {"-v"},
-                FakeResponse{true, 0, "rizin 0.8.2 build\n", ""});
+                FakeResponse{true, 0, "rizin 0.8.0 build\n", ""});
     fake.script("ghidra-decomp", {"--version"},
                 FakeResponse{true, 0, "ghidra-decomp 11.0\n", ""});
     fake.script("java", {"-version"},
@@ -1032,14 +1032,14 @@ TEST_CASE("rizin probe: parsed version below 0.7 yields VERSION_MISMATCH") {
 TEST_CASE("rizin probe: parsed version 0.8.x stays AVAILABLE") {
     FakeRunner fake;
     fake.script("rizin", {"-v"},
-                FakeResponse{true, 0, "rizin 0.8.2 @ linux-x86-64\n", ""});
+                FakeResponse{true, 0, "rizin 0.8.0 @ linux-x86-64\n", ""});
 
     AuraProbeResult result{};
     int rc = aura_probe_rizin(fake.runner(), &result);
 
     REQUIRE(rc == 0);
     CHECK(result.status == AURA_PROBE_AVAILABLE);
-    CHECK(std::string(result.detected_version) == "0.8.2");
+    CHECK(std::string(result.detected_version) == "0.8.0");
 }
 
 // ── Slice 32: registry JSON envelope exposes per-OS install_hint ────
@@ -1126,11 +1126,9 @@ TEST_CASE("angr probe: RUNTIME_MISSING populates per-OS install_hint fields") {
 
 // ── Slice 29: retdec ENGINE_MISSING per-OS install_hint ─────────────
 //
-// retdec is normally built from source (no apt/brew package on most
-// distros); the per-OS hint should still surface a usable command
-// keyed on the host's actual platform. Linux/macOS use the .sh
-// bootstrap, Windows uses the .ps1 variant — same convention as the
-// other vendored engines.
+// retdec is optional and no longer vendored as a source tree. The
+// per-OS hints should point users at the supported external-runtime
+// contract instead of non-existent bootstrap scripts.
 
 TEST_CASE("retdec probe: ENGINE_MISSING populates per-OS install_hint fields") {
     FakeRunner fake;
@@ -1142,9 +1140,10 @@ TEST_CASE("retdec probe: ENGINE_MISSING populates per-OS install_hint fields") {
 
     REQUIRE(rc == 0);
     CHECK(result.status == AURA_PROBE_ENGINE_MISSING);
-    CHECK(std::string(result.install_hint_linux).find(".sh")    != std::string::npos);
-    CHECK(std::string(result.install_hint_macos).find(".sh")    != std::string::npos);
-    CHECK(std::string(result.install_hint_windows).find(".ps1") != std::string::npos);
+    CHECK(std::string(result.install_hint_linux).find("AURA_RETDEC_DECOMPILER_BIN") != std::string::npos);
+    CHECK(std::string(result.install_hint_macos).find("AURA_RETDEC_DECOMPILER_BIN") != std::string::npos);
+    CHECK(std::string(result.install_hint_windows).find("AURA_RETDEC_DECOMPILER_BIN") != std::string::npos);
+    CHECK(std::string(result.install_hint_windows).find("PATH") != std::string::npos);
 }
 
 // ── Phase 2.5.2 Slice X.8: probe binary lookup contract ──────────────
@@ -1255,14 +1254,14 @@ TEST_CASE("rizin probe: AURA_RIZIN_BIN env override is honored at spawn") {
 
     FakeRunner fake;
     fake.script("/opt/custom/rizin", {"-v"},
-                FakeResponse{true, 0, "rizin 0.8.2 @ test\n", ""});
+                FakeResponse{true, 0, "rizin 0.8.0 @ test\n", ""});
 
     AuraProbeResult result{};
     int rc = aura_probe_rizin(fake.runner(), &result);
 
     REQUIRE(rc == 0);
     CHECK(result.status == AURA_PROBE_AVAILABLE);
-    CHECK(std::string(result.detected_version) == "0.8.2");
+    CHECK(std::string(result.detected_version) == "0.8.0");
 }
 
 TEST_CASE("ghidra-decomp probe: AURA_GHIDRA_DECOMP_BIN env override is honored") {
@@ -1385,20 +1384,20 @@ struct VendoredRoot {
 TEST_CASE("rizin probe: vendored third_party path is honored when present") {
 #ifdef _WIN32
     VendoredRoot vr("AURA_RIZIN_BIN", "aura_rizin_vendored",
-                    "third_party/rizin/0.8.2/bin/rizin.exe");
+                    "third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin.exe");
 #else
     VendoredRoot vr("AURA_RIZIN_BIN", "aura_rizin_vendored",
-                    "third_party/rizin/0.8.2/bin/rizin");
+                    "third_party/rizin/0.8.0-static/bin/rizin");
 #endif
     FakeRunner fake;
     fake.script(vr.absolute().c_str(), {"-v"},
-                FakeResponse{true, 0, "rizin 0.8.2 @ vendored\n", ""});
+                FakeResponse{true, 0, "rizin 0.8.0 @ vendored\n", ""});
 
     AuraProbeResult result{};
     int rc = aura_probe_rizin(fake.runner(), &result);
     REQUIRE(rc == 0);
     CHECK(result.status == AURA_PROBE_AVAILABLE);
-    CHECK(std::string(result.detected_version) == "0.8.2");
+    CHECK(std::string(result.detected_version) == "0.8.0");
 }
 
 TEST_CASE("ghidra-decomp probe: vendored third_party path is honored when present") {

@@ -59,7 +59,7 @@ jobs:
         id: rizin-cache
         uses: actions/cache@v4
         with:
-          path: third_party/rizin/0.8.2
+          path: third_party/rizin/0.8.0-static
           key: rizin-${{ hashFiles('third_party/rizin/manifest.json') }}-linux-x86_64
 
       - name: Fetch external tools (Rizin)
@@ -67,8 +67,8 @@ jobs:
 
       - name: Verify Rizin binary
         run: |
-          test -x third_party/rizin/0.8.2/bin/rizin
-          third_party/rizin/0.8.2/bin/rizin -v
+          test -x third_party/rizin/0.8.0-static/bin/rizin
+          third_party/rizin/0.8.0-static/bin/rizin -v
 
       - name: Configure CMake (Rizin + GUI ON)
         run: |
@@ -87,8 +87,8 @@ jobs:
 
       - name: Run ctest (all integration labels)
         env:
-          AURA_RIZIN_BIN: ${{ github.workspace }}/third_party/rizin/0.8.2/bin/rizin
-          AURA_RIZIN_PATH: ${{ github.workspace }}/third_party/rizin/0.8.2/bin/rizin
+          AURA_RIZIN_BIN: ${{ github.workspace }}/third_party/rizin/0.8.0-static/bin/rizin
+          AURA_RIZIN_PATH: ${{ github.workspace }}/third_party/rizin/0.8.0-static/bin/rizin
         run: |
           ctest --test-dir build-smoke --output-on-failure \
             -L 'integration'
@@ -115,7 +115,7 @@ jobs:
         id: rizin-cache
         uses: actions/cache@v4
         with:
-          path: third_party/rizin/0.8.2
+          path: third_party/rizin/0.8.0-shared
           key: rizin-${{ hashFiles('third_party/rizin/manifest.json') }}-windows-x86_64
 
       - name: Fetch external tools (Rizin)
@@ -125,10 +125,10 @@ jobs:
       - name: Verify Rizin binary
         shell: pwsh
         run: |
-          if (-not (Test-Path "third_party/rizin/0.8.2/bin/rizin.exe")) {
+          if (-not (Test-Path "third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin.exe")) {
             throw "rizin.exe not found after fetch"
           }
-          & ./third_party/rizin/0.8.2/bin/rizin.exe -v
+          & ./third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin.exe -v
 
       # AURA_ENABLE_RIZIN_HUB defaults ON when AURA_ENABLE_RIZIN=ON. The
       # MSVC `<io.h>` macro collision (`#define open _open`, `#define close
@@ -152,9 +152,11 @@ jobs:
       - name: Set AURA_RIZIN_BIN for CLI invocation
         shell: pwsh
         run: |
-          $bin = (Resolve-Path "third_party/rizin/0.8.2/bin/rizin.exe").Path
+          $bin = (Resolve-Path "third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin.exe").Path
+          $sleigh = (Resolve-Path "third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/lib/rizin/plugins/rz_ghidra_sleigh").Path
           "AURA_RIZIN_BIN=$bin" | Out-File -Append $env:GITHUB_ENV
           "AURA_RIZIN_PATH=$bin" | Out-File -Append $env:GITHUB_ENV
+          "SLEIGHHOME=$sleigh" | Out-File -Append $env:GITHUB_ENV
 
       - name: Run ctest (all integration labels)
         run: ctest --test-dir build-smoke --output-on-failure -C Debug -L integration

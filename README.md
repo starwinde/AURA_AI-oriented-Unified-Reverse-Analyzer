@@ -90,6 +90,61 @@ A separate 2026-04-16 re-measurement against Ghidra 12.0.4 on the *current* buil
 
 ---
 
+## Quick Install
+
+Windows:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+Linux/macOS:
+
+```bash
+./install.sh
+```
+
+The full install creates a user runtime registry under `~/.aura`:
+
+```text
+~/.aura/
+  runners/pii-python-venv/
+  token-classification-models/openai-privacy-filter/
+  eval-datasets/
+  rule-packs/
+  safety-profiles/
+  assets/safety/
+```
+
+The default token classification model is large. First install may download
+about 3GB. The files are runtime assets and are not committed to Git.
+
+For a lightweight Rizin/GUI setup without model or dataset downloads:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -SkipSafetyAssets
+```
+
+```bash
+./install.sh --skip-safety-assets
+```
+
+To use a custom runtime location:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -AuraHome "D:\AURA_RUNTIME"
+```
+
+```bash
+./install.sh --aura-home "$HOME/.cache/aura-runtime"
+```
+
+The installer prints the environment variables used by AURA, including
+`AURA_HOME`, `AURA_RIZIN_BIN`, `AURA_RIZIN_PATH`, and
+`AURA_SAFETY_ASSETS_DIR`.
+
+---
+
 ## CLI Usage
 
 ```bash

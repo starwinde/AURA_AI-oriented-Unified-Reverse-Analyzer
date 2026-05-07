@@ -65,9 +65,10 @@ static std::string discover_rizin_bin() {
     }
     fs::path root = repo_root();
 #ifdef _WIN32
-    fs::path candidate = root / "third_party/rizin/0.8.2/bin/rizin.exe";
+    fs::path candidate =
+        root / "third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin.exe";
 #else
-    fs::path candidate = root / "third_party/rizin/0.8.2/bin/rizin";
+    fs::path candidate = root / "third_party/rizin/0.8.0-static/bin/rizin";
 #endif
     if (fs::exists(candidate)) return candidate.string();
     return {};

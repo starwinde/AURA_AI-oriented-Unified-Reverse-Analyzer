@@ -15,7 +15,7 @@
  *   - NO element rename            (no <basicblock>↔<block>)
  *   - NO structure flatten         (no <ast>/<varnodes> reorder)
  *   - NO op-code translation       (no CPUI_xxx → AURA IrOpcode)
- *   - NO schema validation         (tinyxml2 well-formed parse downstream)
+ *   - NO schema validation         (well-formed parse belongs downstream)
  *   - NO semantic correctness      (defer to D-29B+)
  *
  * Idempotent: aura_ghidra_xml_normalize(out) == out (byte-exact fixed

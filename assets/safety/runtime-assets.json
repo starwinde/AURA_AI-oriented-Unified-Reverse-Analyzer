@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "python_packages": {
+    "huggingface_hub": "1.14.0"
+  },
+  "token_classification_models": [
+    {
+      "asset_id": "openai-privacy-filter",
+      "repo_id": "openai/privacy-filter",
+      "repo_type": "model",
+      "revision": "7ffa9a043d54d1be65afb281eddf0ffbe629385b",
+      "target_subdir": "token-classification-models/openai-privacy-filter",
+      "expected_files": [
+        "config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "manifest.json"
+      ],
+      "allow_patterns": [
+        "config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+        "vocab.*",
+        "merges.txt",
+        "*.txt",
+        "*.md"
+      ],
+      "size_note": "about 2.8GB for model.safetensors"
+    }
+  ],
+  "eval_datasets": [
+    {
+      "asset_id": "korean-address-en-ko",
+      "repo_id": "ziozzang/korean_address_en-ko",
+      "repo_type": "dataset",
+      "revision": "69c27815a159f609bee0f7c1b39901232485e313",
+      "target_subdir": "eval-datasets/korean-address-en-ko",
+      "expected_files": ["manifest.aura.json"],
+      "purpose": "external_reference_eval_material"
+    },
+    {
+      "asset_id": "korean-proper-noun-koen",
+      "repo_id": "ziozzang/korean_proper_noun_koen",
+      "repo_type": "dataset",
+      "revision": "65f0d80aa373ddc0a68a19aebc505054cda48860",
+      "target_subdir": "eval-datasets/korean-proper-noun-koen",
+      "expected_files": ["manifest.aura.json"],
+      "purpose": "external_reference_eval_material"
+    }
+  ]
+}

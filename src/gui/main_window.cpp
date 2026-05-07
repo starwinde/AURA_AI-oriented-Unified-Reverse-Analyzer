@@ -99,7 +99,7 @@ constexpr int         kPaneFontMaxPt     = 32;
 constexpr const char* kVendoredRizinRelWin =
     "third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin.exe";
 constexpr const char* kVendoredRizinRelPosix =
-    "third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin";
+    "third_party/rizin/0.8.0-static/bin/rizin";
 constexpr const char* kVendoredSleighRel =
     "third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/lib/rizin/plugins/rz_ghidra_sleigh";
 

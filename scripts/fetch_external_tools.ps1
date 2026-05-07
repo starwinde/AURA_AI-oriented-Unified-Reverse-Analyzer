@@ -30,8 +30,12 @@ function Fetch-Tool {
     if (-not $plat) {
         throw "fetch_external_tools: $Tool`: no entry for platform $Platform"
     }
+    $installDir = $plat.install_dir
+    if (-not $installDir) {
+        throw "fetch_external_tools: $Tool`: platform $Platform missing install_dir"
+    }
 
-    $destDir = Join-Path $Root "third_party/$Tool/$version"
+    $destDir = Join-Path $Root "third_party/$Tool/$installDir"
     $binPath = Join-Path $destDir $plat.binary_relpath
 
     if (Test-Path $binPath) {

@@ -48,24 +48,23 @@ typedef struct AuraRizinCmd {
 extern const AuraRizinCmd  AURA_RIZIN_ANALYZE_GLOBAL[];
 extern const size_t        AURA_RIZIN_ANALYZE_GLOBAL_COUNT;
 
-/* Per-function command templates. Targets the official stable Rizin
- * release (verified against v0.8.2). The catalog pairs:
+/* Per-function command templates. Targets the approved Rizin v0.8.0
+ * execution baseline. The catalog pairs:
  *
- *   id base    rizin v0.8.2 cmd     notes
+ *   id base    Rizin v0.8 cmd       notes
  *   "agfj"  →  "agf json"           basic-block CFG (JSON)
  *   "axtj"  →  "axtj"               xrefs to address
  *   "afvj"  →  "afvlj"              function variables (afvl with j)
  *
- * Phase 3B baseline correction (verified 2026-05-01 against
- * /home/str/rizin-stable-0.8.2/, built from rizin-src-v0.8.2.tar.xz):
- * v0.8.2 has neither legacy `agfj`/`afvj` nor `aftj`. Issuing any of
+ * Phase 3B baseline correction: v0.8 uses `agf json` and `afvlj`, and
+ * has neither legacy `agfj`/`afvj` nor `aftj`. Issuing any of
  * those raises a soft error that halts the entire `rizin -c` script
  * and breaks framing for everything after it. The id base column
  * stays stable so the snapshot parser keys (which key on base) remain
  * unchanged.
  *
  * `aftj` was previously in the catalog (function type signature JSON)
- * but stable v0.8.2 has no JSON mode for `aft` (only the plain text
+ * but the v0.8 baseline has no JSON mode for `aft` (only the plain text
  * form). It is removed rather than synthesised — issuing `aft` would
  * either error out (halting the script) or produce non-JSON text the
  * snapshot parser cannot consume. Function-type ingestion is left

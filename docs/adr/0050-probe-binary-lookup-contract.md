@@ -66,7 +66,7 @@ int aura_probe_resolve_binary(
 | ghidra-full / java | `AURA_JAVA_BIN` (신규) | `(none)` — JRE 는 host 의존 |
 | ghidra-full / analyzeHeadless | `AURA_GHIDRA_FULL_ANALYZE_HEADLESS` (신규) | `third_party/ghidra-full/support/analyzeHeadless{,.bat}` |
 | angr / python | `AURA_ANGR_PYTHON_BIN` (신규) | `third_party/angr/venv/{bin,Scripts}/python{,.exe}` |
-| retdec | `AURA_RETDEC_DECOMPILER_BIN` (신규) | `third_party/retdec/bin/retdec-decompiler{,.exe}` |
+| retdec | `AURA_RETDEC_DECOMPILER_BIN` (신규) | optional local runtime `third_party/retdec/bin/retdec-decompiler{,.exe}` or PATH |
 
 Vendored path 는 cross-platform `#ifdef _WIN32` 분기로 .exe / .bat suffix 처리
 (rules.md §1 cross-platform 가드 준수).

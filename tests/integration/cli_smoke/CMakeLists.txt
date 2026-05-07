@@ -12,9 +12,9 @@ target_compile_features(cli_smoke PRIVATE cxx_std_17)
 
 add_test(NAME cli_smoke COMMAND cli_smoke)
 if(WIN32)
-    set(_aura_rizin_bin_default "${CMAKE_SOURCE_DIR}/third_party/rizin/0.8.2/bin/rizin.exe")
+    set(_aura_rizin_bin_default "${CMAKE_SOURCE_DIR}/third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin.exe")
 else()
-    set(_aura_rizin_bin_default "${CMAKE_SOURCE_DIR}/third_party/rizin/0.8.2/bin/rizin")
+    set(_aura_rizin_bin_default "${CMAKE_SOURCE_DIR}/third_party/rizin/0.8.0-static/bin/rizin")
 endif()
 set_tests_properties(cli_smoke PROPERTIES
     LABELS "integration;cli"

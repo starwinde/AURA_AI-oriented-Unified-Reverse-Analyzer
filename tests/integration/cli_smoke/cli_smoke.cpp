@@ -51,7 +51,7 @@ static std::string aura_binary() {
 }
 
 // Path to a working rizin, either from AURA_RIZIN_BIN or
-// third_party/rizin/0.8.0-shared/.../bin/rizin{,.exe}. Empty string = not found.
+// third_party/rizin/0.8.0-*/.../bin/rizin{,.exe}. Empty string = not found.
 static std::string discover_rizin_bin() {
     if (const char *env = std::getenv("AURA_RIZIN_BIN")) {
         if (fs::exists(env)) return env;
@@ -61,8 +61,7 @@ static std::string discover_rizin_bin() {
     fs::path candidate =
         root / "third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin.exe";
 #else
-    fs::path candidate =
-        root / "third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin";
+    fs::path candidate = root / "third_party/rizin/0.8.0-static/bin/rizin";
 #endif
     if (fs::exists(candidate)) return candidate.string();
     return {};
@@ -76,8 +75,7 @@ static std::string vendored_rizin_bin() {
     fs::path candidate =
         root / "third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin.exe";
 #else
-    fs::path candidate =
-        root / "third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin";
+    fs::path candidate = root / "third_party/rizin/0.8.0-static/bin/rizin";
 #endif
     if (fs::exists(candidate)) return candidate.string();
     return {};
