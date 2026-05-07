@@ -63,7 +63,7 @@ AURA HirFunc / HirNode (그대로 유지, codegen.c 입력 동일)
 ┌──────────────────────────────────────────────▼─────────────────────────┐
 │ AURA host (aura main process)                                          │
 │                                                                        │
-│  ▼ tinyxml2 parse (codegen.c, D-29)                                   │
+│  ▼ byte normalize first; XML parse/semantic mapping deferred           │
 │                                                                        │
 │  ┌─────────────── §3 Element-level mapping ───────────────────┐       │
 │  │  <varnodes>  →  IrVal[]                                    │       │
@@ -554,7 +554,7 @@ Input fixture binary (예: /bin/cat, ls, aura-self)
   │
   ├─ Path A: Ghidra subprocess (aura-decompile)
   │   │
-  │   └─► XML output → tinyxml2 parse → AURA HirFunc
+  │   └─► XML output → byte normalize → future XML parse → AURA HirFunc
   │       │             ↓
   │       │     <diagnostic .../> stream (Tier C)
   │       │

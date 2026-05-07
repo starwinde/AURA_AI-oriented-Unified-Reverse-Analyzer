@@ -77,7 +77,7 @@ configuration (ADR-0050 D4, Codex review #5).
 | ghidra-full / java | `AURA_JAVA_BIN` | (none — host JRE) |
 | ghidra-full / analyzeHeadless | `AURA_GHIDRA_FULL_ANALYZE_HEADLESS` | `third_party/ghidra-full/support/analyzeHeadless{,.bat}` |
 | angr / python | `AURA_ANGR_PYTHON_BIN` | `third_party/angr/venv/{bin/python,Scripts/python.exe}` |
-| retdec | `AURA_RETDEC_DECOMPILER_BIN` | `third_party/retdec/bin/retdec-decompiler{,.exe}` |
+| retdec | `AURA_RETDEC_DECOMPILER_BIN` | optional local runtime `third_party/retdec/bin/retdec-decompiler{,.exe}` or PATH |
 | (meta) | `AURA_REPO_ROOT` | (sets the base for vendored tier; CLI auto-seeds) |
 
 angr keeps an OS-preferred fallback chain (`python3` → `python` on POSIX,

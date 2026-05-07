@@ -248,7 +248,7 @@ flowchart TD
 
     Sub --> XmlOut[Ghidra: XML stdout<br/>Rizin: JSON stdout planned]
 
-    XmlOut --> Norm["ghidra_xml_normalize.c<br/>tinyxml2 파싱<br/>(엔진 출력 구조 매핑)"]
+    XmlOut --> Norm["ghidra_xml_normalize.c<br/>byte normalize<br/>(semantic parse deferred)"]
     Norm --> Hir["AuraGhirFunc<br/>(엔진 출력의 4-요소 구조)"]
 
     Hir --> Ingest["Phase 3: Unified Ingestion<br/><b>field mapping only — no inference</b>"]
@@ -282,7 +282,7 @@ AuraEngineResponse {               │
     .raw  = XML 원본 (R-4 보존)    │  ← AURA 측 임의 변형·정정·보강 금지
 }
         │
-        ▼ src/decompiler/ghidra_xml_normalize.c (tinyxml2)
+        ▼ src/adapter/ghidra/ghidra_xml_normalize.c (byte normalize)
         ▼   (엔진 출력의 구조 매핑 — 새 IR 생성 아님)
         ▼
 AuraGhirFunc { func / block / edge / variable }
@@ -331,7 +331,7 @@ flowchart TD
     GhD --> Sub[engine_subprocess.spawn]
     Sub --> XML[Ghidra decompile XML]
 
-    XML --> N1[ghidra_xml_normalize.c<br/>tinyxml2 파싱]
+    XML --> N1[ghidra_xml_normalize.c<br/>byte normalize]
     N1 --> Map["ghidra_xml_to_hir.cpp<br/>엔진 출력의 구조 매핑 (D-29A 4-요소)"]
     Map --> HIR["AuraGhirFunc<br/>(엔진 출력 미러링 — 새 IR 생성 아님)"]
 
@@ -366,7 +366,7 @@ Ghidra decompile XML (stdout)
         ▼
 AuraEngineResponse.raw = XML 원본 (R-4)
         │
-        ▼ ghidra_xml_normalize.c (tinyxml2)
+        ▼ ghidra_xml_normalize.c (byte normalize)
         ▼ XMLDocument 파싱
         ▼
         ▼ ghidra_xml_to_hir.cpp
@@ -502,7 +502,7 @@ src/
 │                                향후 tp_hub patch capability 어댑터 후보)
 ├── decompiler/
 │   ├── ghidra_subprocess.c       ← Ghidra subprocess argv 조립
-│   ├── ghidra_xml_normalize.c    ← Ghidra output normalize layer (tinyxml2)
+│   ├── ghidra_xml_normalize.c    ← Ghidra output byte-normalize layer
 │   └── ghidra_xml_to_hir.cpp     ← Ghidra output → AURA 자료형 mapping layer
 │                                    (HIR "생성" 아님 — 엔진 출력 구조 매핑)
 ├── llm/                      ← libcurl 직접 사용 (도메인 외, 파이프라인 소비자)

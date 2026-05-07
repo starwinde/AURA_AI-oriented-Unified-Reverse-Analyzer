@@ -169,11 +169,11 @@ Orchestrator 는 request type 기반으로 엔진에 요청을 전달한다. 모
 |--------|------|----------|----------|
 | Rizin | **Primary** disasm + analyze + decompile + trace 엔진 (subprocess, bulk JSON). librz 링크 금지 — 별도 프로세스 실행만 허용. | LGPL-3.0 | ✅ Phase 2 (vendored at `third_party/rizin/`) |
 | Ghidra `decompile/cpp/` 12.0.4 | **Decompile co-primary** (Rizin 과 동률, 사용자 선택). disasm/analyze/trace primary 권한 없음. | Apache 2.0 | ✅ vendored (`third_party/ghidra-decompile/`) |
-| RetDec | **Secondary decompiler** — Rizin/Ghidra 결과 비교용. primary 덮어쓰기 금지. | MIT | 🟡 Phase 6 |
+| RetDec | **Secondary decompiler** — Rizin/Ghidra 결과 비교용. primary 덮어쓰기 금지. | MIT | 🟡 optional external runtime (`AURA_RETDEC_DECOMPILER_BIN` / PATH); source tree not vendored |
 | Capstone ≥ 5.0 | **Disasm secondary** — 보조 disasm 뷰 / fallback. decompile 비교 대상 아님. (disasm primary 는 Rizin) | BSD-3 | ✅ |
 | Qt6 | GUI | LGPL/Commercial | ✅ |
 | SQLite | 프로젝트 DB (override 영속, recent 목록) | Public Domain | ✅ |
-| tinyxml2 11.0.0 | Ghidra XML 파싱 | zlib | ✅ |
+| tinyxml2 11.0.0 | Ghidra XML 파싱 후보 | zlib | ❌ removed from vendored tree; current layer is byte-level XML normalization |
 | libcurl ≥ 7.0 | LLM HTTP 클라이언트 | MIT/X11 | ✅ |
 | cJSON | JSON 파싱 (LLM, 설정) | MIT | ✅ |
 | bison / flex | Ghidra sleigh-compile 빌드 시간 의존 | GPL (build-only) | ✅ (PRD §10 사용자 §10 승인) |

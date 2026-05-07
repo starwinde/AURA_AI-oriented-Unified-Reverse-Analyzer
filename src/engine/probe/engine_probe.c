@@ -334,16 +334,16 @@ int aura_probe_retdec(AuraCommandRunner *runner, AuraProbeResult *out)
         out->status = AURA_PROBE_ENGINE_MISSING;
         strncpy(out->install_hint,
                 "expected at third_party/retdec/bin/retdec-decompiler"
-                " (build from source or install upstream package)",
+                " or set AURA_RETDEC_DECOMPILER_BIN / install retdec-decompiler on PATH",
                 sizeof(out->install_hint) - 1);
         strncpy(out->install_hint_linux,
-                "bash scripts/bootstrap_retdec.sh",
+                "set AURA_RETDEC_DECOMPILER_BIN or install retdec-decompiler on PATH",
                 sizeof(out->install_hint_linux) - 1);
         strncpy(out->install_hint_macos,
-                "bash scripts/bootstrap_retdec.sh",
+                "set AURA_RETDEC_DECOMPILER_BIN or install retdec-decompiler on PATH",
                 sizeof(out->install_hint_macos) - 1);
         strncpy(out->install_hint_windows,
-                "powershell -File scripts\\bootstrap_retdec.ps1",
+                "set AURA_RETDEC_DECOMPILER_BIN or install retdec-decompiler on PATH",
                 sizeof(out->install_hint_windows) - 1);
         strncpy(out->raw_diagnostic, cmd.stderr_buf,
                 sizeof(out->raw_diagnostic) - 1);

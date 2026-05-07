@@ -1126,11 +1126,9 @@ TEST_CASE("angr probe: RUNTIME_MISSING populates per-OS install_hint fields") {
 
 // ── Slice 29: retdec ENGINE_MISSING per-OS install_hint ─────────────
 //
-// retdec is normally built from source (no apt/brew package on most
-// distros); the per-OS hint should still surface a usable command
-// keyed on the host's actual platform. Linux/macOS use the .sh
-// bootstrap, Windows uses the .ps1 variant — same convention as the
-// other vendored engines.
+// retdec is optional and no longer vendored as a source tree. The
+// per-OS hints should point users at the supported external-runtime
+// contract instead of non-existent bootstrap scripts.
 
 TEST_CASE("retdec probe: ENGINE_MISSING populates per-OS install_hint fields") {
     FakeRunner fake;
@@ -1142,9 +1140,10 @@ TEST_CASE("retdec probe: ENGINE_MISSING populates per-OS install_hint fields") {
 
     REQUIRE(rc == 0);
     CHECK(result.status == AURA_PROBE_ENGINE_MISSING);
-    CHECK(std::string(result.install_hint_linux).find(".sh")    != std::string::npos);
-    CHECK(std::string(result.install_hint_macos).find(".sh")    != std::string::npos);
-    CHECK(std::string(result.install_hint_windows).find(".ps1") != std::string::npos);
+    CHECK(std::string(result.install_hint_linux).find("AURA_RETDEC_DECOMPILER_BIN") != std::string::npos);
+    CHECK(std::string(result.install_hint_macos).find("AURA_RETDEC_DECOMPILER_BIN") != std::string::npos);
+    CHECK(std::string(result.install_hint_windows).find("AURA_RETDEC_DECOMPILER_BIN") != std::string::npos);
+    CHECK(std::string(result.install_hint_windows).find("PATH") != std::string::npos);
 }
 
 // ── Phase 2.5.2 Slice X.8: probe binary lookup contract ──────────────

@@ -19,8 +19,8 @@
  *   - element rename (no <basicblock>↔<block>, no <pcode>↔<op>)
  *   - structure flatten (no <ast>/<varnodes>/<highlist> reordering)
  *   - op-code translation (no CPUI_xxx → AURA IrOpcode)
- *   - schema validation (no DTD / RNG check; tinyxml2 well-formed parse
- *     happens downstream)
+ *   - schema validation (no DTD / RNG check; any well-formed XML parse
+ *     happens downstream outside this vendored dependency set)
  *   - semantic correctness (no function-boundary / CFG / call-target check)
  *
  * Copyright 2026 AURA Project Contributors
