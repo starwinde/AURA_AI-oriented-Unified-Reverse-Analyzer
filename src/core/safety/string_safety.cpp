@@ -7,10 +7,11 @@
 #include <cctype>
 #include <cstdlib>
 #include <filesystem>
+#include <initializer_list>
 #include <map>
+#include <cstdio>
 #include <regex>
 #include <set>
-#include <cstdio>
 
 #include "cJSON.h"
 
@@ -37,6 +38,20 @@ std::string readFile(const std::filesystem::path& path) {
     }
     std::fclose(f);
     return out;
+}
+
+std::string firstNonEmpty(std::initializer_list<std::string> values) {
+    for (const auto& value : values) {
+        if (!value.empty()) return value;
+    }
+    return {};
+}
+
+std::string firstNonEmpty(const std::vector<std::string>& values) {
+    for (const auto& value : values) {
+        if (!value.empty()) return value;
+    }
+    return {};
 }
 
 std::filesystem::path auraHome() {
@@ -75,6 +90,94 @@ std::vector<std::string> jsonStringArray(cJSON* obj, const char* key) {
 double jsonNumber(cJSON* obj, const char* key, double fallback) {
     cJSON* v = cJSON_GetObjectItemCaseSensitive(obj, key);
     return cJSON_IsNumber(v) ? v->valuedouble : fallback;
+}
+
+SafetyAssetRef refFromJsonFile(const std::filesystem::path& path,
+                               const std::string& source,
+                               std::initializer_list<const char*> idKeys,
+                               std::string fallbackId = {}) {
+    SafetyAssetRef ref;
+    ref.path = path.string();
+    ref.source = source;
+    if (fallbackId.empty()) fallbackId = path.parent_path().filename().string();
+
+    const std::string text = readFile(path);
+    if (text.empty()) {
+        ref.valid = false;
+        ref.diagnostic = "manifest is empty or unreadable";
+        ref.id = fallbackId;
+        return ref;
+    }
+
+    cJSON* root = cJSON_ParseWithLength(text.data(), text.size());
+    if (!root) {
+        ref.valid = false;
+        ref.diagnostic = "manifest is not valid JSON";
+        ref.id = fallbackId;
+        return ref;
+    }
+
+    std::vector<std::string> ids;
+    for (const char* key : idKeys) ids.push_back(jsonString(root, key));
+    ref.id = firstNonEmpty(ids);
+    ref.display_name = firstNonEmpty({
+        jsonString(root, "display_name"),
+        jsonString(root, "name"),
+        ref.id,
+    });
+    cJSON_Delete(root);
+
+    if (ref.id.empty()) {
+        ref.valid = false;
+        ref.diagnostic = "manifest does not contain an asset id";
+        ref.id = fallbackId;
+    }
+    return ref;
+}
+
+void appendUniqueAsset(std::vector<SafetyAssetRef>& out, SafetyAssetRef ref) {
+    const auto sameId = [&](const SafetyAssetRef& existing) {
+        return existing.id == ref.id;
+    };
+    if (std::find_if(out.begin(), out.end(), sameId) == out.end()) {
+        out.push_back(std::move(ref));
+    }
+}
+
+void listAssetDirs(const std::filesystem::path& root,
+                   const std::string& source,
+                   const char* manifestName,
+                   std::initializer_list<const char*> idKeys,
+                   std::vector<SafetyAssetRef>* out) {
+    if (!out) return;
+    std::error_code ec;
+    if (!std::filesystem::is_directory(root, ec)) return;
+    for (const auto& ent : std::filesystem::directory_iterator(root, ec)) {
+        if (ec) break;
+        std::error_code entEc;
+        if (!ent.is_directory(entEc)) continue;
+        const auto manifestPath = ent.path() / manifestName;
+        if (!std::filesystem::exists(manifestPath, entEc)) continue;
+        appendUniqueAsset(*out,
+                          refFromJsonFile(manifestPath, source, idKeys));
+    }
+}
+
+void listProfileFiles(const std::filesystem::path& root,
+                      const std::string& source,
+                      std::vector<SafetyAssetRef>* out) {
+    if (!out) return;
+    std::error_code ec;
+    if (!std::filesystem::is_directory(root, ec)) return;
+    for (const auto& ent : std::filesystem::directory_iterator(root, ec)) {
+        if (ec) break;
+        std::error_code entEc;
+        if (!ent.is_regular_file(entEc) || ent.path().extension() != ".json")
+            continue;
+        appendUniqueAsset(*out, refFromJsonFile(ent.path(), source,
+                                                {"profile_id"},
+                                                ent.path().stem().string()));
+    }
 }
 
 std::filesystem::path safetyAssetsRoot() {
@@ -302,6 +405,34 @@ bool rejectFalsePositive(const Rule& rule, const std::string& match) {
 
 }  // namespace
 
+SafetyAssetRegistry listSafetyAssets() {
+    SafetyAssetRegistry out;
+
+    const auto home = auraHome();
+    const auto repo = safetyAssetsRoot();
+
+    listProfileFiles(home / "safety-profiles", "home", &out.profiles);
+    listProfileFiles(repo / "safety-profiles", "repo", &out.profiles);
+
+    listAssetDirs(home / "token-classification-models", "home",
+                  "manifest.json", {"model_id", "asset_id"}, &out.models);
+    listAssetDirs(repo / "token-classification-models", "repo",
+                  "manifest.template.json", {"model_id", "asset_id"},
+                  &out.models);
+
+    listAssetDirs(home / "rule-packs", "home", "manifest.json",
+                  {"pack_id", "id"}, &out.rule_packs);
+    listAssetDirs(repo / "rule-packs", "repo", "manifest.json",
+                  {"pack_id", "id"}, &out.rule_packs);
+
+    listAssetDirs(home / "eval-datasets", "home", "manifest.aura.json",
+                  {"dataset_id", "asset_id"}, &out.eval_datasets);
+    listAssetDirs(repo / "eval-datasets", "repo", "manifest.json",
+                  {"dataset_id", "asset_id"}, &out.eval_datasets);
+
+    return out;
+}
+
 SafetyProfile loadDefaultSafetyProfile() {
     SafetyProfile out;
     // Empty rule_pack_ids means "load every runtime rule pack"; if none
@@ -310,13 +441,17 @@ SafetyProfile loadDefaultSafetyProfile() {
     const std::filesystem::path homeProfilePath =
         auraHome() / "safety-profiles" / "default.json";
     std::string text = readFile(homeProfilePath);
-    if (text.empty()) {
+    cJSON* root = nullptr;
+    if (!text.empty()) {
+        root = cJSON_ParseWithLength(text.data(), text.size());
+    }
+    if (!root) {
         text = readFile(safetyAssetsRoot() / "safety-profiles" /
                         "default.json");
+        if (!text.empty()) {
+            root = cJSON_ParseWithLength(text.data(), text.size());
+        }
     }
-    if (text.empty()) return out;
-
-    cJSON* root = cJSON_ParseWithLength(text.data(), text.size());
     if (!root) return out;
 
     out.rule_pack_ids = jsonStringArray(root, "rule_pack_ids");

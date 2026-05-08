@@ -55,6 +55,22 @@ struct SafetyProfile {
     ModelPolicy model_policy;
 };
 
+struct SafetyAssetRef {
+    std::string id;
+    std::string display_name;
+    std::string path;
+    std::string source;
+    bool valid = true;
+    std::string diagnostic;
+};
+
+struct SafetyAssetRegistry {
+    std::vector<SafetyAssetRef> profiles;
+    std::vector<SafetyAssetRef> models;
+    std::vector<SafetyAssetRef> rule_packs;
+    std::vector<SafetyAssetRef> eval_datasets;
+};
+
 struct ProtectedStringView {
     std::string original;
     std::string alias;
@@ -70,6 +86,7 @@ public:
 };
 
 SafetyProfile loadDefaultSafetyProfile();
+SafetyAssetRegistry listSafetyAssets();
 
 std::vector<Finding> scanStringWithRulePacks(const std::string& text,
                                              const SafetyProfile& profile);

@@ -3,8 +3,10 @@
 
 #include "aura/safety/string_safety.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
+#include <functional>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -25,6 +27,13 @@ void clearEnvVar(const char* key) {
 #else
     unsetenv(key);
 #endif
+}
+
+std::filesystem::path tempRoot(const char* name) {
+    const auto buildId =
+        std::hash<std::string>{}(std::filesystem::current_path().string());
+    return std::filesystem::temp_directory_path() /
+           (std::string(name) + "_" + std::to_string(buildId));
 }
 
 }  // namespace
@@ -57,9 +66,11 @@ TEST_CASE("rule pack scan detects common sensitive strings") {
 
 TEST_CASE("runtime rule pack from AURA_HOME overrides built-in fallback") {
     namespace fs = std::filesystem;
-    const fs::path root = fs::temp_directory_path() / "aura_safety_unit_home";
+    const fs::path root = tempRoot("aura_safety_unit_home");
     const fs::path packs = root / "rule-packs";
+    fs::remove_all(root);
     fs::create_directories(packs);
+    fs::create_directories(root / "safety-profiles");
     {
         std::ofstream out(packs / "default.json", std::ios::binary);
         out << R"({
@@ -73,6 +84,15 @@ TEST_CASE("runtime rule pack from AURA_HOME overrides built-in fallback") {
               "confidence": 0.88
             }
           ]
+        })";
+    }
+    {
+        std::ofstream out(root / "safety-profiles" / "default.json",
+                          std::ios::binary);
+        out << R"({
+          "schema_version": 1,
+          "profile_id": "default",
+          "rule_pack_ids": ["default"]
         })";
     }
 
@@ -90,7 +110,7 @@ TEST_CASE("runtime rule pack from AURA_HOME overrides built-in fallback") {
 TEST_CASE("safety profile selects directory rule packs and model policy") {
     namespace fs = std::filesystem;
     const fs::path root =
-        fs::temp_directory_path() / "aura_safety_unit_registry_home";
+        tempRoot("aura_safety_unit_registry_home");
     fs::remove_all(root);
     const fs::path packDir = root / "rule-packs" / "korean-sensitive";
     fs::create_directories(packDir);
@@ -169,9 +189,9 @@ TEST_CASE("safety profile selects directory rule packs and model policy") {
 TEST_CASE("repo safety profile is the default when AURA_HOME has none") {
     namespace fs = std::filesystem;
     const fs::path home =
-        fs::temp_directory_path() / "aura_safety_unit_empty_home";
+        tempRoot("aura_safety_unit_empty_home");
     const fs::path assets =
-        fs::temp_directory_path() / "aura_safety_unit_repo_assets";
+        tempRoot("aura_safety_unit_repo_assets");
     fs::remove_all(home);
     fs::remove_all(assets);
     fs::create_directories(home);
@@ -216,12 +236,202 @@ TEST_CASE("repo safety profile is the default when AURA_HOME has none") {
           aura::safety::ModelFailureAction::BlockExport);
 }
 
+TEST_CASE("safety registry lists profiles, models, rule packs, and eval datasets") {
+    namespace fs = std::filesystem;
+    const fs::path home =
+        tempRoot("aura_safety_unit_asset_registry_home");
+    const fs::path assets =
+        tempRoot("aura_safety_unit_asset_registry_assets");
+    fs::remove_all(home);
+    fs::remove_all(assets);
+
+    fs::create_directories(home / "safety-profiles");
+    fs::create_directories(home / "token-classification-models" / "local-model");
+    fs::create_directories(home / "rule-packs" / "local-rules");
+    fs::create_directories(home / "eval-datasets" / "local-eval");
+    fs::create_directories(assets / "safety-profiles");
+    fs::create_directories(assets / "token-classification-models" /
+                           "repo-model");
+    fs::create_directories(assets / "rule-packs" / "local-rules");
+    fs::create_directories(assets / "rule-packs" / "repo-rules");
+    fs::create_directories(assets / "eval-datasets" / "repo-eval");
+
+    {
+        std::ofstream out(home / "safety-profiles" / "custom.json",
+                          std::ios::binary);
+        out << R"({"schema_version":1,"profile_id":"custom","rule_pack_ids":["local-rules"],"eval_dataset_ids":["local-eval"],"model_policy":{"enabled":true,"mode":"conditional","model_id":"local-model"}})";
+    }
+    {
+        std::ofstream out(home / "token-classification-models" /
+                              "local-model" / "manifest.json",
+                          std::ios::binary);
+        out << R"({"schema_version":1,"model_id":"local-model","display_name":"Local Model"})";
+    }
+    {
+        std::ofstream out(home / "rule-packs" / "local-rules" /
+                              "manifest.json",
+                          std::ios::binary);
+        out << R"({"schema_version":1,"pack_id":"local-rules","display_name":"Local Rules","rules_file":"rules.json"})";
+    }
+    {
+        std::ofstream out(home / "eval-datasets" / "local-eval" /
+                              "manifest.aura.json",
+                          std::ios::binary);
+        out << R"({"schema_version":1,"dataset_id":"local-eval","display_name":"Local Eval"})";
+    }
+    {
+        std::ofstream out(assets / "rule-packs" / "repo-rules" /
+                              "manifest.json",
+                          std::ios::binary);
+        out << R"({"schema_version":1,"pack_id":"repo-rules","display_name":"Repo Rules","rules_file":"rules.json"})";
+    }
+    {
+        std::ofstream out(assets / "token-classification-models" /
+                              "repo-model" / "manifest.template.json",
+                          std::ios::binary);
+        out << R"({"schema_version":1,"model_id":"repo-model","display_name":"Repo Model"})";
+    }
+    {
+        std::ofstream out(assets / "eval-datasets" / "repo-eval" /
+                              "manifest.json",
+                          std::ios::binary);
+        out << R"({"schema_version":1,"dataset_id":"repo-eval","display_name":"Repo Eval"})";
+    }
+    {
+        std::ofstream out(assets / "rule-packs" / "local-rules" /
+                              "manifest.json",
+                          std::ios::binary);
+        out << R"({"schema_version":1,"pack_id":"local-rules","display_name":"Repo Duplicate Rules","rules_file":"rules.json"})";
+    }
+
+    setEnvVar("AURA_HOME", home.string());
+    setEnvVar("AURA_SAFETY_ASSETS_DIR", assets.string());
+    const auto registry = aura::safety::listSafetyAssets();
+    clearEnvVar("AURA_SAFETY_ASSETS_DIR");
+    clearEnvVar("AURA_HOME");
+
+    REQUIRE(registry.profiles.size() == 1);
+    CHECK(registry.profiles[0].id == "custom");
+    CHECK(registry.profiles[0].source == "home");
+    REQUIRE(registry.models.size() == 2);
+    CHECK(std::find_if(registry.models.begin(), registry.models.end(),
+                       [](const aura::safety::SafetyAssetRef& ref) {
+                           return ref.id == "local-model" &&
+                                  ref.source == "home";
+                       }) != registry.models.end());
+    CHECK(std::find_if(registry.models.begin(), registry.models.end(),
+                       [](const aura::safety::SafetyAssetRef& ref) {
+                           return ref.id == "repo-model" &&
+                                  ref.source == "repo";
+                       }) != registry.models.end());
+    REQUIRE(registry.rule_packs.size() == 2);
+    const auto localRules = std::find_if(
+        registry.rule_packs.begin(), registry.rule_packs.end(),
+        [](const aura::safety::SafetyAssetRef& ref) {
+            return ref.id == "local-rules";
+        });
+    REQUIRE(localRules != registry.rule_packs.end());
+    CHECK(localRules->source == "home");
+    const auto repoRules = std::find_if(
+        registry.rule_packs.begin(), registry.rule_packs.end(),
+        [](const aura::safety::SafetyAssetRef& ref) {
+            return ref.id == "repo-rules";
+        });
+    REQUIRE(repoRules != registry.rule_packs.end());
+    CHECK(repoRules->source == "repo");
+    REQUIRE(registry.eval_datasets.size() == 2);
+    CHECK(std::find_if(registry.eval_datasets.begin(),
+                       registry.eval_datasets.end(),
+                       [](const aura::safety::SafetyAssetRef& ref) {
+                           return ref.id == "local-eval" &&
+                                  ref.source == "home";
+                       }) != registry.eval_datasets.end());
+    CHECK(std::find_if(registry.eval_datasets.begin(),
+                       registry.eval_datasets.end(),
+                       [](const aura::safety::SafetyAssetRef& ref) {
+                           return ref.id == "repo-eval" &&
+                                  ref.source == "repo";
+                       }) != registry.eval_datasets.end());
+}
+
+TEST_CASE("safety registry keeps invalid home asset over repo duplicate") {
+    namespace fs = std::filesystem;
+    const fs::path home =
+        tempRoot("aura_safety_unit_invalid_home_asset");
+    const fs::path assets =
+        tempRoot("aura_safety_unit_invalid_repo_asset");
+    fs::remove_all(home);
+    fs::remove_all(assets);
+    fs::create_directories(home / "rule-packs" / "duplicate-rules");
+    fs::create_directories(assets / "rule-packs" / "duplicate-rules");
+
+    {
+        std::ofstream out(home / "rule-packs" / "duplicate-rules" /
+                              "manifest.json",
+                          std::ios::binary);
+        out << "{";
+    }
+    {
+        std::ofstream out(assets / "rule-packs" / "duplicate-rules" /
+                              "manifest.json",
+                          std::ios::binary);
+        out << R"({"schema_version":1,"pack_id":"duplicate-rules","display_name":"Repo Duplicate","rules_file":"rules.json"})";
+    }
+
+    setEnvVar("AURA_HOME", home.string());
+    setEnvVar("AURA_SAFETY_ASSETS_DIR", assets.string());
+    const auto registry = aura::safety::listSafetyAssets();
+    clearEnvVar("AURA_SAFETY_ASSETS_DIR");
+    clearEnvVar("AURA_HOME");
+
+    REQUIRE(registry.rule_packs.size() == 1);
+    CHECK(registry.rule_packs[0].id == "duplicate-rules");
+    CHECK(registry.rule_packs[0].source == "home");
+    CHECK(!registry.rule_packs[0].valid);
+    CHECK(!registry.rule_packs[0].diagnostic.empty());
+}
+
+TEST_CASE("safety registry keeps invalid home profile over repo duplicate") {
+    namespace fs = std::filesystem;
+    const fs::path home =
+        tempRoot("aura_safety_unit_invalid_home_profile");
+    const fs::path assets =
+        tempRoot("aura_safety_unit_invalid_repo_profile");
+    fs::remove_all(home);
+    fs::remove_all(assets);
+    fs::create_directories(home / "safety-profiles");
+    fs::create_directories(assets / "safety-profiles");
+
+    {
+        std::ofstream out(home / "safety-profiles" / "default.json",
+                          std::ios::binary);
+        out << "{";
+    }
+    {
+        std::ofstream out(assets / "safety-profiles" / "default.json",
+                          std::ios::binary);
+        out << R"({"schema_version":1,"profile_id":"default","rule_pack_ids":[]})";
+    }
+
+    setEnvVar("AURA_HOME", home.string());
+    setEnvVar("AURA_SAFETY_ASSETS_DIR", assets.string());
+    const auto registry = aura::safety::listSafetyAssets();
+    clearEnvVar("AURA_SAFETY_ASSETS_DIR");
+    clearEnvVar("AURA_HOME");
+
+    REQUIRE(registry.profiles.size() == 1);
+    CHECK(registry.profiles[0].id == "default");
+    CHECK(registry.profiles[0].source == "home");
+    CHECK(!registry.profiles[0].valid);
+    CHECK(!registry.profiles[0].diagnostic.empty());
+}
+
 TEST_CASE("partial home rule pack override keeps repo default packs") {
     namespace fs = std::filesystem;
     const fs::path home =
-        fs::temp_directory_path() / "aura_safety_unit_partial_home";
+        tempRoot("aura_safety_unit_partial_home");
     const fs::path assets =
-        fs::temp_directory_path() / "aura_safety_unit_partial_assets";
+        tempRoot("aura_safety_unit_partial_assets");
     fs::remove_all(home);
     fs::remove_all(assets);
     fs::create_directories(home / "rule-packs" / "korean-sensitive");
