@@ -163,6 +163,25 @@ class TempTree {
     std::filesystem::path root_;
 };
 
+class ScopedSafetyAssets {
+  public:
+    ScopedSafetyAssets()
+        : aura_home_("AURA_HOME"),
+          safety_assets_("AURA_SAFETY_ASSETS_DIR") {
+        setEnvVar("AURA_HOME", home_.root().string());
+        setEnvVar("AURA_SAFETY_ASSETS_DIR", assets_.root().string());
+    }
+
+    ScopedSafetyAssets(const ScopedSafetyAssets&) = delete;
+    ScopedSafetyAssets& operator=(const ScopedSafetyAssets&) = delete;
+
+  private:
+    TempTree home_;
+    TempTree assets_;
+    ScopedEnvVar aura_home_;
+    ScopedEnvVar safety_assets_;
+};
+
 char pathListSeparator() {
 #ifdef _WIN32
     return ';';
@@ -553,12 +572,13 @@ TEST_CASE("mcp tool dispatch does not take ownership of caller args") {
 }
 
 TEST_CASE("protected export record masks sensitive strings without raw content") {
+    ScopedSafetyAssets safety_assets;
+
     const auto record = aura::safety::buildProtectedExportRecord(
         7, "support alice.smith@example.com", "cli.analyze.strings");
 
     CHECK(record.string_id == 7);
     CHECK(record.source == "cli.analyze.strings");
-    CHECK(record.raw_content.empty());
     CHECK(record.protected_value == "support [EMAIL_1]");
     CHECK(record.masked_content == "support [EMAIL_1]");
     CHECK(record.findings_count == 1);
@@ -572,12 +592,27 @@ TEST_CASE("protected export record masks sensitive strings without raw content")
 }
 
 TEST_CASE("analyze CLI JSON normalization protects body strings") {
+    ScopedSafetyAssets safety_assets;
+
     cJSON* root = cJSON_Parse(R"({
       "ok": true,
       "body": {
         "strings": [
-          {"id": 1, "source": "rizin", "content": "admin@example.com"},
-          {"string_id": 2, "content": "plain menu label"},
+          {
+            "id": 1,
+            "source": "rizin",
+            "content": "admin@example.com",
+            "raw_content": "admin@example.com",
+            "original": "admin@example.com",
+            "export_value": "admin@example.com"
+          },
+          {
+            "string_id": 2,
+            "content": "plain menu label",
+            "raw_content": "plain menu label",
+            "original": "plain menu label",
+            "export_value": "plain menu label"
+          },
           {"id": 3, "content": 42}
         ]
       }
@@ -594,6 +629,9 @@ TEST_CASE("analyze CLI JSON normalization protects body strings") {
     const cJSON* sensitive = cJSON_GetArrayItem(strings, 0);
     REQUIRE(cJSON_IsObject(sensitive));
     CHECK(field(sensitive, "content") == nullptr);
+    CHECK(field(sensitive, "raw_content") == nullptr);
+    CHECK(field(sensitive, "original") == nullptr);
+    CHECK(field(sensitive, "export_value") == nullptr);
     CHECK(stringField(sensitive, "protected_value") == "[EMAIL_1]");
     CHECK(stringField(sensitive, "masked_content") == "[EMAIL_1]");
     CHECK(cJSON_IsTrue(field(sensitive, "protected_only")));
@@ -609,6 +647,9 @@ TEST_CASE("analyze CLI JSON normalization protects body strings") {
     const cJSON* plain = cJSON_GetArrayItem(strings, 1);
     REQUIRE(cJSON_IsObject(plain));
     CHECK(field(plain, "content") == nullptr);
+    CHECK(field(plain, "raw_content") == nullptr);
+    CHECK(field(plain, "original") == nullptr);
+    CHECK(field(plain, "export_value") == nullptr);
     CHECK(stringField(plain, "protected_value") == "plain menu label");
     CHECK(stringField(plain, "masked_content") == "plain menu label");
     CHECK(cJSON_IsTrue(field(plain, "protected_only")));

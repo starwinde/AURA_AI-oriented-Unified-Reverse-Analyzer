@@ -4,8 +4,10 @@ add_library(aura_mcp_core STATIC
     mcp_path_policy.cpp
     mcp_tools.cpp
 )
-target_include_directories(aura_mcp_core PUBLIC
+target_include_directories(aura_mcp_core
+    PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
+    PUBLIC
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/third_party/cjson
 )

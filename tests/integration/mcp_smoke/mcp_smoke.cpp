@@ -467,6 +467,16 @@ TEST_CASE("aura-mcp bridges probe, info, and analyze through aura CLI") {
                 }
                 CHECK(cJSON_GetObjectItemCaseSensitive(row, "content") ==
                       nullptr);
+                CHECK(cJSON_GetObjectItemCaseSensitive(row, "raw_content") ==
+                      nullptr);
+                CHECK(cJSON_IsString(cJSON_GetObjectItemCaseSensitive(
+                    row, "protected_value")));
+                CHECK(cJSON_IsString(cJSON_GetObjectItemCaseSensitive(
+                    row, "masked_content")));
+                CHECK(cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(
+                    row, "protected_only")));
+                CHECK(cJSON_IsArray(cJSON_GetObjectItemCaseSensitive(
+                    row, "findings")));
             }
         }
     }

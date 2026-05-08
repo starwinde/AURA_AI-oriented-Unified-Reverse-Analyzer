@@ -21,7 +21,6 @@ ProtectedExportRecord buildProtectedExportRecord(int string_id,
     record.protected_value = view.protected_value;
     record.masked_content = view.masked;
     record.source = source;
-    record.raw_content.clear();
     record.findings_count = view.findings.size();
     record.findings.reserve(view.findings.size());
     for (const Finding& finding : view.findings) {

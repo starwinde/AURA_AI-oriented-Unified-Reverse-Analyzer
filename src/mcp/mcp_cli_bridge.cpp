@@ -946,11 +946,13 @@ void aura_mcp_normalize_analyze_cli_json(cJSON* cli_json) {
             string_id, content, source);
 
         cJSON_DeleteItemFromObjectCaseSensitive(row, "content");
+        cJSON_DeleteItemFromObjectCaseSensitive(row, "raw_content");
+        cJSON_DeleteItemFromObjectCaseSensitive(row, "original");
+        cJSON_DeleteItemFromObjectCaseSensitive(row, "export_value");
         setNumberField(row, "string_id", static_cast<double>(record.string_id));
         setStringField(row, "protected_value", record.protected_value);
         setStringField(row, "masked_content", record.masked_content);
         setStringField(row, "source", record.source);
-        setStringField(row, "raw_content", record.raw_content);
         setNumberField(row, "findings_count",
                        static_cast<double>(record.findings_count));
         setBoolField(row, "protected_only", true);

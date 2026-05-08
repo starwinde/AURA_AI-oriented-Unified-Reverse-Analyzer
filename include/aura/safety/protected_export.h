@@ -23,7 +23,6 @@ struct ProtectedExportRecord {
     std::string protected_value;
     std::string masked_content;
     std::string source;
-    std::string raw_content;
     std::size_t findings_count = 0;
     std::vector<ProtectedExportFinding> findings;
 };
