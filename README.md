@@ -154,10 +154,12 @@ Safety profiles are JSON files under `safety-profiles/`. A profile selects the
 token classification model, rule packs, eval datasets, and model failure policy.
 The active profile is persisted in the GUI setting `safety/activeProfileId`.
 
-Runtime masking uses the selected profile's model and rule packs when the
-Strings workflow builds protected values. Eval datasets are listed in the
-settings dialog for evaluation/reporting context only; changing an eval dataset
-does not directly change live string masking.
+Runtime masking currently uses the selected profile's rule packs when the
+Strings workflow builds protected values. The selected model and model failure
+policy are surfaced and validated in the settings dialog, but model inference is
+not yet wired into live string masking. Eval datasets are listed for
+evaluation/reporting context only; changing an eval dataset does not directly
+change live string masking.
 
 Users can add or override local assets under:
 
