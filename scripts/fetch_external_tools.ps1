@@ -38,9 +38,27 @@ function Fetch-Tool {
     $destDir = Join-Path $Root "third_party/$Tool/$installDir"
     $binPath = Join-Path $destDir $plat.binary_relpath
 
-    if (Test-Path $binPath) {
+    $requiredRelpaths = @($plat.binary_relpath)
+    if ($plat.PSObject.Properties.Name -contains "required_relpaths") {
+        $requiredRelpaths = @($plat.required_relpaths)
+    }
+
+    $missingRequired = @()
+    foreach ($relpath in $requiredRelpaths) {
+        $requiredPath = Join-Path $destDir $relpath
+        if (-not (Test-Path $requiredPath)) {
+            $missingRequired += $relpath
+        }
+    }
+
+    if ($missingRequired.Count -eq 0) {
         Write-Host "fetch_external_tools: $Tool@$version`: cache hit ($binPath)"
         return
+    }
+
+    if ((Test-Path $destDir) -and (Test-Path $binPath)) {
+        Write-Host "fetch_external_tools: $Tool@$version`: cache incomplete, missing $($missingRequired -join ', '); refreshing"
+        Remove-Item -LiteralPath $destDir -Recurse -Force
     }
 
     Write-Host "fetch_external_tools: $Tool@$version`: downloading from $($plat.url)"
@@ -79,8 +97,11 @@ fetch_external_tools: $Tool@$version`: sha256 mismatch
             }
         }
 
-        if (-not (Test-Path $binPath)) {
-            throw "fetch_external_tools: $Tool`: binary not found at $binPath after extract"
+        foreach ($relpath in $requiredRelpaths) {
+            $requiredPath = Join-Path $destDir $relpath
+            if (-not (Test-Path $requiredPath)) {
+                throw "fetch_external_tools: $Tool`: required path not found at $requiredPath after extract"
+            }
         }
         Write-Host "fetch_external_tools: $Tool@$version`: ready at $binPath"
     }

@@ -19,7 +19,11 @@
       "archive": "zip",
       "install_dir": "0.8.0-shared",
       "strip_components": 0,
-      "binary_relpath": "rizin-win-installer-clang_cl-64/bin/rizin.exe"
+      "binary_relpath": "rizin-win-installer-clang_cl-64/bin/rizin.exe",
+      "required_relpaths": [
+        "rizin-win-installer-clang_cl-64/bin/rizin.exe",
+        "rizin-win-installer-clang_cl-64/lib/rizin/plugins/rz_ghidra_sleigh"
+      ]
     }
   }
 }
