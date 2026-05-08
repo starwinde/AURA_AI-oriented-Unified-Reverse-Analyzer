@@ -111,7 +111,7 @@ core safety asset registry
         v
 GUI Safety Settings Dialog
   choose profile
-  override model/rule/eval selections
+  inspect selected model/rule/eval selections
   save selected profile id to QSettings
         |
         v
