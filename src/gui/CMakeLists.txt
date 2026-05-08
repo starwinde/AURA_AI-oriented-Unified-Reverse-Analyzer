@@ -18,6 +18,7 @@ set(AURA_GUI_SOURCES
     xref_table_model.cpp
     symbol_table_model.cpp
     string_table_model.cpp
+    safety_settings_dialog.cpp
     code_syntax_highlighter.cpp
     decompile_pane.cpp
     disasm_pane.cpp
@@ -36,6 +37,7 @@ set(AURA_GUI_HEADERS
     xref_table_model.h
     symbol_table_model.h
     string_table_model.h
+    safety_settings_dialog.h
     code_syntax_highlighter.h
     decompile_pane.h
     disasm_pane.h

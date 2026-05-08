@@ -37,6 +37,8 @@ target_sources(gui_smoke PRIVATE
     ${CMAKE_SOURCE_DIR}/src/gui/symbol_table_model.h
     ${CMAKE_SOURCE_DIR}/src/gui/string_table_model.cpp
     ${CMAKE_SOURCE_DIR}/src/gui/string_table_model.h
+    ${CMAKE_SOURCE_DIR}/src/gui/safety_settings_dialog.cpp
+    ${CMAKE_SOURCE_DIR}/src/gui/safety_settings_dialog.h
     ${CMAKE_SOURCE_DIR}/src/gui/code_syntax_highlighter.cpp
     ${CMAKE_SOURCE_DIR}/src/gui/code_syntax_highlighter.h
     ${CMAKE_SOURCE_DIR}/src/gui/analysis_options_dialog.cpp
