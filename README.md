@@ -152,6 +152,17 @@ The installer prints the environment variables used by AURA, including
 `AURA_HOME`, `AURA_RIZIN_BIN`, `AURA_RIZIN_PATH`, and
 `AURA_SAFETY_ASSETS_DIR`.
 
+### MCP local stdio server
+
+`aura-mcp` is the current MCP V1 local stdio JSON-RPC server. Installer builds
+with `-Build` / `--build` include the `aura-mcp` target and print its discovered
+path. Runtime clients must set `AURA_REPO_ROOT` to the repo root and set
+`AURA_MCP_ALLOWED_ROOTS` to the binary-file allowlist (`;` on Windows, `:` on
+POSIX). Binary tools fail closed when allowed roots are unset or empty.
+
+See [MCP local stdio server](docs/mcp.md) for setup, JSON-RPC examples, tool
+inventory, protected-output rules, and troubleshooting.
+
 ---
 
 ## Safety Assets Settings

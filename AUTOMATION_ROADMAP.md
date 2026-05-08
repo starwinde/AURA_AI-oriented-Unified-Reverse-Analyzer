@@ -25,6 +25,18 @@
 > 0.8.2 계열은 과거 analyze 정합화 기록으로만 취급하며 신규 기준이 아니다.
 > Defender/SmartScreen/EDR 의 cyber security risk 경고는 RE 도구 특성상
 > 예상 가능한 경고로 문서화하고, 코드 우회는 금지한다.
+>
+> **2026-05-08 MCP real-use local stdio slice**: `aura-mcp` 는 현재 MCP V1
+> local stdio JSON-RPC server 로 문서화됨. `AURA_REPO_ROOT` 로 local `aura`
+> CLI 를 찾고, binary-file tool 은 `AURA_MCP_ALLOWED_ROOTS` allowlist 가
+> 없거나 비어 있으면 fail-closed 된다. `install.ps1 -Build` /
+> `install.sh --build` 는 `aura-mcp` target 을 함께 빌드하고 실행에 필요한
+> env var guidance 를 출력한다. 구현된 bridge surface 는
+> `aura_probe_engines`, `aura_info`, `aura_analyze`,
+> `aura_get_disassembly`, `aura_get_cfg`, `aura_get_llm_context` 이며,
+> `aura_list_functions` 는 V1 surface 에서 제외된 후속 작업이고, raw
+> disassembly/decompile 은 의도적으로 deny. Protected output 은 analyze string masking, disassembly
+> raw text/op_str omission, raw access denial 을 현재 계약으로 둔다.
 
 | Phase | 제목 | 상태 | 위치 |
 |-------|------|------|------|
