@@ -63,7 +63,7 @@
 
 > **Capstone 역할 명시** — Capstone 은 **disasm secondary** 어댑터다 (disasm primary 는 Rizin). Decompile / analyze 비교 대상이 아니며, primary 의 decompile 결과를 Capstone 으로 cross-check 하거나 보정하지 않는다 (R-8 + R-9 의 자연 따름). Decompile 의 secondary 후보는 Rizin co-primary 외에 RetDec 이며 Capstone 이 아니다.
 
-> **Rizin 실행 기준 (ADR-0052)** — 현재 approved baseline 은 **Rizin 0.8.0 shared64 + rz-ghidra 0.8.0** 이다. 코드/테스트/문서의 기본 vendored path 는 `third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/...` 를 기준으로 한다. CLI/GUI 는 `SLEIGHHOME` 이 비어 있고 vendored `rz_ghidra_sleigh` 가 존재하면 해당 경로를 자동 설정한다. 0.8.2 계열은 신규 decompile 시연/테스트 기준으로 사용하지 않는다.
+> **Rizin 실행 기준 (ADR-0052)** — 현재 approved mandatory baseline 은 fetch script 가 내려받아 검증한 **Rizin 0.8.0 shared64** 이다. 코드/테스트/문서의 기본 vendored path 는 `third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/...` 를 기준으로 하지만, 추출된 바이너리는 Git 에 커밋하지 않는다. rz-ghidra 0.8.0 은 존재할 때 preferred pseudo-C provider 이며, CLI/GUI 는 `SLEIGHHOME` 이 비어 있고 vendored `rz_ghidra_sleigh` 가 존재할 때만 해당 경로를 자동 설정한다. fetch/install script 가 실제 설치하기 전까지 rz-ghidra 자동 설치를 주장하지 않는다. 부재 시 deterministic install guidance 를 표시하고 pseudo-C 를 조작해 만들지 않는다. 0.8.2 계열은 신규 decompile 시연/테스트 기준으로 사용하지 않는다.
 
 > **보안 제품 경고 처리 (ADR-0052)** — Windows Defender / SmartScreen / EDR 이 AURA, Rizin, rz-ghidra 를 cyber security risk 로 표시할 수 있다. 이는 RE 도구가 외부 analyzer, plugin DLL, 임의 바이너리 분석을 수행하기 때문에 예상 가능한 경고다. 코드에서 경고를 우회하거나 비활성화하지 않는다. 허용되는 대응은 출처/버전/경로/해시 문서화, 로컬 분석 원칙, LLM 자동 전송 없음 명시, 사용자의 로컬 보안 정책 기반 allow-list 뿐이다.
 
@@ -163,6 +163,7 @@ legacy/                 # v2.x 격리 (참조용, 빌드 영향 없음)
 - `FunctionRecord` 부속 필드로 type / call / variable 뭉개기 — 1 급 record 분해 위반 (R-12)
 - AURA 코어 로직을 인터프리터 언어로 작성 (§1) — 외부 도구의 자체 런타임은 해당하지 않음
 - 외부 도구 런타임 부재 시 "사용 불가" 표기 + 이유 + 설치 안내 누락 (§1, 2026-05-02)
+- rz-ghidra 부재 시 pseudo-C fabrication 또는 deterministic install guidance 누락 (ADR-0052, 2026-05-08)
 - 외부 명령 호출 시 OS 별 이름 차이 미고려 (§1, 2026-05-05) — Tier 1 양 OS (Linux WSL + Windows MSVC) 동작 보장 의무. `install_hint` 와 probe 명령의 OS-별 자기-일관성 불일치도 위반.
 - 사용자 승인 없는 새 의존성 도입 (§6)
 - 사용자 승인 없는 PR 머지 / 직접 push (§6)

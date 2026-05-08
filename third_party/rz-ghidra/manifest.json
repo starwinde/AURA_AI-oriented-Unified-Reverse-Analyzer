@@ -1,0 +1,28 @@
+{
+  "_comment": "rz-ghidra 0.8.0 acquisition contract. The upstream v0.8.0 GitHub release publishes source only; no pinned Windows prebuilt archive is currently selected. Installers therefore detect an existing plugin/runtime and keep deterministic fallback when absent.",
+  "tool": "rz-ghidra",
+  "version": "0.8.0",
+  "platforms": {
+    "windows-x86_64": {
+      "supported": false,
+      "reason": "No pinned hash-verified Windows prebuilt archive has been selected. Existing local drops are detected under the Rizin plugin directory."
+    },
+    "linux-x86_64": {
+      "supported": false,
+      "reason": "Use a distribution package or local install that exposes pdgj to Rizin; source-only upstream archive is not auto-built by AURA."
+    },
+    "darwin-x86_64": {
+      "supported": false,
+      "reason": "macOS runtime packaging is deferred."
+    }
+  },
+  "source_release": {
+    "url": "https://github.com/rizinorg/rz-ghidra/releases/download/v0.8.0/rz-ghidra-src-v0.8.0.tar.gz",
+    "sha256": "831aa98f8d20489d526b6ef2fcdcc33be4a1f070a6932cb43c5950fd3569e74f",
+    "note": "Source archive only. Do not treat this as a runtime plugin bundle."
+  },
+  "expected_runtime_paths": [
+    "lib/rizin/plugins/core_ghidra.dll",
+    "lib/rizin/plugins/rz_ghidra_sleigh/x86-64.sla"
+  ]
+}

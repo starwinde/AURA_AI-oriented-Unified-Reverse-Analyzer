@@ -138,11 +138,13 @@ Existing engines, integrated. Native performance, modern UX.
   `pD 4096` arrow text 로 구현하되, `Structured` 탭은 `pD` mixed listing 을
   분류해 invalid/data/comment/label 줄도 보존한다. UI 는 Cutter처럼
   `Structured` / `With arrows` 탭 + 함수 선택 스크롤 방식으로 제공한다.
-- 현재 reference execution baseline = **Rizin 0.8.0 shared64 + rz-ghidra
-  0.8.0**. 기본 경로는
-  `third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/...`,
-  pseudo-C decompile 은 같은 bundle 의 `rz_ghidra_sleigh` 를
-`SLEIGHHOME` 으로 사용한다 (ADR-0052).
+- 현재 mandatory reference execution baseline = fetch script 가 획득·검증한
+  **Rizin 0.8.0 shared64**. 추출된 바이너리는 Git 에 커밋하지 않는다.
+  rz-ghidra 0.8.0 은 존재할 때 preferred pseudo-C provider 이며, 같은
+  prefix 의 `rz_ghidra_sleigh` 를 `SLEIGHHOME` 으로 사용할 수 있다.
+  fetch/install script 가 실제 설치하기 전까지 자동 설치를 주장하지 않는다.
+  부재 시 deterministic install guidance 를 표시하고 pseudo-C 를 조작해
+  만들지 않는다 (ADR-0052).
 - 보안 제품이 이 toolchain 을 cyber security risk 로 표시할 수 있다.
   이는 리버스 엔지니어링 도구의 예상 가능한 평판/행위 기반 경고이며,
   AURA 는 이를 우회하지 않는다. 출처/버전/해시/로컬 분석/LLM 자동 전송
@@ -261,7 +263,7 @@ probe / orchestrator 가 외부 도구 binary 를 찾는 우선순위: **env ove
 | D-33 | Phase 번호 재배정 (plan 11.5-12 → 12.1-13) | ✅ 결정 (2026-05-05) | 옛 plan 11.5/11.6 = 코드베이스 11.5 (P5 polish ✅ landed) / 11.6 (Disasm flow gutter ✅ landed) 와 충돌 → 옛 11.5~11.10 → **Phase 12 묶음 (12.1~12.6)** "External Engine Session & Cache Layer" / 옛 12 → **Phase 13** "LLM Context Provider". 옛 phase 번호 재사용 영구 금지. 상세: `docs/adr/0051-phase-number-renumber.md`. |
 | D-34 | Symbolic request type policy | ✅ 결정 (2026-05-06) | AURA 는 `symbolic` request type 을 허용한다. `symbolic` primary 는 `{angr}` 이며 AURA 는 symbolic execution 을 자체 구현하지 않는다. angr 는 외부 subprocess / runner 로만 실행되고, AURA 는 raw output 보존, normalized mapping, UI 표시만 수행한다. angr 부재 또는 실패 시 secondary/fallback 으로 대체하지 않는다. `aura_angr_runner.py` 는 외부 도구 runner 로 간주하며 AURA core 로직이 아니다. 실제 코드 계약(`include/engine_request.h` enum/mask, manifest validation, orchestrator primary set)은 Phase 7.1 구현에서 갱신한다. |
 | D-35 | Type propagation DB apply path | ✅ 결정 (2026-05-06) | 타입 전파 수정/후속 기능을 위해 DB 개선을 허가한다. 범위는 분석 결과 전체 캐시 또는 후보 캐시 신설이 아니라, 사용자가 명시 Apply 한 후보만 기존 SQLite `override_store` 의 `AURA_OVERRIDE_PAYLOAD_TYPE` row 로 저장하는 것이다. CLI 계약: `propagate-type --apply` 는 `--all` 또는 `--candidate-ids` 와 `--project`/`$AURA_PROJECT` 가 있을 때만 store write. 상세: `docs/adr/0045-pp1-type-propagation.md` D6. |
-| D-36 | Multi-decompiler serving final target | ✅ 방향 결정 (2026-05-06) | 최종 제품은 Rizin/rz-ghidra, Ghidra, RetDec 등 복수 decompiler 결과를 같은 함수 단위로 요청·보존·표시할 수 있어야 한다. 현재 0.8.0 Rizin/rz-ghidra 는 시연 가능한 단일 기준일 뿐 최종 범위 축소가 아니다. 결과 merge/vote/자동 정정은 금지하며, compare 는 display-only side-by-side/tabbed 계층에서 수행한다. 구체 CLI flag, GUI layout, cache schema, RetDec/Ghidra PrettyPrint 도입 방식은 구현 phase 진입 시 별도 ADR 로 확정한다. |
+| D-36 | Multi-decompiler serving final target | ✅ 방향 결정 (2026-05-06) | 최종 제품은 Rizin/rz-ghidra, Ghidra, RetDec 등 복수 decompiler 결과를 같은 함수 단위로 요청·보존·표시할 수 있어야 한다. 현재 필수 기준은 Rizin 0.8.0 shared64 이고, rz-ghidra 0.8.0 은 설치되어 있을 때 preferred pseudo-C provider 일 뿐 최종 범위 축소가 아니다. 결과 merge/vote/자동 정정은 금지하며, compare 는 display-only side-by-side/tabbed 계층에서 수행한다. 구체 CLI flag, GUI layout, cache schema, RetDec/Ghidra PrettyPrint 도입 방식은 구현 phase 진입 시 별도 ADR 로 확정한다. |
 | D-37 | GUI IPC + MCP execution split | ✅ 결정 (2026-05-06) | `aura-gui` 는 opt-in localhost RPC server 를 제공하고, `aura gui ...` 는 나중에 실행되어 현재 GUI 에 접속하는 client mode 로 동작한다. MCP 는 GUI 에 내장하지 않고 별도 `aura-mcp` gateway 로 둔다. Gateway 는 LLM/agent 요청을 allowlist/policy/audit 후 GUI IPC 또는 headless engine API 로 전달한다. |
 | D-38 | GUI browser presentation policy | ✅ 결정 (2026-05-06) | Functions/Xrefs/Symbols/Imports/Strings 는 Cutter-style `QTreeView` 로 표현한다. GUI 는 엔진 record 의 display layer 이므로 없는 metadata 를 0, false, unknown 등으로 추론하지 않고 `-` 로 둔다. |
 | D-39 | Single LLM + Token Classification/Rule privacy filter gateway policy | ✅ 결정 (2026-05-06, 용어 갱신 2026-05-07) | 제품 기본 구조는 2개 생성형 LLM 상시 배치가 아니라 **1개 생성형 LLM + Token Classification Model/Rule Pack 기반 Privacy Filter & Policy Gateway**다. `aura-mcp` 는 생성형 모델이 아니라 policy gateway 이며, 문자열 기반 MVP 에서 시작해 token classification 탐지, 정규식 rule pack, eval dataset 기반 평가를 결합한 민감정보 마스킹 시스템으로 확장한다. 보조 verifier 모델은 기본 아키텍처에서 제외하고, 별도 연구/옵션 phase 승인 없이는 요구사항으로 두지 않는다. |

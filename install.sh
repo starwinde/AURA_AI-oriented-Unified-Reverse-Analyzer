@@ -4,6 +4,7 @@ set -eu
 BUILD=0
 NO_GUI=0
 SKIP_SAFETY_ASSETS=0
+REPO_SAFETY_ASSETS_ONLY=0
 BUILD_DIR=build-local
 CONFIG=Release
 AURA_HOME_DIR="${AURA_HOME:-$HOME/.aura}"
@@ -16,6 +17,8 @@ Options:
   --build                 Configure and build AURA after installing runtime tools.
   --no-gui                Disable GUI targets during --build.
   --skip-safety-assets    Skip model and dataset downloads.
+  --repo-safety-assets-only
+                          Copy repo safety manifests/rules only; skip HF downloads.
   --build-dir PATH        CMake build directory. Default: build-local.
   --config CONFIG         CMake build type. Default: Release.
   --aura-home PATH        Runtime asset directory. Default: ${AURA_HOME:-$HOME/.aura}.
@@ -48,6 +51,9 @@ while [ "$#" -gt 0 ]; do
       ;;
     --skip-safety-assets)
       SKIP_SAFETY_ASSETS=1
+      ;;
+    --repo-safety-assets-only)
+      REPO_SAFETY_ASSETS_ONLY=1
       ;;
     --build-dir)
       option="$1"
@@ -99,7 +105,7 @@ cd "$ROOT"
 
 mkdir -p "$AURA_HOME_DIR"
 FREE_KB="$(df -Pk "$AURA_HOME_DIR" | awk 'NR==2 {print $4}')"
-if [ "$SKIP_SAFETY_ASSETS" -eq 1 ]; then
+if [ "$SKIP_SAFETY_ASSETS" -eq 1 ] || [ "$REPO_SAFETY_ASSETS_ONLY" -eq 1 ]; then
   NEED_KB=1048576
 else
   NEED_KB=6291456
@@ -134,22 +140,38 @@ export AURA_RIZIN_PATH="$RIZIN_BIN"
 export AURA_HOME="$AURA_HOME_DIR"
 export AURA_SAFETY_ASSETS_DIR="$AURA_HOME_DIR/assets/safety"
 
+RZ_GHIDRA_PROBE="$ROOT/tests/fixtures/bin/elf_smoke.x86_64"
+if [ -f "$RZ_GHIDRA_PROBE" ] && "$RIZIN_BIN" -e scr.color=0 -q -c 'pdg?' "$RZ_GHIDRA_PROBE" 2>/dev/null | grep 'pdgj' >/dev/null; then
+  echo "AURA install: rz-ghidra pdgj available"
+else
+  echo "AURA install: rz-ghidra pdgj not available; pseudo-C will show install guidance/fallback"
+fi
+
 if [ "$SKIP_SAFETY_ASSETS" -eq 0 ]; then
   need_cmd python3
-  VENV_DIR="$AURA_HOME_DIR/runners/pii-python-venv"
-  if [ ! -x "$VENV_DIR/bin/python" ]; then
-    echo "AURA install: creating PII runner venv at $VENV_DIR"
-    python3 -m venv "$VENV_DIR"
+  if [ "$REPO_SAFETY_ASSETS_ONLY" -eq 1 ]; then
+    echo "AURA install: copying repo safety assets only"
+    python3 "$ROOT/scripts/download_safety_assets.py" \
+      --repo-root "$ROOT" \
+      --aura-home "$AURA_HOME_DIR" \
+      --manifest "$ROOT/assets/safety/runtime-assets.json" \
+      --repo-assets-only
+  else
+    VENV_DIR="$AURA_HOME_DIR/runners/pii-python-venv"
+    if [ ! -x "$VENV_DIR/bin/python" ]; then
+      echo "AURA install: creating PII runner venv at $VENV_DIR"
+      python3 -m venv "$VENV_DIR"
+    fi
+    VENV_PY="$VENV_DIR/bin/python"
+    "$VENV_PY" -m pip install --upgrade pip
+    "$VENV_PY" -m pip install --upgrade "huggingface_hub==1.14.0"
+    echo "AURA install: downloading token classification model and eval datasets"
+    echo "AURA install: this may download about 3GB on first run"
+    "$VENV_PY" "$ROOT/scripts/download_safety_assets.py" \
+      --repo-root "$ROOT" \
+      --aura-home "$AURA_HOME_DIR" \
+      --manifest "$ROOT/assets/safety/runtime-assets.json"
   fi
-  VENV_PY="$VENV_DIR/bin/python"
-  "$VENV_PY" -m pip install --upgrade pip
-  "$VENV_PY" -m pip install --upgrade "huggingface_hub==1.14.0"
-  echo "AURA install: downloading token classification model and eval datasets"
-  echo "AURA install: this may download about 3GB on first run"
-  "$VENV_PY" "$ROOT/scripts/download_safety_assets.py" \
-    --repo-root "$ROOT" \
-    --aura-home "$AURA_HOME_DIR" \
-    --manifest "$ROOT/assets/safety/runtime-assets.json"
 fi
 
 echo "AURA_HOME=$AURA_HOME"
@@ -162,6 +184,14 @@ if [ "$BUILD" -eq 1 ]; then
   GUI_FLAG=ON
   if [ "$NO_GUI" -eq 1 ]; then
     GUI_FLAG=OFF
+  fi
+  if [ "$NO_GUI" -eq 0 ]; then
+    if ! pkg-config --exists Qt6Widgets 2>/dev/null && [ -z "${Qt6_DIR:-}" ] && [ -z "${CMAKE_PREFIX_PATH:-}" ]; then
+      fail_install \
+        "Qt6 was not found for GUI build." \
+        "AURA_BUILD_GUI=ON requires Qt6 Widgets." \
+        "Install qt6-base-dev or rerun ./install.sh --no-gui."
+    fi
   fi
   cmake -S "$ROOT" -B "$BUILD_DIR" \
     -DCMAKE_BUILD_TYPE="$CONFIG" \

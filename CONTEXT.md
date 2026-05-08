@@ -21,12 +21,15 @@ Adapter 중 매 PR 게이트가 의존하는 mandatory 1개. 현재 = **Rizin**.
 _Avoid_: primary engine, default backend.
 
 **Rizin execution baseline**:
-현재 시연/테스트/문서 기준 Rizin 조합은 **Rizin 0.8.0 shared64 +
-rz-ghidra 0.8.0** 이다. 기본 경로는
+현재 필수 reference engine 은 fetch script 가 내려받아 검증한 **Rizin
+0.8.0 shared64** 이다. 기본 vendored 경로는
 `third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin.exe`
-(Windows) 이며, pseudo-C decompile 을 위해 같은 bundle 의
-`lib/rizin/plugins/rz_ghidra_sleigh` 를 `SLEIGHHOME` 으로 사용한다.
-0.8.2 계열은 신규 적용 기준이 아니다. 상세 = ADR-0052.
+(Windows) 이지만, 추출된 바이너리는 Git 에 커밋하지 않는다. rz-ghidra
+0.8.0 은 존재할 때 preferred pseudo-C provider 이며, 같은 prefix 의
+`lib/rizin/plugins/rz_ghidra_sleigh` 를 `SLEIGHHOME` 으로 사용할 수 있다.
+fetch/install script 가 실제 설치하기 전까지 rz-ghidra 자동 설치를 주장하지
+않는다. 부재 시 deterministic install guidance 를 표시하고 pseudo-C 를
+조작해 만들지 않는다. 0.8.2 계열은 신규 적용 기준이 아니다. 상세 = ADR-0052.
 
 **Optional engine**:
 있으면 추가 시나리오를 기여하고, 없으면 해당 시나리오만 SKIP 되는 adapter.
@@ -488,8 +491,9 @@ LLM rename / 전체 list dock = v1.3+. 상세 = ADR-0037.
 
 **Multi-decompiler serving**:
 같은 함수에 대해 Rizin/rz-ghidra, Ghidra, RetDec 등 복수 decompiler 결과를
-동시에 요청·보존·표시하는 최종 목표. 현재 Rizin 0.8.0 shared64 +
-rz-ghidra 0.8.0 은 시연 가능한 baseline 이며 최종 범위 축소가 아니다.
+동시에 요청·보존·표시하는 최종 목표. 현재 필수 baseline 은 Rizin 0.8.0
+shared64 이고, rz-ghidra 0.8.0 은 설치되어 있을 때 preferred pseudo-C
+provider 이며 최종 범위 축소가 아니다.
 비교는 display-only 이고, AURA 가 결과를 merge/vote 하거나 "정답"으로
 자동 정정하지 않는다. 상세 phase 번호와 CLI/GUI surface 는 향후 ADR 에서
 확정한다.
@@ -505,6 +509,9 @@ rz-ghidra 0.8.0 은 시연 가능한 baseline 이며 최종 범위 축소가 아
 `scripts/fetch_external_tools.{sh,ps1}` — manifest 를 읽어 prebuilt 를
 `third_party/<tool>/<version>/` 로 다운로드·검증·추출. CMake 의존 그래프
 밖에서 실행되며, CI 는 cmake configure 전에 1회 호출한다.
+현재 계약상 Rizin 0.8.0 은 이 경로로 획득되어야 한다. rz-ghidra 0.8.0 은
+preferred pseudo-C provider 이지만 fetch/install script 가 실제 설치하기
+전까지 자동 설치 보장으로 설명하지 않는다.
 
 **Override**:
 사용자가 unified model 의 한 요소 (예: 함수 이름) 를 영속적으로 재정의한
