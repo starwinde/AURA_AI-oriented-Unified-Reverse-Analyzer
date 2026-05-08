@@ -124,6 +124,7 @@ set(AURA_CORE_SOURCES
     src/core/override_pipeline.c
     src/core/project_binaries.c
     src/core/string_protection_store.c
+    src/core/safety/protected_export.cpp
     src/core/safety/string_safety.cpp
     src/adapter/ghidra/ghidra_adapter.c
     src/adapter/ghidra/ghidra_subprocess.c

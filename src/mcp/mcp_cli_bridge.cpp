@@ -1,6 +1,8 @@
 #include "mcp_cli_bridge.h"
 
 #include "aura/mcp/mcp_envelope.h"
+#include "aura/safety/protected_export.h"
+#include "mcp_cli_bridge_internal.h"
 #include "mcp_path_policy.h"
 
 #include <algorithm>
@@ -709,6 +711,80 @@ cJSON* envelopeError(const char* kind,
                                    kDisclosure);
 }
 
+std::string jsonStringField(const cJSON* object, const char* key) {
+    const cJSON* item = cJSON_GetObjectItemCaseSensitive(object, key);
+    return cJSON_IsString(item) && item->valuestring != nullptr
+               ? item->valuestring
+               : "";
+}
+
+int jsonIntField(const cJSON* object, const char* key, int fallback) {
+    const cJSON* item = cJSON_GetObjectItemCaseSensitive(object, key);
+    return cJSON_IsNumber(item) ? item->valueint : fallback;
+}
+
+void setStringField(cJSON* object, const char* key, const std::string& value) {
+    cJSON* item = cJSON_CreateString(value.c_str());
+    if (item == nullptr) {
+        return;
+    }
+    if (!cJSON_ReplaceItemInObjectCaseSensitive(object, key, item)) {
+        cJSON_AddItemToObject(object, key, item);
+    }
+}
+
+void setBoolField(cJSON* object, const char* key, bool value) {
+    cJSON* item = cJSON_CreateBool(value ? 1 : 0);
+    if (item == nullptr) {
+        return;
+    }
+    if (!cJSON_ReplaceItemInObjectCaseSensitive(object, key, item)) {
+        cJSON_AddItemToObject(object, key, item);
+    }
+}
+
+void setNumberField(cJSON* object, const char* key, double value) {
+    cJSON* item = cJSON_CreateNumber(value);
+    if (item == nullptr) {
+        return;
+    }
+    if (!cJSON_ReplaceItemInObjectCaseSensitive(object, key, item)) {
+        cJSON_AddItemToObject(object, key, item);
+    }
+}
+
+cJSON* findingToJson(const aura::safety::ProtectedExportFinding& finding) {
+    cJSON* item = cJSON_CreateObject();
+    if (item == nullptr) {
+        return nullptr;
+    }
+    cJSON_AddStringToObject(item, "detector_id", finding.detector_id.c_str());
+    cJSON_AddStringToObject(item, "kind", finding.kind.c_str());
+    cJSON_AddNumberToObject(item, "start", static_cast<double>(finding.start));
+    cJSON_AddNumberToObject(item, "end", static_cast<double>(finding.end));
+    cJSON_AddNumberToObject(item, "confidence", finding.confidence);
+    cJSON_AddStringToObject(item, "mask_token", finding.mask_token.c_str());
+    return item;
+}
+
+void setFindingsField(
+    cJSON* object,
+    const std::vector<aura::safety::ProtectedExportFinding>& findings) {
+    cJSON* array = cJSON_CreateArray();
+    if (array == nullptr) {
+        return;
+    }
+    for (const auto& finding : findings) {
+        cJSON* item = findingToJson(finding);
+        if (item != nullptr) {
+            cJSON_AddItemToArray(array, item);
+        }
+    }
+    if (!cJSON_ReplaceItemInObjectCaseSensitive(object, "findings", array)) {
+        cJSON_AddItemToObject(object, "findings", array);
+    }
+}
+
 cJSON* parseCliJsonOrError(const char* kind, const std::string& stdout_text) {
     cJSON* parsed =
         cJSON_ParseWithLength(stdout_text.data(), stdout_text.size());
@@ -716,6 +792,10 @@ cJSON* parseCliJsonOrError(const char* kind, const std::string& stdout_text) {
         return envelopeError(kind,
                              "cli_invalid_json",
                              "aura CLI stdout was not valid JSON");
+    }
+
+    if (streq(kind, "aura_analyze")) {
+        aura_mcp_normalize_analyze_cli_json(parsed);
     }
 
     cJSON* data = cJSON_CreateObject();
@@ -825,6 +905,58 @@ cJSON* callBinaryTool(const char* tool_name,
 }
 
 }  // namespace
+
+void aura_mcp_normalize_analyze_cli_json(cJSON* cli_json) {
+    if (!cJSON_IsObject(cli_json)) {
+        return;
+    }
+    cJSON* body = cJSON_GetObjectItemCaseSensitive(cli_json, "body");
+    if (!cJSON_IsObject(body)) {
+        return;
+    }
+    cJSON* strings = cJSON_GetObjectItemCaseSensitive(body, "strings");
+    if (!cJSON_IsArray(strings)) {
+        return;
+    }
+
+    int fallback_id = 0;
+    cJSON* row = nullptr;
+    cJSON_ArrayForEach(row, strings) {
+        ++fallback_id;
+        if (!cJSON_IsObject(row)) {
+            continue;
+        }
+        const cJSON* content_item =
+            cJSON_GetObjectItemCaseSensitive(row, "content");
+        if (!cJSON_IsString(content_item) ||
+            content_item->valuestring == nullptr) {
+            continue;
+        }
+
+        const std::string content = content_item->valuestring;
+        const int string_id =
+            jsonIntField(row, "string_id",
+                         jsonIntField(row, "id", fallback_id));
+        std::string source = jsonStringField(row, "source");
+        if (source.empty()) {
+            source = "cli.analyze.strings";
+        }
+
+        const auto record = aura::safety::buildProtectedExportRecord(
+            string_id, content, source);
+
+        cJSON_DeleteItemFromObjectCaseSensitive(row, "content");
+        setNumberField(row, "string_id", static_cast<double>(record.string_id));
+        setStringField(row, "protected_value", record.protected_value);
+        setStringField(row, "masked_content", record.masked_content);
+        setStringField(row, "source", record.source);
+        setStringField(row, "raw_content", record.raw_content);
+        setNumberField(row, "findings_count",
+                       static_cast<double>(record.findings_count));
+        setBoolField(row, "protected_only", true);
+        setFindingsField(row, record.findings);
+    }
+}
 
 extern "C" cJSON* aura_mcp_cli_bridge_call_json(const char* tool_name,
                                                  cJSON*      args_or_null) {

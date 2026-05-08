@@ -204,6 +204,13 @@ const cJSON* contentTextOf(const cJSON* result) {
     return text;
 }
 
+std::string optionalStringField(const cJSON* object, const char* name) {
+    const cJSON* item = cJSON_GetObjectItemCaseSensitive(object, name);
+    return cJSON_IsString(item) && item->valuestring != nullptr
+               ? item->valuestring
+               : "";
+}
+
 void checkJsonRpcError(const cJSON* response,
                        int          expected_code,
                        bool         expect_null_id) {
@@ -434,5 +441,37 @@ TEST_CASE("aura-mcp bridges probe, info, and analyze through aura CLI") {
     CHECK(out.find("functions") != std::string::npos);
     CHECK(out.find("aura_cli") != std::string::npos);
 
+    cJSON* analyze_response = parseLine(out, 2);
+    const cJSON* analyze_text = contentTextOf(resultOf(analyze_response));
+    REQUIRE(analyze_text->valuestring != nullptr);
+    cJSON* analyze_envelope = cJSON_Parse(analyze_text->valuestring);
+    REQUIRE(analyze_envelope != nullptr);
+    CHECK(optionalStringField(analyze_envelope, "status") == "ok");
+    CHECK(optionalStringField(analyze_envelope, "disclosure") == "protected");
+
+    const cJSON* data =
+        cJSON_GetObjectItemCaseSensitive(analyze_envelope, "data");
+    REQUIRE(cJSON_IsObject(data));
+    const cJSON* aura_cli =
+        cJSON_GetObjectItemCaseSensitive(data, "aura_cli");
+    REQUIRE(cJSON_IsObject(aura_cli));
+    const cJSON* body = cJSON_GetObjectItemCaseSensitive(aura_cli, "body");
+    if (cJSON_IsObject(body)) {
+        const cJSON* strings =
+            cJSON_GetObjectItemCaseSensitive(body, "strings");
+        if (cJSON_IsArray(strings)) {
+            const cJSON* row = nullptr;
+            cJSON_ArrayForEach(row, strings) {
+                if (!cJSON_IsObject(row)) {
+                    continue;
+                }
+                CHECK(cJSON_GetObjectItemCaseSensitive(row, "content") ==
+                      nullptr);
+            }
+        }
+    }
+
+    cJSON_Delete(analyze_envelope);
+    cJSON_Delete(analyze_response);
     std::remove(input_path.c_str());
 }

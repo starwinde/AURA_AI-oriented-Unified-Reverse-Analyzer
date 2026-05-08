@@ -1,7 +1,9 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
+#include "aura/safety/protected_export.h"
 #include "aura/mcp/mcp_envelope.h"
+#include "mcp_cli_bridge_internal.h"
 #include "mcp_path_policy.h"
 #include "mcp_tools.h"
 
@@ -548,6 +550,92 @@ TEST_CASE("mcp tool dispatch does not take ownership of caller args") {
     CHECK(cJSON_IsObject(args));
     CHECK(stringField(args, "unused") == "sample.bin");
     cJSON_Delete(args);
+}
+
+TEST_CASE("protected export record masks sensitive strings without raw content") {
+    const auto record = aura::safety::buildProtectedExportRecord(
+        7, "support alice.smith@example.com", "cli.analyze.strings");
+
+    CHECK(record.string_id == 7);
+    CHECK(record.source == "cli.analyze.strings");
+    CHECK(record.raw_content.empty());
+    CHECK(record.protected_value == "support [EMAIL_1]");
+    CHECK(record.masked_content == "support [EMAIL_1]");
+    CHECK(record.findings_count == 1);
+    REQUIRE(record.findings.size() == 1);
+    CHECK_FALSE(record.findings[0].detector_id.empty());
+    CHECK(record.findings[0].kind == "email");
+    CHECK(record.findings[0].start == 8);
+    CHECK(record.findings[0].end == 31);
+    CHECK(record.findings[0].confidence > 0.0);
+    CHECK(record.findings[0].mask_token == "[EMAIL_1]");
+}
+
+TEST_CASE("analyze CLI JSON normalization protects body strings") {
+    cJSON* root = cJSON_Parse(R"({
+      "ok": true,
+      "body": {
+        "strings": [
+          {"id": 1, "source": "rizin", "content": "admin@example.com"},
+          {"string_id": 2, "content": "plain menu label"},
+          {"id": 3, "content": 42}
+        ]
+      }
+    })");
+    REQUIRE(root != nullptr);
+
+    aura_mcp_normalize_analyze_cli_json(root);
+
+    const cJSON* body = field(root, "body");
+    REQUIRE(cJSON_IsObject(body));
+    const cJSON* strings = field(body, "strings");
+    REQUIRE(cJSON_IsArray(strings));
+
+    const cJSON* sensitive = cJSON_GetArrayItem(strings, 0);
+    REQUIRE(cJSON_IsObject(sensitive));
+    CHECK(field(sensitive, "content") == nullptr);
+    CHECK(stringField(sensitive, "protected_value") == "[EMAIL_1]");
+    CHECK(stringField(sensitive, "masked_content") == "[EMAIL_1]");
+    CHECK(cJSON_IsTrue(field(sensitive, "protected_only")));
+    const cJSON* sensitive_findings = field(sensitive, "findings");
+    REQUIRE(cJSON_IsArray(sensitive_findings));
+    REQUIRE(cJSON_GetArraySize(sensitive_findings) == 1);
+    const cJSON* finding = cJSON_GetArrayItem(sensitive_findings, 0);
+    REQUIRE(cJSON_IsObject(finding));
+    CHECK_FALSE(stringField(finding, "detector_id").empty());
+    CHECK(stringField(finding, "kind") == "email");
+    CHECK(stringField(finding, "mask_token") == "[EMAIL_1]");
+
+    const cJSON* plain = cJSON_GetArrayItem(strings, 1);
+    REQUIRE(cJSON_IsObject(plain));
+    CHECK(field(plain, "content") == nullptr);
+    CHECK(stringField(plain, "protected_value") == "plain menu label");
+    CHECK(stringField(plain, "masked_content") == "plain menu label");
+    CHECK(cJSON_IsTrue(field(plain, "protected_only")));
+    const cJSON* plain_findings = field(plain, "findings");
+    REQUIRE(cJSON_IsArray(plain_findings));
+    CHECK(cJSON_GetArraySize(plain_findings) == 0);
+
+    const cJSON* non_string = cJSON_GetArrayItem(strings, 2);
+    REQUIRE(cJSON_IsObject(non_string));
+    CHECK(field(non_string, "content") != nullptr);
+    CHECK(field(non_string, "protected_value") == nullptr);
+
+    cJSON_Delete(root);
+}
+
+TEST_CASE("analyze CLI JSON normalization leaves payload without strings unchanged") {
+    cJSON* root = cJSON_Parse(R"({"ok": true, "body": {"functions": []}})");
+    REQUIRE(root != nullptr);
+
+    aura_mcp_normalize_analyze_cli_json(root);
+
+    const cJSON* body = field(root, "body");
+    REQUIRE(cJSON_IsObject(body));
+    CHECK(field(body, "functions") != nullptr);
+    CHECK(field(body, "strings") == nullptr);
+
+    cJSON_Delete(root);
 }
 
 TEST_CASE("bridged protected mcp tool validates missing arguments") {

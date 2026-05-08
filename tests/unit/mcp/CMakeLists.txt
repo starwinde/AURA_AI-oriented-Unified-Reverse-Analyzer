@@ -7,7 +7,7 @@ target_include_directories(mcp_unit PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party/cjson
     ${CMAKE_SOURCE_DIR}/third_party/doctest
 )
-target_link_libraries(mcp_unit PRIVATE aura_mcp_core cjson)
+target_link_libraries(mcp_unit PRIVATE aura_mcp_core aura_core cjson)
 target_compile_features(mcp_unit PRIVATE cxx_std_17)
 
 add_test(NAME mcp_unit COMMAND mcp_unit)
