@@ -237,6 +237,9 @@ add_subdirectory(src/engine/consent)
 # real fetcher is injected by the caller so tests stay hermetic.
 add_subdirectory(src/engine/bootstrap)
 
+# ── MCP response envelope core (ADR-0057) ────────────────────────────────
+add_subdirectory(src/mcp)
+
 # ── Tests ──────────────────────────────────────────────────────────────────
 # Integration gates introduced in Phase 10 (ADR-0031 reference engine policy
 # + ADR-0032 external tool acquisition). Default ON; gated per-suite by
@@ -252,6 +255,7 @@ if(AURA_BUILD_TESTS)
     # Phase 2.5 §1.6/§1.7 — bootstrap classify/dispatch unit tests.
     add_subdirectory(tests/unit/bootstrap)
     add_subdirectory(tests/unit/safety)
+    add_subdirectory(tests/unit/mcp)
 
     if(AURA_ENABLE_RIZIN)
         add_subdirectory(tests/integration/orchestrator_smoke)
