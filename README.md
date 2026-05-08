@@ -145,6 +145,36 @@ The installer prints the environment variables used by AURA, including
 
 ---
 
+## Safety Assets Settings
+
+AURA stores privacy-filter runtime assets under `~/.aura` by default. The GUI
+uses **Settings -> Safety Assets** to choose the active safety profile.
+
+Safety profiles are JSON files under `safety-profiles/`. A profile selects the
+token classification model, rule packs, eval datasets, and model failure policy.
+The active profile is persisted in the GUI setting `safety/activeProfileId`.
+
+Runtime masking uses the selected profile's model and rule packs when the
+Strings workflow builds protected values. Eval datasets are listed in the
+settings dialog for evaluation/reporting context only; changing an eval dataset
+does not directly change live string masking.
+
+Users can add or override local assets under:
+
+```text
+~/.aura/
+  safety-profiles/*.json
+  token-classification-models/*/manifest.json
+  rule-packs/*/manifest.json
+  eval-datasets/*/manifest.aura.json
+```
+
+Committed repo assets remain the fallback. Local `~/.aura` assets with the same
+id take precedence, including invalid manifests so the GUI can surface a clear
+diagnostic instead of silently hiding a broken local override.
+
+---
+
 ## CLI Usage
 
 ```bash
