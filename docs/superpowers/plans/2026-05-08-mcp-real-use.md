@@ -91,7 +91,6 @@ Supported V1 tools:
 - `aura_probe_engines`
 - `aura_info`
 - `aura_analyze`
-- `aura_list_functions`
 - `aura_get_disassembly`
 - `aura_get_cfg`
 - `aura_get_llm_context`
@@ -99,6 +98,8 @@ Supported V1 tools:
 - `aura_get_raw_decompile`
 
 The two raw tools exist only to return denied-by-default structured errors in V1.
+`aura_list_functions` is deferred and must not be advertised in `tools/list`
+until it has a real bridge implementation.
 
 ## Task 1: Add MCP Envelope Builder
 
@@ -738,7 +739,6 @@ cJSON* aura_mcp_tools_list_json() {
     addTool(arr, "aura_probe_engines", "Probe available AURA RE engines.", inputSchema({}));
     addTool(arr, "aura_info", "Return binary fingerprint and format metadata.", inputSchema({"binary_path"}));
     addTool(arr, "aura_analyze", "Return bounded protected analysis records.", inputSchema({"binary_path"}));
-    addTool(arr, "aura_list_functions", "List bounded function records.", inputSchema({"binary_path"}));
     addTool(arr, "aura_get_disassembly", "Return protected structured disassembly for one function.", inputSchema({"binary_path", "function_addr"}));
     addTool(arr, "aura_get_cfg", "Return CFG blocks and edges for one function.", inputSchema({"binary_path", "function_addr"}));
     addTool(arr, "aura_get_llm_context", "Return protected LLM context for one function.", inputSchema({"binary_path", "function_addr"}));
