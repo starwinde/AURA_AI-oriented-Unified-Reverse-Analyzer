@@ -92,6 +92,29 @@ cJSON* parseLine(const std::string& text, int line_index) {
     return parsed;
 }
 
+int responseLineCount(const std::string& text) {
+    if (text.empty()) {
+        return 0;
+    }
+
+    int count = 0;
+    size_t pos = 0;
+    while (pos < text.size()) {
+        const size_t end = text.find('\n', pos);
+        const std::string line =
+            text.substr(pos, end == std::string::npos ? std::string::npos
+                                                      : end - pos);
+        if (!line.empty()) {
+            ++count;
+        }
+        if (end == std::string::npos) {
+            break;
+        }
+        pos = end + 1;
+    }
+    return count;
+}
+
 const cJSON* resultOf(const cJSON* response) {
     const cJSON* result = cJSON_GetObjectItemCaseSensitive(response, "result");
     REQUIRE(cJSON_IsObject(result));
@@ -107,6 +130,25 @@ const cJSON* contentTextOf(const cJSON* result) {
     const cJSON* text = cJSON_GetObjectItemCaseSensitive(item, "text");
     REQUIRE(cJSON_IsString(text));
     return text;
+}
+
+void checkJsonRpcError(const cJSON* response,
+                       int          expected_code,
+                       bool         expect_null_id) {
+    REQUIRE(cJSON_IsObject(response));
+    const cJSON* error = cJSON_GetObjectItemCaseSensitive(response, "error");
+    REQUIRE(cJSON_IsObject(error));
+
+    const cJSON* code = cJSON_GetObjectItemCaseSensitive(error, "code");
+    REQUIRE(cJSON_IsNumber(code));
+    CHECK(code->valueint == expected_code);
+
+    const cJSON* id = cJSON_GetObjectItemCaseSensitive(response, "id");
+    if (expect_null_id) {
+        CHECK(cJSON_IsNull(id));
+    } else {
+        CHECK(!cJSON_IsNull(id));
+    }
 }
 
 std::string runMcpWithInput(const std::string& exe,
@@ -193,46 +235,52 @@ TEST_CASE("aura-mcp validates request envelopes and suppresses notifications") {
     {
         std::ofstream input(input_path, std::ios::binary);
         REQUIRE(input.good());
+        input << "not-json\n";
         input << "{\"id\":10,\"method\":\"ping\"}\n";
         input << "{\"jsonrpc\":\"2.0\",\"method\":\"ping\"}\n";
         input << "{\"jsonrpc\":\"2.0\",\"method\":\"tools/list\","
                  "\"params\":{}}\n";
         input << "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/"
                  "cancelled\",\"params\":{}}\n";
+        input << "{\"jsonrpc\":\"2.0\",\"method\":\"unknown/method\"}\n";
         input << "{\"jsonrpc\":\"2.0\",\"id\":{\"bad\":true},"
                  "\"method\":\"ping\"}\n";
+        input << "{\"jsonrpc\":\"2.0\",\"id\":[1],\"method\":\"ping\"}\n";
+        input << "{\"jsonrpc\":\"2.0\",\"id\":true,\"method\":\"ping\"}\n";
     }
 
     const std::string out = runMcpWithInput(exe_env, input_path);
+    CHECK(responseLineCount(out) == 5);
     CHECK(out.find("\"id\":10") != std::string::npos);
     CHECK(out.find("\"code\":-32600") != std::string::npos);
+    CHECK(out.find("\"code\":-32700") != std::string::npos);
     CHECK(out.find("\"id\":null") != std::string::npos);
     CHECK(out.find("\"result\"") == std::string::npos);
     CHECK(out.find("tools") == std::string::npos);
     CHECK(out.find("cancelled") == std::string::npos);
+    CHECK(out.find("unknown/method") == std::string::npos);
 
-    cJSON* missing_jsonrpc = parseLine(out, 0);
-    cJSON* invalid_id = parseLine(out, 1);
-    const cJSON* first_error =
-        cJSON_GetObjectItemCaseSensitive(missing_jsonrpc, "error");
-    REQUIRE(cJSON_IsObject(first_error));
-    const cJSON* first_code =
-        cJSON_GetObjectItemCaseSensitive(first_error, "code");
-    CHECK(cJSON_IsNumber(first_code));
-    CHECK(first_code->valueint == -32600);
+    cJSON* parse_error = parseLine(out, 0);
+    cJSON* missing_jsonrpc = parseLine(out, 1);
+    cJSON* invalid_id_object = parseLine(out, 2);
+    cJSON* invalid_id_array = parseLine(out, 3);
+    cJSON* invalid_id_bool = parseLine(out, 4);
 
-    const cJSON* invalid_id_value =
-        cJSON_GetObjectItemCaseSensitive(invalid_id, "id");
-    CHECK(cJSON_IsNull(invalid_id_value));
-    const cJSON* second_error =
-        cJSON_GetObjectItemCaseSensitive(invalid_id, "error");
-    REQUIRE(cJSON_IsObject(second_error));
-    const cJSON* second_code =
-        cJSON_GetObjectItemCaseSensitive(second_error, "code");
-    CHECK(cJSON_IsNumber(second_code));
-    CHECK(second_code->valueint == -32600);
+    checkJsonRpcError(parse_error, -32700, true);
+    checkJsonRpcError(missing_jsonrpc, -32600, false);
+    checkJsonRpcError(invalid_id_object, -32600, true);
+    checkJsonRpcError(invalid_id_array, -32600, true);
+    checkJsonRpcError(invalid_id_bool, -32600, true);
 
+    const cJSON* missing_id =
+        cJSON_GetObjectItemCaseSensitive(missing_jsonrpc, "id");
+    REQUIRE(cJSON_IsNumber(missing_id));
+    CHECK(missing_id->valueint == 10);
+
+    cJSON_Delete(parse_error);
     cJSON_Delete(missing_jsonrpc);
-    cJSON_Delete(invalid_id);
+    cJSON_Delete(invalid_id_object);
+    cJSON_Delete(invalid_id_array);
+    cJSON_Delete(invalid_id_bool);
     std::remove(input_path.c_str());
 }
