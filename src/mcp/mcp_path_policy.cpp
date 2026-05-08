@@ -89,7 +89,7 @@ std::vector<fs::path> splitAllowedRoots(const std::string& raw_roots) {
 std::vector<std::filesystem::path> aura_mcp_allowed_roots_from_environment() {
     const char* raw = std::getenv(kAllowedRootsEnv);
     if (raw == nullptr || trim(raw).empty()) {
-        return {std::filesystem::current_path()};
+        return {};
     }
     return splitAllowedRoots(raw);
 }

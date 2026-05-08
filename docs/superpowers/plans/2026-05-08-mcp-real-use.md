@@ -332,6 +332,18 @@ git commit -m "feat(mcp): add stable response envelope"
 - Modify: `CMakeLists.txt`
 - Modify: `tests/unit/mcp/mcp_unit.cpp`
 
+**Security correction (2026-05-08):** MCP real-use path policy must fail closed. Missing, empty, or all-invalid `AURA_MCP_ALLOWED_ROOTS` means no allowed roots and must deny with a clear code such as `no_allowed_roots`. Do not fall back to the current working directory or repository root. Direct explicit-root calls remain available for internal callers and tests.
+
+**TOCTOU note:** This policy authorizes a canonical path before a later tool opens it. Later CLI bridge/tool code should pass the returned `canonical_path` forward immediately and avoid re-resolving user input, but a check-then-use race can still exist if an attacker can replace files between authorization and open. Stronger handle-based opening is deferred beyond this task.
+
+Task 2 safety checklist:
+- [ ] Unset `AURA_MCP_ALLOWED_ROOTS` denies existing files with `no_allowed_roots`.
+- [ ] Empty `AURA_MCP_ALLOWED_ROOTS` denies existing files with `no_allowed_roots`.
+- [ ] Explicit environment roots allow only canonical files under those roots.
+- [ ] Explicit-root overload remains usable for direct callers and tests.
+- [ ] Empty/malformed env entries are ignored, while a valid sibling entry still works.
+- [ ] Sibling prefix escapes are rejected after canonicalization.
+
 - [ ] **Step 1: Add failing path policy tests**
 
 Append to `tests/unit/mcp/mcp_unit.cpp`:
@@ -341,34 +353,30 @@ Append to `tests/unit/mcp/mcp_unit.cpp`:
 
 #include <filesystem>
 
-TEST_CASE("mcp path policy allows files under configured roots") {
-    const auto root = std::filesystem::current_path();
-    const auto file = root / "tests" / "fixtures" / "bin" / "elf_smoke.x86_64";
+TEST_CASE("mcp path policy rejects when env allowlist is unset or empty") {
+    // Use temp directories/files, not fixed machine paths.
+    // Unset AURA_MCP_ALLOWED_ROOTS -> denied with no_allowed_roots.
+    // Empty AURA_MCP_ALLOWED_ROOTS -> denied with no_allowed_roots.
+}
 
-    AuraMcpPathDecision d = aura_mcp_path_allowed(file.string(), root.string());
+TEST_CASE("mcp path policy allows files under direct explicit roots") {
+    // Explicit-root overload still allows a temp file under that root.
+}
 
-    CHECK(d.allowed);
-    CHECK(d.reason.empty());
-    CHECK(d.canonical_path.find("elf_smoke.x86_64") != std::string::npos);
+TEST_CASE("mcp path policy env allowlist allows a temp fixture path") {
+    // AURA_MCP_ALLOWED_ROOTS set to a temp root allows a file below it.
 }
 
 TEST_CASE("mcp path policy rejects files outside configured roots") {
-    const auto root = std::filesystem::current_path() / "tests";
-    const auto file = std::filesystem::current_path() / "README.md";
-
-    AuraMcpPathDecision d = aura_mcp_path_allowed(file.string(), root.string());
-
-    CHECK_FALSE(d.allowed);
-    CHECK(d.reason == "path_denied");
+    // Sibling prefix escapes must be rejected: root/repo must not allow root/repo2/file.
 }
 
-TEST_CASE("mcp path policy rejects directories") {
-    const auto root = std::filesystem::current_path();
+TEST_CASE("mcp path policy rejects nonexistent paths") {
+    // Nonexistent files deny before allowlist matching.
+}
 
-    AuraMcpPathDecision d = aura_mcp_path_allowed(root.string(), root.string());
-
-    CHECK_FALSE(d.allowed);
-    CHECK(d.reason == "not_a_regular_file");
+TEST_CASE("mcp path policy ignores malformed and empty env entries safely") {
+    // Empty entries and bad roots are ignored; one valid root still allows the fixture.
 }
 ```
 
@@ -411,6 +419,8 @@ AuraMcpPathDecision aura_mcp_path_allowed(const std::string& candidate,
 ```
 
 - [ ] **Step 4: Implement path policy source**
+
+The default overload reads `AURA_MCP_ALLOWED_ROOTS`. If it is unset, empty, or has no canonicalizable directory roots, it must deny with `no_allowed_roots`; no cwd/repo fallback is allowed. The explicit-root overload keeps the same semantics for callers that provide roots directly.
 
 Create `src/mcp/mcp_path_policy.cpp`:
 

@@ -71,24 +71,6 @@ class ScopedEnvVar {
     std::string old_value_;
 };
 
-class ScopedCurrentPath {
-  public:
-    explicit ScopedCurrentPath(const std::filesystem::path& next)
-        : old_path_(std::filesystem::current_path()) {
-        std::filesystem::current_path(next);
-    }
-
-    ~ScopedCurrentPath() {
-        std::filesystem::current_path(old_path_);
-    }
-
-    ScopedCurrentPath(const ScopedCurrentPath&) = delete;
-    ScopedCurrentPath& operator=(const ScopedCurrentPath&) = delete;
-
-  private:
-    std::filesystem::path old_path_;
-};
-
 class TempTree {
   public:
     TempTree()
@@ -311,30 +293,41 @@ TEST_CASE("success builder rejects non-object caller data") {
     cJSON_Delete(data);
 }
 
-TEST_CASE("path policy allows files under cwd when env allowlist is unset") {
+TEST_CASE("path policy rejects files when env allowlist is unset or empty") {
     ScopedEnvVar env("AURA_MCP_ALLOWED_ROOTS");
-    unsetEnvVar("AURA_MCP_ALLOWED_ROOTS");
     TempTree temp;
     const auto file = temp.writeFile("bin/sample.bin");
-    const ScopedCurrentPath cwd(temp.root());
 
-    const AuraMcpPathDecision decision =
-        aura_mcp_path_allowed(std::filesystem::path("bin") / file.filename());
+    unsetEnvVar("AURA_MCP_ALLOWED_ROOTS");
+    const AuraMcpPathDecision unset_decision = aura_mcp_path_allowed(file);
 
-    CHECK(decision.allowed);
-    CHECK(decision.error_code.empty());
-    CHECK(decision.error_message.empty());
-    CHECK(std::filesystem::path(decision.canonical_path) ==
-          std::filesystem::canonical(file));
+    CHECK_FALSE(unset_decision.allowed);
+    CHECK(unset_decision.canonical_path ==
+          std::filesystem::canonical(file).string());
+    CHECK(unset_decision.error_code == "no_allowed_roots");
+    CHECK_FALSE(unset_decision.error_message.empty());
 
     setEnvVar("AURA_MCP_ALLOWED_ROOTS", "");
-    const AuraMcpPathDecision empty_env_decision =
-        aura_mcp_path_allowed(std::filesystem::path("bin") / file.filename());
+    const AuraMcpPathDecision empty_decision = aura_mcp_path_allowed(file);
 
-    CHECK(empty_env_decision.allowed);
-    CHECK(empty_env_decision.error_code.empty());
-    CHECK(std::filesystem::path(empty_env_decision.canonical_path) ==
-          std::filesystem::canonical(file));
+    CHECK_FALSE(empty_decision.allowed);
+    CHECK(empty_decision.canonical_path ==
+          std::filesystem::canonical(file).string());
+    CHECK(empty_decision.error_code == "no_allowed_roots");
+    CHECK_FALSE(empty_decision.error_message.empty());
+}
+
+TEST_CASE("path policy allows files under direct explicit roots") {
+    TempTree temp;
+    const auto file = temp.writeFile("bin/sample.bin");
+
+    const AuraMcpPathDecision decision =
+        aura_mcp_path_allowed(file, {temp.root()});
+
+    CHECK(decision.allowed);
+    CHECK(decision.canonical_path == std::filesystem::canonical(file).string());
+    CHECK(decision.error_code.empty());
+    CHECK(decision.error_message.empty());
 }
 
 TEST_CASE("path policy rejects sibling prefix escapes outside allowed roots") {
