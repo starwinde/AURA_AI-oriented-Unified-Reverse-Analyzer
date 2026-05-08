@@ -71,6 +71,20 @@ struct SafetyAssetRegistry {
     std::vector<SafetyAssetRef> eval_datasets;
 };
 
+struct SafetyProfileLoadResult {
+    bool found = false;
+    bool used_fallback = false;
+    std::string profile_id;
+    std::string path;
+    std::string diagnostic;
+    SafetyProfile profile;
+};
+
+struct SafetyProfileValidation {
+    bool valid = true;
+    std::vector<std::string> messages;
+};
+
 struct ProtectedStringView {
     std::string original;
     std::string alias;
@@ -87,6 +101,10 @@ public:
 
 SafetyProfile loadDefaultSafetyProfile();
 SafetyAssetRegistry listSafetyAssets();
+SafetyProfileLoadResult loadSafetyProfileById(const std::string& profile_id);
+SafetyProfileLoadResult resolveSelectedSafetyProfile(
+    const std::string& selected_profile_id);
+SafetyProfileValidation validateSafetyProfile(const SafetyProfile& profile);
 
 std::vector<Finding> scanStringWithRulePacks(const std::string& text,
                                              const SafetyProfile& profile);

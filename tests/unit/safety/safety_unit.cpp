@@ -426,6 +426,207 @@ TEST_CASE("safety registry keeps invalid home profile over repo duplicate") {
     CHECK(!registry.profiles[0].diagnostic.empty());
 }
 
+TEST_CASE("safety profile can be loaded by id from AURA_HOME") {
+    namespace fs = std::filesystem;
+    const fs::path root =
+        tempRoot("aura_safety_unit_profile_by_id_home");
+    fs::remove_all(root);
+    fs::create_directories(root / "safety-profiles");
+
+    {
+        std::ofstream out(root / "safety-profiles" / "high-security.json",
+                          std::ios::binary);
+        out << R"({
+          "schema_version": 1,
+          "profile_id": "high-security",
+          "rule_pack_ids": ["secret-api-key"],
+          "eval_dataset_ids": ["safety-default"],
+          "model_policy": {
+            "enabled": true,
+            "mode": "required",
+            "model_id": "openai-privacy-filter",
+            "on_missing": "block_export"
+          }
+        })";
+    }
+
+    setEnvVar("AURA_HOME", root.string());
+    const auto loaded = aura::safety::loadSafetyProfileById("high-security");
+    clearEnvVar("AURA_HOME");
+
+    REQUIRE(loaded.found);
+    CHECK(loaded.profile_id == "high-security");
+    CHECK(loaded.path.find("high-security.json") != std::string::npos);
+    CHECK(loaded.profile.rule_pack_ids.size() == 1);
+    CHECK(loaded.profile.model_policy.mode ==
+          aura::safety::ModelPolicyMode::Required);
+}
+
+TEST_CASE("selected safety profile falls back to default when missing") {
+    namespace fs = std::filesystem;
+    const fs::path root =
+        tempRoot("aura_safety_unit_selected_missing_home");
+    fs::remove_all(root);
+    fs::create_directories(root / "safety-profiles");
+
+    {
+        std::ofstream out(root / "safety-profiles" / "default.json",
+                          std::ios::binary);
+        out << R"({"schema_version":1,"profile_id":"default","rule_pack_ids":["korean-sensitive"]})";
+    }
+
+    setEnvVar("AURA_HOME", root.string());
+    const auto selected =
+        aura::safety::resolveSelectedSafetyProfile("deleted-profile");
+    clearEnvVar("AURA_HOME");
+
+    CHECK(selected.profile_id == "default");
+    CHECK(selected.used_fallback);
+    CHECK(selected.found);
+    CHECK(selected.diagnostic.find("deleted-profile") != std::string::npos);
+}
+
+TEST_CASE("profile validation reports missing referenced assets") {
+    namespace fs = std::filesystem;
+    const fs::path root =
+        tempRoot("aura_safety_unit_validation_home");
+    fs::remove_all(root);
+    fs::create_directories(root / "safety-profiles");
+
+    {
+        std::ofstream out(root / "safety-profiles" / "broken.json",
+                          std::ios::binary);
+        out << R"({
+          "schema_version": 1,
+          "profile_id": "broken",
+          "rule_pack_ids": ["missing-rules"],
+          "eval_dataset_ids": ["missing-eval"],
+          "model_policy": {"enabled": true, "model_id": "missing-model"}
+        })";
+    }
+
+    setEnvVar("AURA_HOME", root.string());
+    const auto loaded = aura::safety::loadSafetyProfileById("broken");
+    const auto validation = aura::safety::validateSafetyProfile(loaded.profile);
+    clearEnvVar("AURA_HOME");
+
+    CHECK_FALSE(validation.valid);
+    REQUIRE(validation.messages.size() == 3);
+    CHECK(validation.messages[0].find("missing-rules") != std::string::npos);
+    CHECK(validation.messages[1].find("missing-eval") != std::string::npos);
+    CHECK(validation.messages[2].find("missing-model") != std::string::npos);
+}
+
+TEST_CASE("malformed selected safety profile falls back to default") {
+    namespace fs = std::filesystem;
+    const fs::path root =
+        tempRoot("aura_safety_unit_malformed_selected_home");
+    fs::remove_all(root);
+    fs::create_directories(root / "safety-profiles");
+
+    {
+        std::ofstream out(root / "safety-profiles" / "broken.json",
+                          std::ios::binary);
+        out << "{";
+    }
+    {
+        std::ofstream out(root / "safety-profiles" / "default.json",
+                          std::ios::binary);
+        out << R"({"schema_version":1,"profile_id":"default","rule_pack_ids":["default-rules"]})";
+    }
+
+    setEnvVar("AURA_HOME", root.string());
+    const auto selected = aura::safety::resolveSelectedSafetyProfile("broken");
+    clearEnvVar("AURA_HOME");
+
+    CHECK(selected.found);
+    CHECK(selected.used_fallback);
+    CHECK(selected.profile_id == "default");
+    CHECK(selected.profile.rule_pack_ids.size() == 1);
+    CHECK(selected.diagnostic.find("broken") != std::string::npos);
+}
+
+TEST_CASE("default safety profile falls back to repo when home default is malformed") {
+    namespace fs = std::filesystem;
+    const fs::path home =
+        tempRoot("aura_safety_unit_malformed_home_default");
+    const fs::path assets =
+        tempRoot("aura_safety_unit_repo_default_fallback");
+    fs::remove_all(home);
+    fs::remove_all(assets);
+    fs::create_directories(home / "safety-profiles");
+    fs::create_directories(assets / "safety-profiles");
+
+    {
+        std::ofstream out(home / "safety-profiles" / "default.json",
+                          std::ios::binary);
+        out << "{";
+    }
+    {
+        std::ofstream out(assets / "safety-profiles" / "default.json",
+                          std::ios::binary);
+        out << R"({
+          "schema_version": 1,
+          "profile_id": "default",
+          "rule_pack_ids": ["repo-default"],
+          "model_policy": {"enabled": true, "model_id": "repo-model"}
+        })";
+    }
+
+    setEnvVar("AURA_HOME", home.string());
+    setEnvVar("AURA_SAFETY_ASSETS_DIR", assets.string());
+    const auto profile = aura::safety::loadDefaultSafetyProfile();
+    clearEnvVar("AURA_SAFETY_ASSETS_DIR");
+    clearEnvVar("AURA_HOME");
+
+    REQUIRE(profile.rule_pack_ids.size() == 1);
+    CHECK(profile.rule_pack_ids[0] == "repo-default");
+    CHECK(profile.model_policy.model_id == "repo-model");
+}
+
+TEST_CASE("default safety profile rejects wrong home profile id") {
+    namespace fs = std::filesystem;
+    const fs::path home =
+        tempRoot("aura_safety_unit_wrong_home_default_id");
+    const fs::path assets =
+        tempRoot("aura_safety_unit_wrong_id_repo_default");
+    fs::remove_all(home);
+    fs::remove_all(assets);
+    fs::create_directories(home / "safety-profiles");
+    fs::create_directories(assets / "safety-profiles");
+
+    {
+        std::ofstream out(home / "safety-profiles" / "default.json",
+                          std::ios::binary);
+        out << R"({"schema_version":1,"profile_id":"wrong","rule_pack_ids":["wrong"]})";
+    }
+    {
+        std::ofstream out(assets / "safety-profiles" / "default.json",
+                          std::ios::binary);
+        out << R"({"schema_version":1,"profile_id":"default","rule_pack_ids":["repo-default"]})";
+    }
+
+    setEnvVar("AURA_HOME", home.string());
+    setEnvVar("AURA_SAFETY_ASSETS_DIR", assets.string());
+    const auto profile = aura::safety::loadDefaultSafetyProfile();
+    clearEnvVar("AURA_SAFETY_ASSETS_DIR");
+    clearEnvVar("AURA_HOME");
+
+    REQUIRE(profile.rule_pack_ids.size() == 1);
+    CHECK(profile.rule_pack_ids[0] == "repo-default");
+}
+
+TEST_CASE("profile validation reports enabled model policy without model id") {
+    aura::safety::SafetyProfile profile;
+    profile.model_policy.enabled = true;
+
+    const auto validation = aura::safety::validateSafetyProfile(profile);
+
+    CHECK_FALSE(validation.valid);
+    REQUIRE(validation.messages.size() == 1);
+    CHECK(validation.messages[0].find("<empty>") != std::string::npos);
+}
+
 TEST_CASE("partial home rule pack override keeps repo default packs") {
     namespace fs = std::filesystem;
     const fs::path home =

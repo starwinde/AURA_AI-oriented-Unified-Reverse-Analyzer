@@ -403,57 +403,23 @@ bool rejectFalsePositive(const Rule& rule, const std::string& match) {
     return !(anyAlpha && anyDigit);
 }
 
-}  // namespace
+bool parseSafetyProfileText(const std::string& text,
+                            SafetyProfile* profile,
+                            const std::string& expectedProfileId = {}) {
+    if (!profile || text.empty()) return false;
 
-SafetyAssetRegistry listSafetyAssets() {
-    SafetyAssetRegistry out;
+    cJSON* root = cJSON_ParseWithLength(text.data(), text.size());
+    if (!cJSON_IsObject(root)) {
+        if (root) cJSON_Delete(root);
+        return false;
+    }
+    if (!expectedProfileId.empty() &&
+        jsonString(root, "profile_id") != expectedProfileId) {
+        cJSON_Delete(root);
+        return false;
+    }
 
-    const auto home = auraHome();
-    const auto repo = safetyAssetsRoot();
-
-    listProfileFiles(home / "safety-profiles", "home", &out.profiles);
-    listProfileFiles(repo / "safety-profiles", "repo", &out.profiles);
-
-    listAssetDirs(home / "token-classification-models", "home",
-                  "manifest.json", {"model_id", "asset_id"}, &out.models);
-    listAssetDirs(repo / "token-classification-models", "repo",
-                  "manifest.template.json", {"model_id", "asset_id"},
-                  &out.models);
-
-    listAssetDirs(home / "rule-packs", "home", "manifest.json",
-                  {"pack_id", "id"}, &out.rule_packs);
-    listAssetDirs(repo / "rule-packs", "repo", "manifest.json",
-                  {"pack_id", "id"}, &out.rule_packs);
-
-    listAssetDirs(home / "eval-datasets", "home", "manifest.aura.json",
-                  {"dataset_id", "asset_id"}, &out.eval_datasets);
-    listAssetDirs(repo / "eval-datasets", "repo", "manifest.json",
-                  {"dataset_id", "asset_id"}, &out.eval_datasets);
-
-    return out;
-}
-
-SafetyProfile loadDefaultSafetyProfile() {
     SafetyProfile out;
-    // Empty rule_pack_ids means "load every runtime rule pack"; if none
-    // exist, the engine falls back to the built-in MVP rules.
-
-    const std::filesystem::path homeProfilePath =
-        auraHome() / "safety-profiles" / "default.json";
-    std::string text = readFile(homeProfilePath);
-    cJSON* root = nullptr;
-    if (!text.empty()) {
-        root = cJSON_ParseWithLength(text.data(), text.size());
-    }
-    if (!root) {
-        text = readFile(safetyAssetsRoot() / "safety-profiles" /
-                        "default.json");
-        if (!text.empty()) {
-            root = cJSON_ParseWithLength(text.data(), text.size());
-        }
-    }
-    if (!root) return out;
-
     out.rule_pack_ids = jsonStringArray(root, "rule_pack_ids");
     out.eval_dataset_ids = jsonStringArray(root, "eval_dataset_ids");
 
@@ -484,8 +450,188 @@ SafetyProfile loadDefaultSafetyProfile() {
         out.token_classification_enabled = out.model_policy.enabled;
         out.token_classification_model_id = out.model_policy.model_id;
     }
+
     cJSON_Delete(root);
+    *profile = std::move(out);
+    return true;
+}
+
+SafetyProfileLoadResult loadDefaultSafetyProfileResult() {
+    SafetyProfileLoadResult result;
+    result.profile_id = "default";
+
+    const std::vector<std::filesystem::path> candidates = {
+        auraHome() / "safety-profiles" / "default.json",
+        safetyAssetsRoot() / "safety-profiles" / "default.json",
+    };
+
+    bool sawInvalid = false;
+    for (const auto& path : candidates) {
+        const std::string text = readFile(path);
+        if (text.empty()) continue;
+        SafetyProfile profile;
+        if (!parseSafetyProfileText(text, &profile, "default")) {
+            sawInvalid = true;
+            continue;
+        }
+        result.found = true;
+        result.path = path.string();
+        result.profile = std::move(profile);
+        if (sawInvalid) {
+            result.used_fallback = true;
+            result.diagnostic =
+                "home default safety profile was invalid; used fallback";
+        }
+        return result;
+    }
+
+    result.diagnostic = sawInvalid ? "default safety profile is invalid"
+                                   : "default safety profile not found";
+    return result;
+}
+
+bool containsValidAssetId(const std::vector<SafetyAssetRef>& refs,
+                          const std::string& id) {
+    return std::find_if(refs.begin(), refs.end(),
+                        [&](const SafetyAssetRef& ref) {
+                            return ref.valid && ref.id == id;
+                        }) != refs.end();
+}
+
+void addMissingAssetMessages(const std::vector<std::string>& ids,
+                             const std::vector<SafetyAssetRef>& refs,
+                             const char* kind,
+                             std::vector<std::string>* messages) {
+    if (!messages) return;
+    for (const auto& id : ids) {
+        if (containsValidAssetId(refs, id)) continue;
+        messages->push_back(std::string("missing ") + kind + ": " + id);
+    }
+}
+
+}  // namespace
+
+SafetyAssetRegistry listSafetyAssets() {
+    SafetyAssetRegistry out;
+
+    const auto home = auraHome();
+    const auto repo = safetyAssetsRoot();
+
+    listProfileFiles(home / "safety-profiles", "home", &out.profiles);
+    listProfileFiles(repo / "safety-profiles", "repo", &out.profiles);
+
+    listAssetDirs(home / "token-classification-models", "home",
+                  "manifest.json", {"model_id", "asset_id"}, &out.models);
+    listAssetDirs(repo / "token-classification-models", "repo",
+                  "manifest.template.json", {"model_id", "asset_id"},
+                  &out.models);
+
+    listAssetDirs(home / "rule-packs", "home", "manifest.json",
+                  {"pack_id", "id"}, &out.rule_packs);
+    listAssetDirs(repo / "rule-packs", "repo", "manifest.json",
+                  {"pack_id", "id"}, &out.rule_packs);
+
+    listAssetDirs(home / "eval-datasets", "home", "manifest.aura.json",
+                  {"dataset_id", "asset_id"}, &out.eval_datasets);
+    listAssetDirs(repo / "eval-datasets", "repo", "manifest.json",
+                  {"dataset_id", "asset_id"}, &out.eval_datasets);
+
     return out;
+}
+
+SafetyProfileLoadResult loadSafetyProfileById(const std::string& profile_id) {
+    SafetyProfileLoadResult result;
+    result.profile_id = profile_id;
+    if (profile_id.empty()) {
+        result.diagnostic = "profile id is empty";
+        return result;
+    }
+
+    std::string invalidDiagnostic;
+    const auto registry = listSafetyAssets();
+    for (const auto& ref : registry.profiles) {
+        if (ref.id != profile_id) continue;
+        if (!ref.valid) {
+            invalidDiagnostic = ref.diagnostic;
+            continue;
+        }
+
+        SafetyProfile profile;
+        if (!parseSafetyProfileText(readFile(ref.path), &profile,
+                                    profile_id)) {
+            invalidDiagnostic = "safety profile is not valid JSON";
+            continue;
+        }
+
+        result.found = true;
+        result.path = ref.path;
+        result.profile = std::move(profile);
+        return result;
+    }
+
+    result.diagnostic = invalidDiagnostic.empty()
+                            ? "safety profile not found: " + profile_id
+                            : "safety profile is invalid: " + profile_id +
+                                  " (" + invalidDiagnostic + ")";
+    return result;
+}
+
+SafetyProfileLoadResult resolveSelectedSafetyProfile(
+    const std::string& selected_profile_id) {
+    if (selected_profile_id.empty() || selected_profile_id == "default") {
+        return loadDefaultSafetyProfileResult();
+    }
+
+    auto selected = loadSafetyProfileById(selected_profile_id);
+    if (selected.found) return selected;
+
+    auto fallback = loadDefaultSafetyProfileResult();
+    fallback.used_fallback = true;
+    fallback.diagnostic = "selected safety profile '" + selected_profile_id +
+                          "' could not be loaded; " + selected.diagnostic;
+    return fallback;
+}
+
+SafetyProfileValidation validateSafetyProfile(const SafetyProfile& profile) {
+    SafetyProfileValidation validation;
+    const auto registry = listSafetyAssets();
+
+    addMissingAssetMessages(profile.rule_pack_ids, registry.rule_packs,
+                            "rule pack", &validation.messages);
+    addMissingAssetMessages(profile.eval_dataset_ids, registry.eval_datasets,
+                            "eval dataset", &validation.messages);
+    if (profile.model_policy.enabled) {
+        if (profile.model_policy.model_id.empty()) {
+            validation.messages.push_back("missing model: <empty>");
+        } else if (!containsValidAssetId(registry.models,
+                                         profile.model_policy.model_id)) {
+            validation.messages.push_back("missing model: " +
+                                          profile.model_policy.model_id);
+        }
+    }
+    if (profile.token_classification_enabled &&
+        (!profile.model_policy.enabled ||
+         profile.token_classification_model_id != profile.model_policy.model_id)) {
+        if (profile.token_classification_model_id.empty()) {
+            validation.messages.push_back(
+                "missing token classification model: <empty>");
+        } else if (!containsValidAssetId(
+                       registry.models,
+                       profile.token_classification_model_id)) {
+            validation.messages.push_back(
+                "missing token classification model: " +
+                profile.token_classification_model_id);
+        }
+    }
+
+    validation.valid = validation.messages.empty();
+    return validation;
+}
+
+SafetyProfile loadDefaultSafetyProfile() {
+    // Empty rule_pack_ids means "load every runtime rule pack"; if none
+    // exist, the engine falls back to the built-in MVP rules.
+    return loadDefaultSafetyProfileResult().profile;
 }
 
 std::vector<Finding> scanStringWithRulePacks(const std::string& text,
