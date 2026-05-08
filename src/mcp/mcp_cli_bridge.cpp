@@ -863,21 +863,24 @@ cJSON* callProbeEngines() {
                           literalArg("--probe-engines")});
 }
 
-cJSON* callBinaryTool(const char* tool_name,
-                      const char* cli_command,
-                      cJSON*      args_or_null) {
+bool resolveAllowedBinaryPath(const char* tool_name,
+                              cJSON*      args_or_null,
+                              fs::path&   canonical_binary,
+                              cJSON**     error_out) {
     if (!cJSON_IsObject(args_or_null)) {
-        return envelopeError(tool_name,
-                             "invalid_arguments",
-                             "tool arguments must be an object");
+        *error_out = envelopeError(tool_name,
+                                   "invalid_arguments",
+                                   "tool arguments must be an object");
+        return false;
     }
 
     const cJSON* binary_path =
         cJSON_GetObjectItemCaseSensitive(args_or_null, "binary_path");
     if (!cJSON_IsString(binary_path) || !nonempty(binary_path->valuestring)) {
-        return envelopeError(tool_name,
-                             "invalid_arguments",
-                             "binary_path must be a non-empty string");
+        *error_out = envelopeError(tool_name,
+                                   "invalid_arguments",
+                                   "binary_path must be a non-empty string");
+        return false;
     }
 
     const fs::path candidate = pathFromUtf8(binary_path->valuestring);
@@ -889,19 +892,63 @@ cJSON* callBinaryTool(const char* tool_name,
         const std::string message = decision.error_message.empty()
                                         ? "binary path is not allowed"
                                         : decision.error_message;
-        return envelopeError(tool_name, code.c_str(), message);
+        *error_out = envelopeError(tool_name, code.c_str(), message);
+        return false;
     }
 
     std::error_code ec;
-    fs::path canonical_binary = fs::canonical(candidate, ec);
+    canonical_binary = fs::canonical(candidate, ec);
     if (ec) {
         canonical_binary = pathFromUtf8(decision.canonical_path.c_str());
+    }
+    return true;
+}
+
+cJSON* callBinaryTool(const char* tool_name,
+                      const char* cli_command,
+                      cJSON*      args_or_null) {
+    fs::path canonical_binary;
+    cJSON* error = nullptr;
+    if (!resolveAllowedBinaryPath(tool_name,
+                                  args_or_null,
+                                  canonical_binary,
+                                  &error)) {
+        return error;
     }
     return runCliAndWrap(
         tool_name,
         {literalArg("--compact"),
          literalArg(cli_command),
          pathArg(canonical_binary)});
+}
+
+cJSON* callFunctionTool(const char* tool_name,
+                        const char* cli_command,
+                        cJSON*      args_or_null) {
+    fs::path canonical_binary;
+    cJSON* error = nullptr;
+    if (!resolveAllowedBinaryPath(tool_name,
+                                  args_or_null,
+                                  canonical_binary,
+                                  &error)) {
+        return error;
+    }
+
+    const cJSON* function_addr =
+        cJSON_GetObjectItemCaseSensitive(args_or_null, "function_addr");
+    if (!cJSON_IsString(function_addr) ||
+        !nonempty(function_addr->valuestring)) {
+        return envelopeError(tool_name,
+                             "invalid_arguments",
+                             "function_addr must be a non-empty string");
+    }
+
+    return runCliAndWrap(tool_name,
+                         {literalArg("--compact"),
+                          literalArg(cli_command),
+                          pathArg(canonical_binary),
+                          literalArg("--func"),
+                          literalArg(function_addr->valuestring)});
 }
 
 }  // namespace
@@ -970,6 +1017,17 @@ extern "C" cJSON* aura_mcp_cli_bridge_call_json(const char* tool_name,
     }
     if (streq(tool_name, "aura_analyze")) {
         return callBinaryTool("aura_analyze", "analyze", args_or_null);
+    }
+    if (streq(tool_name, "aura_get_disassembly")) {
+        return callFunctionTool(
+            "aura_get_disassembly", "disasm", args_or_null);
+    }
+    if (streq(tool_name, "aura_get_cfg")) {
+        return callFunctionTool("aura_get_cfg", "cfg", args_or_null);
+    }
+    if (streq(tool_name, "aura_get_llm_context")) {
+        return callFunctionTool(
+            "aura_get_llm_context", "llm-context", args_or_null);
     }
     return envelopeError("unknown",
                          "tool_not_found",

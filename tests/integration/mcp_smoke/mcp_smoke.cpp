@@ -211,6 +211,56 @@ std::string optionalStringField(const cJSON* object, const char* name) {
                : "";
 }
 
+bool jsonTreeHasKey(const cJSON* item, const char* key) {
+    if (item == nullptr || key == nullptr) {
+        return false;
+    }
+    if (cJSON_IsObject(item)) {
+        const cJSON* child = item->child;
+        while (child != nullptr) {
+            if (child->string != nullptr && std::string(child->string) == key) {
+                return true;
+            }
+            if (jsonTreeHasKey(child, key)) {
+                return true;
+            }
+            child = child->next;
+        }
+        return false;
+    }
+    if (cJSON_IsArray(item)) {
+        const cJSON* child = item->child;
+        while (child != nullptr) {
+            if (jsonTreeHasKey(child, key)) {
+                return true;
+            }
+            child = child->next;
+        }
+    }
+    return false;
+}
+
+cJSON* envelopeFromCallResponse(const cJSON* response) {
+    const cJSON* text = contentTextOf(resultOf(response));
+    REQUIRE(text->valuestring != nullptr);
+    cJSON* envelope = cJSON_Parse(text->valuestring);
+    REQUIRE(envelope != nullptr);
+    return envelope;
+}
+
+void checkProtectedOkEnvelope(const cJSON* envelope, const char* kind) {
+    CHECK(optionalStringField(envelope, "status") == "ok");
+    CHECK(optionalStringField(envelope, "kind") == kind);
+    CHECK(optionalStringField(envelope, "disclosure") == "protected");
+
+    const cJSON* data =
+        cJSON_GetObjectItemCaseSensitive(envelope, "data");
+    REQUIRE(cJSON_IsObject(data));
+    const cJSON* aura_cli =
+        cJSON_GetObjectItemCaseSensitive(data, "aura_cli");
+    REQUIRE(cJSON_IsObject(aura_cli));
+}
+
 void checkJsonRpcError(const cJSON* response,
                        int          expected_code,
                        bool         expect_null_id) {
@@ -483,5 +533,89 @@ TEST_CASE("aura-mcp bridges probe, info, and analyze through aura CLI") {
 
     cJSON_Delete(analyze_envelope);
     cJSON_Delete(analyze_response);
+    std::remove(input_path.c_str());
+}
+
+TEST_CASE("aura-mcp bridges function detail tools through aura CLI") {
+    const char* exe_env = std::getenv("AURA_MCP_BIN");
+    REQUIRE(exe_env != nullptr);
+    ScopedEnvVar repo_root_env("AURA_REPO_ROOT");
+    ScopedEnvVar allowed_roots_env("AURA_MCP_ALLOWED_ROOTS");
+
+    const fs::path repo_root = findRepoRoot();
+    REQUIRE(!repo_root.empty());
+    REQUIRE(cliLooksAvailable(repo_root));
+
+    const fs::path fixture =
+        repo_root / "tests" / "fixtures" / "bin" / "elf_smoke.x86_64";
+    REQUIRE(fs::exists(fixture));
+
+    setEnvVar("AURA_REPO_ROOT", repo_root.string());
+    setEnvVar("AURA_MCP_ALLOWED_ROOTS", repo_root.string());
+
+    const std::string input_path = tempInputPath("function_details");
+    {
+        std::ofstream input(input_path, std::ios::binary);
+        REQUIRE(input.good());
+        input << "{\"jsonrpc\":\"2.0\",\"id\":40,\"method\":\"tools/call\","
+                 "\"params\":{\"name\":\"aura_get_disassembly\","
+                 "\"arguments\":{\"binary_path\":\""
+              << fixture.generic_string()
+              << "\",\"function_addr\":\"0x40117b\"}}}\n";
+        input << "{\"jsonrpc\":\"2.0\",\"id\":41,\"method\":\"tools/call\","
+                 "\"params\":{\"name\":\"aura_get_cfg\","
+                 "\"arguments\":{\"binary_path\":\""
+              << fixture.generic_string()
+              << "\",\"function_addr\":\"0x40117b\"}}}\n";
+        input << "{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"tools/call\","
+                 "\"params\":{\"name\":\"aura_get_llm_context\","
+                 "\"arguments\":{\"binary_path\":\""
+              << fixture.generic_string()
+              << "\",\"function_addr\":\"0x40117b\"}}}\n";
+        input << "{\"jsonrpc\":\"2.0\",\"id\":43,\"method\":\"tools/call\","
+                 "\"params\":{\"name\":\"aura_get_disassembly\","
+                 "\"arguments\":{\"binary_path\":\""
+              << fixture.generic_string() << "\"}}}\n";
+    }
+
+    const std::string out = runMcpWithInput(exe_env, input_path);
+    CHECK(responseLineCount(out) == 4);
+
+    cJSON* disasm_response = parseLine(out, 0);
+    cJSON* cfg_response = parseLine(out, 1);
+    cJSON* llm_context_response = parseLine(out, 2);
+    cJSON* missing_addr_response = parseLine(out, 3);
+
+    cJSON* disasm_envelope = envelopeFromCallResponse(disasm_response);
+    cJSON* cfg_envelope = envelopeFromCallResponse(cfg_response);
+    cJSON* llm_context_envelope = envelopeFromCallResponse(llm_context_response);
+    cJSON* missing_addr_envelope =
+        envelopeFromCallResponse(missing_addr_response);
+
+    checkProtectedOkEnvelope(disasm_envelope, "aura_get_disassembly");
+    checkProtectedOkEnvelope(cfg_envelope, "aura_get_cfg");
+    checkProtectedOkEnvelope(llm_context_envelope, "aura_get_llm_context");
+    CHECK(jsonTreeHasKey(disasm_envelope, "instructions"));
+    CHECK(jsonTreeHasKey(cfg_envelope, "blocks"));
+    CHECK(jsonTreeHasKey(llm_context_envelope, "callees"));
+
+    CHECK(optionalStringField(missing_addr_envelope, "status") == "error");
+    CHECK(optionalStringField(missing_addr_envelope, "kind") ==
+          "aura_get_disassembly");
+    CHECK(optionalStringField(missing_addr_envelope, "disclosure") ==
+          "protected");
+    const cJSON* error =
+        cJSON_GetObjectItemCaseSensitive(missing_addr_envelope, "error");
+    REQUIRE(cJSON_IsObject(error));
+    CHECK(optionalStringField(error, "code") == "invalid_arguments");
+
+    cJSON_Delete(disasm_envelope);
+    cJSON_Delete(cfg_envelope);
+    cJSON_Delete(llm_context_envelope);
+    cJSON_Delete(missing_addr_envelope);
+    cJSON_Delete(disasm_response);
+    cJSON_Delete(cfg_response);
+    cJSON_Delete(llm_context_response);
+    cJSON_Delete(missing_addr_response);
     std::remove(input_path.c_str());
 }

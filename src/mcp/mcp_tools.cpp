@@ -228,7 +228,10 @@ extern "C" cJSON* aura_mcp_call_tool_json(const char* name,
     }
 
     if (streq(name, "aura_probe_engines") || streq(name, "aura_info") ||
-        streq(name, "aura_analyze")) {
+        streq(name, "aura_analyze") ||
+        streq(name, "aura_get_disassembly") ||
+        streq(name, "aura_get_cfg") ||
+        streq(name, "aura_get_llm_context")) {
         return aura_mcp_cli_bridge_call_json(name, args_or_null);
     }
 
