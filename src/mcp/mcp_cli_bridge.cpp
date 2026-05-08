@@ -785,6 +785,83 @@ void setFindingsField(
     }
 }
 
+void removeObjectKeyRecursive(cJSON* item, const char* key) {
+    if (item == nullptr || key == nullptr) {
+        return;
+    }
+    if (cJSON_IsObject(item)) {
+        cJSON_DeleteItemFromObjectCaseSensitive(item, key);
+        cJSON* child = item->child;
+        while (child != nullptr) {
+            cJSON* next = child->next;
+            removeObjectKeyRecursive(child, key);
+            child = next;
+        }
+        return;
+    }
+    if (cJSON_IsArray(item)) {
+        cJSON* child = item->child;
+        while (child != nullptr) {
+            cJSON* next = child->next;
+            removeObjectKeyRecursive(child, key);
+            child = next;
+        }
+    }
+}
+
+void normalizeDisassemblyCliJson(cJSON* cli_json) {
+    if (!cJSON_IsObject(cli_json)) {
+        return;
+    }
+    cJSON* body = cJSON_GetObjectItemCaseSensitive(cli_json, "body");
+    if (!cJSON_IsObject(body)) {
+        return;
+    }
+
+    cJSON_DeleteItemFromObjectCaseSensitive(body, "text");
+    setBoolField(body, "protected_only", true);
+    setBoolField(body, "text_omitted", true);
+    setBoolField(body, "op_str_omitted", true);
+
+    cJSON* instructions =
+        cJSON_GetObjectItemCaseSensitive(body, "instructions");
+    if (!cJSON_IsArray(instructions)) {
+        return;
+    }
+
+    cJSON* instruction = nullptr;
+    cJSON_ArrayForEach(instruction, instructions) {
+        if (cJSON_IsObject(instruction)) {
+            cJSON_DeleteItemFromObjectCaseSensitive(instruction, "op_str");
+        }
+    }
+}
+
+void normalizeCfgCliJson(cJSON* cli_json) {
+    if (!cJSON_IsObject(cli_json)) {
+        return;
+    }
+    cJSON* body = cJSON_GetObjectItemCaseSensitive(cli_json, "body");
+    if (cJSON_IsObject(body)) {
+        setBoolField(body, "protected_only", true);
+    }
+}
+
+void normalizeLlmContextCliJson(cJSON* cli_json) {
+    removeObjectKeyRecursive(cli_json, "text");
+    removeObjectKeyRecursive(cli_json, "op_str");
+}
+
+void normalizeFunctionDetailCliJson(const char* kind, cJSON* cli_json) {
+    if (streq(kind, "aura_get_disassembly")) {
+        normalizeDisassemblyCliJson(cli_json);
+    } else if (streq(kind, "aura_get_cfg")) {
+        normalizeCfgCliJson(cli_json);
+    } else if (streq(kind, "aura_get_llm_context")) {
+        normalizeLlmContextCliJson(cli_json);
+    }
+}
+
 cJSON* parseCliJsonOrError(const char* kind, const std::string& stdout_text) {
     cJSON* parsed =
         cJSON_ParseWithLength(stdout_text.data(), stdout_text.size());
@@ -796,6 +873,8 @@ cJSON* parseCliJsonOrError(const char* kind, const std::string& stdout_text) {
 
     if (streq(kind, "aura_analyze")) {
         aura_mcp_normalize_analyze_cli_json(parsed);
+    } else {
+        normalizeFunctionDetailCliJson(kind, parsed);
     }
 
     cJSON* data = cJSON_CreateObject();

@@ -261,6 +261,16 @@ void checkProtectedOkEnvelope(const cJSON* envelope, const char* kind) {
     REQUIRE(cJSON_IsObject(aura_cli));
 }
 
+const cJSON* auraCliOf(const cJSON* envelope) {
+    const cJSON* data =
+        cJSON_GetObjectItemCaseSensitive(envelope, "data");
+    REQUIRE(cJSON_IsObject(data));
+    const cJSON* aura_cli =
+        cJSON_GetObjectItemCaseSensitive(data, "aura_cli");
+    REQUIRE(cJSON_IsObject(aura_cli));
+    return aura_cli;
+}
+
 void checkJsonRpcError(const cJSON* response,
                        int          expected_code,
                        bool         expect_null_id) {
@@ -576,21 +586,29 @@ TEST_CASE("aura-mcp bridges function detail tools through aura CLI") {
                  "\"params\":{\"name\":\"aura_get_disassembly\","
                  "\"arguments\":{\"binary_path\":\""
               << fixture.generic_string() << "\"}}}\n";
+        input << "{\"jsonrpc\":\"2.0\",\"id\":44,\"method\":\"tools/call\","
+                 "\"params\":{\"name\":\"aura_get_disassembly\","
+                 "\"arguments\":{\"binary_path\":\""
+              << fixture.generic_string()
+              << "\",\"function_addr\":\"not-an-address\"}}}\n";
     }
 
     const std::string out = runMcpWithInput(exe_env, input_path);
-    CHECK(responseLineCount(out) == 4);
+    CHECK(responseLineCount(out) == 5);
 
     cJSON* disasm_response = parseLine(out, 0);
     cJSON* cfg_response = parseLine(out, 1);
     cJSON* llm_context_response = parseLine(out, 2);
     cJSON* missing_addr_response = parseLine(out, 3);
+    cJSON* invalid_addr_response = parseLine(out, 4);
 
     cJSON* disasm_envelope = envelopeFromCallResponse(disasm_response);
     cJSON* cfg_envelope = envelopeFromCallResponse(cfg_response);
     cJSON* llm_context_envelope = envelopeFromCallResponse(llm_context_response);
     cJSON* missing_addr_envelope =
         envelopeFromCallResponse(missing_addr_response);
+    cJSON* invalid_addr_envelope =
+        envelopeFromCallResponse(invalid_addr_response);
 
     checkProtectedOkEnvelope(disasm_envelope, "aura_get_disassembly");
     checkProtectedOkEnvelope(cfg_envelope, "aura_get_cfg");
@@ -598,6 +616,33 @@ TEST_CASE("aura-mcp bridges function detail tools through aura CLI") {
     CHECK(jsonTreeHasKey(disasm_envelope, "instructions"));
     CHECK(jsonTreeHasKey(cfg_envelope, "blocks"));
     CHECK(jsonTreeHasKey(llm_context_envelope, "callees"));
+
+    const cJSON* disasm_body =
+        cJSON_GetObjectItemCaseSensitive(auraCliOf(disasm_envelope), "body");
+    REQUIRE(cJSON_IsObject(disasm_body));
+    CHECK(cJSON_GetObjectItemCaseSensitive(disasm_body, "text") == nullptr);
+    CHECK(cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(
+        disasm_body, "protected_only")));
+    CHECK(cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(
+        disasm_body, "text_omitted")));
+    CHECK(cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(
+        disasm_body, "op_str_omitted")));
+
+    const cJSON* instructions =
+        cJSON_GetObjectItemCaseSensitive(disasm_body, "instructions");
+    REQUIRE(cJSON_IsArray(instructions));
+    const cJSON* first_instruction = cJSON_GetArrayItem(instructions, 0);
+    REQUIRE(cJSON_IsObject(first_instruction));
+    CHECK(cJSON_GetObjectItemCaseSensitive(first_instruction, "op_str") ==
+          nullptr);
+    CHECK(cJSON_IsNumber(cJSON_GetObjectItemCaseSensitive(
+        first_instruction, "addr")));
+    CHECK(cJSON_IsNumber(cJSON_GetObjectItemCaseSensitive(
+        first_instruction, "size")));
+    CHECK(cJSON_IsString(cJSON_GetObjectItemCaseSensitive(
+        first_instruction, "mnemonic")));
+    CHECK(cJSON_IsObject(cJSON_GetObjectItemCaseSensitive(
+        first_instruction, "provenance")));
 
     CHECK(optionalStringField(missing_addr_envelope, "status") == "error");
     CHECK(optionalStringField(missing_addr_envelope, "kind") ==
@@ -609,13 +654,25 @@ TEST_CASE("aura-mcp bridges function detail tools through aura CLI") {
     REQUIRE(cJSON_IsObject(error));
     CHECK(optionalStringField(error, "code") == "invalid_arguments");
 
+    CHECK(optionalStringField(invalid_addr_envelope, "status") == "error");
+    CHECK(optionalStringField(invalid_addr_envelope, "kind") ==
+          "aura_get_disassembly");
+    CHECK(optionalStringField(invalid_addr_envelope, "disclosure") ==
+          "protected");
+    const cJSON* invalid_error =
+        cJSON_GetObjectItemCaseSensitive(invalid_addr_envelope, "error");
+    REQUIRE(cJSON_IsObject(invalid_error));
+    CHECK(optionalStringField(invalid_error, "code") == "cli_failed");
+
     cJSON_Delete(disasm_envelope);
     cJSON_Delete(cfg_envelope);
     cJSON_Delete(llm_context_envelope);
     cJSON_Delete(missing_addr_envelope);
+    cJSON_Delete(invalid_addr_envelope);
     cJSON_Delete(disasm_response);
     cJSON_Delete(cfg_response);
     cJSON_Delete(llm_context_response);
     cJSON_Delete(missing_addr_response);
+    cJSON_Delete(invalid_addr_response);
     std::remove(input_path.c_str());
 }
