@@ -97,7 +97,6 @@ containing AURA's protected envelope, including `mcp_schema_version`,
 | `aura_probe_engines` | Implemented through the CLI bridge. |
 | `aura_info` | Implemented for allowlisted binaries. |
 | `aura_analyze` | Implemented for allowlisted binaries with protected/masked strings. |
-| `aura_list_functions` | Registered, but currently returns `tool_not_implemented`. |
 | `aura_get_disassembly` | Implemented for one function with protected output. |
 | `aura_get_cfg` | Implemented for one function with protected output. |
 | `aura_get_llm_context` | Implemented for one function with protected output. |
@@ -131,7 +130,8 @@ to `AURA_MCP_ALLOWED_ROOTS`.
 `path_not_found` or `not_a_regular_file`: pass an existing regular binary file,
 not a directory.
 
-`tool_not_implemented` for `aura_list_functions`: this is expected until the
-bridge grows a function-list implementation.
+`tool_not_found` for `aura_list_functions`: this function-list helper is not
+part of MCP V1 yet. Use `aura_analyze` or a known function address for the
+current function-detail tools.
 
 `raw_access_denied`: expected for raw tools. Use protected tools instead.

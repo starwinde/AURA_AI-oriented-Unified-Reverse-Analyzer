@@ -28,8 +28,6 @@ constexpr ToolSpec kTools[] = {
      kBinaryPathFields, 1},
     {"aura_analyze", "Return bounded protected analysis records.",
      kBinaryPathFields, 1},
-    {"aura_list_functions", "List bounded protected function records.",
-     kBinaryPathFields, 1},
     {"aura_get_disassembly",
      "Return protected structured disassembly for one function.",
      kFunctionFields, 2},

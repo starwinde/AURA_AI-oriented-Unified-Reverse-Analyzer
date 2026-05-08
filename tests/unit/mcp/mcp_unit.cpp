@@ -468,7 +468,6 @@ TEST_CASE("mcp tool registry lists protected and raw tool names") {
     CHECK(hasToolNamed(tools, "aura_probe_engines"));
     CHECK(hasToolNamed(tools, "aura_info"));
     CHECK(hasToolNamed(tools, "aura_analyze"));
-    CHECK(hasToolNamed(tools, "aura_list_functions"));
     CHECK(hasToolNamed(tools, "aura_get_disassembly"));
     CHECK(hasToolNamed(tools, "aura_get_cfg"));
     CHECK(hasToolNamed(tools, "aura_get_llm_context"));
@@ -689,13 +688,18 @@ TEST_CASE("bridged protected mcp tool validates missing arguments") {
     cJSON_Delete(env);
 }
 
-TEST_CASE("known non-bridge protected mcp tool placeholder is not implemented") {
+TEST_CASE("unimplemented function list tool is not advertised or callable") {
+    cJSON* tools = aura_mcp_tools_list_json();
+    REQUIRE(cJSON_IsArray(tools));
+    CHECK_FALSE(hasToolNamed(tools, "aura_list_functions"));
+    cJSON_Delete(tools);
+
     cJSON* env = aura_mcp_call_tool_json("aura_list_functions", nullptr);
     REQUIRE(env != nullptr);
     CHECK(aura_mcp_envelope_is_valid(env) == 1);
     CHECK(stringField(env, "status") == "error");
     CHECK(stringField(env, "disclosure") == "protected");
-    CHECK(errorCode(env) == "tool_not_implemented");
+    CHECK(errorCode(env) == "tool_not_found");
     cJSON_Delete(env);
 }
 
