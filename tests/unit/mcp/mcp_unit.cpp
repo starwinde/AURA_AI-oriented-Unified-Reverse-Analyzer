@@ -40,6 +40,29 @@ bool hasToolNamed(const cJSON* tools, const char* name) {
     return false;
 }
 
+const cJSON* toolNamed(const cJSON* tools, const char* name) {
+    const cJSON* tool = nullptr;
+    cJSON_ArrayForEach(tool, tools) {
+        const cJSON* tool_name = field(tool, "name");
+        if (cJSON_IsString(tool_name) && tool_name->valuestring != nullptr &&
+            std::string(tool_name->valuestring) == name) {
+            return tool;
+        }
+    }
+    return nullptr;
+}
+
+bool arrayHasString(const cJSON* array, const char* value) {
+    const cJSON* item = nullptr;
+    cJSON_ArrayForEach(item, array) {
+        if (cJSON_IsString(item) && item->valuestring != nullptr &&
+            std::string(item->valuestring) == value) {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::string errorCode(const cJSON* envelope) {
     const cJSON* error = field(envelope, "error");
     REQUIRE(cJSON_IsObject(error));
@@ -453,16 +476,7 @@ TEST_CASE("probe engine tool schema does not require binary arguments") {
     cJSON* tools = aura_mcp_tools_list_json();
     REQUIRE(cJSON_IsArray(tools));
 
-    const cJSON* probe_tool = nullptr;
-    const cJSON* tool = nullptr;
-    cJSON_ArrayForEach(tool, tools) {
-        const cJSON* tool_name = field(tool, "name");
-        if (cJSON_IsString(tool_name) && tool_name->valuestring != nullptr &&
-            std::string(tool_name->valuestring) == "aura_probe_engines") {
-            probe_tool = tool;
-            break;
-        }
-    }
+    const cJSON* probe_tool = toolNamed(tools, "aura_probe_engines");
     REQUIRE(probe_tool != nullptr);
 
     const cJSON* schema = field(probe_tool, "inputSchema");
@@ -471,6 +485,31 @@ TEST_CASE("probe engine tool schema does not require binary arguments") {
     const cJSON* required = field(schema, "required");
     REQUIRE(cJSON_IsArray(required));
     CHECK(cJSON_GetArraySize(required) == 0);
+
+    cJSON_Delete(tools);
+}
+
+TEST_CASE("mcp tool schemas declare expected required arguments") {
+    cJSON* tools = aura_mcp_tools_list_json();
+    REQUIRE(cJSON_IsArray(tools));
+
+    const cJSON* info_schema = field(toolNamed(tools, "aura_info"),
+                                     "inputSchema");
+    REQUIRE(cJSON_IsObject(info_schema));
+    const cJSON* info_required = field(info_schema, "required");
+    REQUIRE(cJSON_IsArray(info_required));
+    CHECK(arrayHasString(info_required, "binary_path"));
+    CHECK(cJSON_IsFalse(field(info_schema, "additionalProperties")));
+
+    const cJSON* disassembly_schema =
+        field(toolNamed(tools, "aura_get_disassembly"), "inputSchema");
+    REQUIRE(cJSON_IsObject(disassembly_schema));
+    const cJSON* disassembly_required =
+        field(disassembly_schema, "required");
+    REQUIRE(cJSON_IsArray(disassembly_required));
+    CHECK(arrayHasString(disassembly_required, "binary_path"));
+    CHECK(arrayHasString(disassembly_required, "function_addr"));
+    CHECK(cJSON_IsFalse(field(disassembly_schema, "additionalProperties")));
 
     cJSON_Delete(tools);
 }
@@ -492,6 +531,23 @@ TEST_CASE("raw mcp tools are denied by default") {
     CHECK(stringField(env, "disclosure") == "protected");
     CHECK(errorCode(env) == "raw_access_denied");
     cJSON_Delete(env);
+}
+
+TEST_CASE("mcp tool dispatch does not take ownership of caller args") {
+    cJSON* args = cJSON_CreateObject();
+    REQUIRE(args != nullptr);
+    REQUIRE(cJSON_AddStringToObject(args, "binary_path", "sample.bin") !=
+            nullptr);
+
+    cJSON* env = aura_mcp_call_tool_json("aura_analyze", args);
+    REQUIRE(env != nullptr);
+    CHECK(aura_mcp_envelope_is_valid(env) == 1);
+    CHECK(errorCode(env) == "tool_not_implemented");
+    cJSON_Delete(env);
+
+    CHECK(cJSON_IsObject(args));
+    CHECK(stringField(args, "binary_path") == "sample.bin");
+    cJSON_Delete(args);
 }
 
 TEST_CASE("known protected mcp tool placeholder is not implemented") {

@@ -1,4 +1,7 @@
-add_executable(mcp_unit mcp_unit.cpp)
+add_executable(mcp_unit
+    mcp_unit.cpp
+    mcp_tools_header_c.c
+)
 target_include_directories(mcp_unit PRIVATE
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/third_party/cjson
