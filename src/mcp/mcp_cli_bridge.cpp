@@ -87,6 +87,8 @@ fs::path cliName() {
 std::vector<fs::path> candidateCliPaths(const fs::path& root) {
     const fs::path exe = cliName();
     return {
+        root / "build-local" / "src" / "cli" / "Release" / exe,
+        root / "build-local" / "src" / "cli" / exe,
         root / "build-trim-gui" / "src" / "cli" / "Release" / exe,
         root / "build-trim-gui" / "src" / "cli" / exe,
         root / "build" / "src" / "cli" / "Release" / exe,
