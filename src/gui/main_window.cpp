@@ -14,6 +14,7 @@
 #include "symbol_table_model.h"
 #include "string_table_model.h"
 #include "project_binary_model.h"
+#include "safety_settings_dialog.h"
 #include "aura/safety/string_safety.h"
 
 #include <QAction>
@@ -93,6 +94,7 @@ constexpr int         kRecentMax         = 5;
 // Phase 11.5: monospace pane font-size (Decompile/Disasm/Hex synced).
 constexpr const char* kKeyPaneFontPt     = "paneFontPt";
 constexpr const char* kKeyUiLanguage     = "ui/language";
+constexpr const char* kKeySafetyActiveProfile = "safety/activeProfileId";
 constexpr int         kPaneFontDefaultPt = 10;
 constexpr int         kPaneFontMinPt     = 6;
 constexpr int         kPaneFontMaxPt     = 32;
@@ -403,6 +405,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setAcceptDrops(true);
 
     restoreUiState();
+    updateSafetyStatusText();
 }
 
 MainWindow::~MainWindow() {
@@ -926,6 +929,15 @@ void MainWindow::buildMenus() {
     connect(englishAct, &QAction::triggered, this,
             [setLanguage] { setLanguage(QStringLiteral("en")); });
 
+    QAction* safetyAct = new QAction(
+        ko ? QStringLiteral("안전 자산 설정(&S)...")
+           : QStringLiteral("&Safety Assets..."),
+        this);
+    safetyAct->setObjectName(QStringLiteral("safetySettingsAction"));
+    connect(safetyAct, &QAction::triggered,
+            this, &MainWindow::onSafetySettings);
+    settingsMenu->addAction(safetyAct);
+
     auto* helpMenu = mb->addMenu(ko ? QStringLiteral("&도움말")
                                     : QStringLiteral("&Help"));
     // Phase 11.5 (P5 polish) — keyboard shortcuts cheat sheet (Ctrl+/).
@@ -1029,6 +1041,71 @@ QStringList MainWindow::recentProjects() const {
                 QString::fromUtf8(kSettingsApp));
     return s.value(QString::fromUtf8(kKeyRecentProjects))
         .toStringList();
+}
+
+QString MainWindow::activeSafetyProfileId() const {
+    QSettings s(QString::fromUtf8(kSettingsOrg),
+                QString::fromUtf8(kSettingsApp));
+    return s.value(QString::fromUtf8(kKeySafetyActiveProfile),
+                   QStringLiteral("default")).toString();
+}
+
+aura::safety::SafetyProfile MainWindow::activeSafetyProfile() const {
+    const auto selected = aura::safety::resolveSelectedSafetyProfile(
+        activeSafetyProfileId().toStdString());
+    return selected.profile;
+}
+
+void MainWindow::setActiveSafetyProfileId(const QString& profileId) {
+    QSettings s(QString::fromUtf8(kSettingsOrg),
+                QString::fromUtf8(kSettingsApp));
+    s.setValue(QString::fromUtf8(kKeySafetyActiveProfile),
+               profileId.isEmpty() ? QStringLiteral("default") : profileId);
+    updateSafetyStatusText();
+}
+
+void MainWindow::updateSafetyStatusText() {
+    const QString id = activeSafetyProfileId();
+    const auto selected = aura::safety::resolveSelectedSafetyProfile(
+        id.toStdString());
+    const auto validation = aura::safety::validateSafetyProfile(
+        selected.profile);
+
+    if (selected.used_fallback) {
+        m_safetyStatusText =
+            QStringLiteral("Safety: %1 (fallback from %2)")
+                .arg(QString::fromStdString(selected.profile_id), id);
+    } else if (!selected.found) {
+        m_safetyStatusText =
+            QStringLiteral("Safety: default (selected profile missing)");
+    } else if (!validation.valid) {
+        m_safetyStatusText = QStringLiteral("Safety: %1 (missing assets)")
+            .arg(QString::fromStdString(selected.profile_id));
+    } else {
+        m_safetyStatusText = QStringLiteral("Safety: %1")
+            .arg(QString::fromStdString(selected.profile_id));
+    }
+
+    if (statusBar()) statusBar()->showMessage(m_safetyStatusText, 4000);
+}
+
+QString MainWindow::activeSafetyProfileIdForTest() const {
+    return activeSafetyProfileId();
+}
+
+QString MainWindow::safetyStatusTextForTest() const {
+    return m_safetyStatusText;
+}
+
+bool MainWindow::openSafetySettingsForTest(const QString& profileId) {
+    setActiveSafetyProfileId(profileId);
+    return activeSafetyProfileId() == profileId;
+}
+
+void MainWindow::onSafetySettings() {
+    SafetySettingsDialog dlg(activeSafetyProfileId(), this);
+    if (dlg.exec() != QDialog::Accepted) return;
+    setActiveSafetyProfileId(dlg.selectedProfileId());
 }
 
 void MainWindow::pushRecentProject(const QString& path) {
@@ -1875,7 +1952,8 @@ bool MainWindow::runAnalyze(int row, AuraAnalysisLevel level) {
         const AuraStringRecord* str =
             aura_rizin_analyze_body_strings(body);
         m_strings.reserve(static_cast<int>(body->strings_count));
-        const auto safetyProfile = aura::safety::loadDefaultSafetyProfile();
+        const auto safetyProfile = activeSafetyProfile();
+        updateSafetyStatusText();
         for (size_t i = 0; str && i < body->strings_count; ++i) {
             GuiStringRecord s;
             s.stringId = str[i].string_id;

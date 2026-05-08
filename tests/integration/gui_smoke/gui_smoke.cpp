@@ -14,6 +14,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
+#include <QAction>
 #include <QAbstractItemModel>
 #include <QApplication>
 #include <QDir>
@@ -29,6 +30,7 @@
 #include <QTextCursor>
 #include <QTextDocument>
 #include <QTreeView>
+#include <QVariant>
 
 #include "disasm_pane.h"
 #include "full_disasm_pane.h"
@@ -68,6 +70,32 @@ void selectFunctionRow(QTreeView* tree, int row) {
     tree->setCurrentIndex(idx);
 }
 
+class SettingsKeyGuard {
+public:
+    explicit SettingsKeyGuard(const QString& key) : m_key(key) {
+        QSettings settings(QStringLiteral("AURA"), QStringLiteral("aura-gui"));
+        m_hadValue = settings.contains(m_key);
+        m_oldValue = settings.value(m_key);
+        settings.remove(m_key);
+    }
+
+    ~SettingsKeyGuard() {
+        QSettings settings(QStringLiteral("AURA"), QStringLiteral("aura-gui"));
+        if (m_hadValue) {
+            settings.setValue(m_key, m_oldValue);
+        } else {
+            settings.remove(m_key);
+        }
+    }
+
+    SettingsKeyGuard(const SettingsKeyGuard&) = delete;
+    SettingsKeyGuard& operator=(const SettingsKeyGuard&) = delete;
+
+    QString m_key;
+    QVariant m_oldValue;
+    bool m_hadValue = false;
+};
+
 }  // namespace
 
 TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
@@ -104,6 +132,40 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
     SUBCASE("open project") {
         REQUIRE(window.openProject(dbPath));
         CHECK(window.projectBinaryCount() == 0);
+    }
+
+    SUBCASE("safety settings profile selection persists through QSettings") {
+        const SettingsKeyGuard guard(QStringLiteral("safety/activeProfileId"));
+
+        aura::gui::MainWindow first;
+        QAction* action = first.findChild<QAction*>(
+            QStringLiteral("safetySettingsAction"));
+        REQUIRE(action != nullptr);
+        const bool actionTextMatches =
+            action->text().contains(QStringLiteral("Safety"),
+                                    Qt::CaseInsensitive) ||
+            action->text().contains(QStringLiteral("안전"));
+        CHECK(actionTextMatches);
+        CHECK(first.activeSafetyProfileIdForTest()
+              == QStringLiteral("default"));
+        CHECK(first.safetyStatusTextForTest().contains(
+            QStringLiteral("Safety")));
+        CHECK(first.openSafetySettingsForTest(
+            QStringLiteral("high-security")));
+        CHECK(first.activeSafetyProfileIdForTest()
+              == QStringLiteral("high-security"));
+        CHECK(first.safetyStatusTextForTest().contains(
+            QStringLiteral("high-security")));
+        CHECK(first.openSafetySettingsForTest(
+            QStringLiteral("deleted-profile")));
+        CHECK(first.safetyStatusTextForTest().contains(
+            QStringLiteral("fallback")));
+        CHECK(first.safetyStatusTextForTest().contains(
+            QStringLiteral("deleted-profile")));
+
+        aura::gui::MainWindow second;
+        CHECK(second.activeSafetyProfileIdForTest()
+              == QStringLiteral("deleted-profile"));
     }
 
     SUBCASE("analyze auto-discovers vendored Rizin without bin override") {

@@ -25,6 +25,10 @@ class QEvent;
 class QPlainTextEdit;
 class QWidget;
 
+namespace aura::safety {
+struct SafetyProfile;
+}
+
 namespace aura::gui {
 
 class ProjectBinaryModel;
@@ -263,6 +267,9 @@ public:
     // deduped, capped at kRecentMax (5). Pushed on successful openProject.
     // Returned in MRU order for gui_smoke.
     QStringList recentProjects() const;
+    QString activeSafetyProfileIdForTest() const;
+    QString safetyStatusTextForTest() const;
+    bool openSafetySettingsForTest(const QString& profileId);
 
     // Phase 11.5 (P5 polish) — drag-drop binary onto the project view.
     // Public so gui_smoke can exercise the path without synthesizing
@@ -478,6 +485,11 @@ private:
     bool searchInScope(SearchScope scope, const QString& needle);
     int  functionRowContainingAddress(quint64 addr) const;
     bool persistStringOverride(int stringRow) const;
+    QString activeSafetyProfileId() const;
+    aura::safety::SafetyProfile activeSafetyProfile() const;
+    void setActiveSafetyProfileId(const QString& profileId);
+    void updateSafetyStatusText();
+    void onSafetySettings();
     void closeProject();
     void updateWindowTitle();
     void restoreUiState();
@@ -575,6 +587,7 @@ private:
     QAction* m_actQuit           = nullptr;
     QAction* m_actBackToProject  = nullptr;
     QAction* m_actAbout          = nullptr;
+    QString  m_safetyStatusText;
 
     // Phase 11.5: recent-projects submenu (rebuilt on each push).
     class QMenu* m_recentMenu    = nullptr;
