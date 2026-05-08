@@ -2,10 +2,16 @@
 #include "doctest.h"
 
 #include "aura/mcp/mcp_envelope.h"
+#include "mcp_path_policy.h"
 
 #include "cJSON.h"
 
+#include <chrono>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <string>
+#include <system_error>
 
 namespace {
 
@@ -19,6 +25,124 @@ std::string stringField(const cJSON* root, const char* name) {
     REQUIRE(cJSON_IsString(item));
     REQUIRE(item->valuestring != nullptr);
     return item->valuestring;
+}
+
+void setEnvVar(const char* name, const std::string& value) {
+#ifdef _WIN32
+    REQUIRE(_putenv_s(name, value.c_str()) == 0);
+#else
+    REQUIRE(setenv(name, value.c_str(), 1) == 0);
+#endif
+}
+
+void unsetEnvVar(const char* name) {
+#ifdef _WIN32
+    REQUIRE(_putenv_s(name, "") == 0);
+#else
+    REQUIRE(unsetenv(name) == 0);
+#endif
+}
+
+std::string getEnvVar(const char* name) {
+    const char* value = std::getenv(name);
+    return value != nullptr ? value : "";
+}
+
+class ScopedEnvVar {
+  public:
+    explicit ScopedEnvVar(const char* name)
+        : name_(name), had_value_(std::getenv(name) != nullptr),
+          old_value_(getEnvVar(name)) {}
+
+    ~ScopedEnvVar() {
+        if (had_value_) {
+            setEnvVar(name_, old_value_);
+        } else {
+            unsetEnvVar(name_);
+        }
+    }
+
+    ScopedEnvVar(const ScopedEnvVar&) = delete;
+    ScopedEnvVar& operator=(const ScopedEnvVar&) = delete;
+
+  private:
+    const char* name_;
+    bool        had_value_;
+    std::string old_value_;
+};
+
+class ScopedCurrentPath {
+  public:
+    explicit ScopedCurrentPath(const std::filesystem::path& next)
+        : old_path_(std::filesystem::current_path()) {
+        std::filesystem::current_path(next);
+    }
+
+    ~ScopedCurrentPath() {
+        std::filesystem::current_path(old_path_);
+    }
+
+    ScopedCurrentPath(const ScopedCurrentPath&) = delete;
+    ScopedCurrentPath& operator=(const ScopedCurrentPath&) = delete;
+
+  private:
+    std::filesystem::path old_path_;
+};
+
+class TempTree {
+  public:
+    TempTree()
+        : root_(makeUniqueTempPath()) {
+        std::filesystem::create_directories(root_);
+    }
+
+    ~TempTree() {
+        std::error_code ec;
+        std::filesystem::remove_all(root_, ec);
+    }
+
+    const std::filesystem::path& root() const {
+        return root_;
+    }
+
+    std::filesystem::path writeFile(const std::filesystem::path& relative,
+                                    const std::string& contents = "fixture") {
+        const auto path = root_ / relative;
+        std::filesystem::create_directories(path.parent_path());
+        std::ofstream out(path, std::ios::binary);
+        REQUIRE(out.good());
+        out << contents;
+        out.close();
+        REQUIRE(out.good());
+        return path;
+    }
+
+  private:
+    static std::filesystem::path makeUniqueTempPath() {
+        const auto base = std::filesystem::temp_directory_path();
+        for (int i = 0; i < 100; ++i) {
+            const auto ticks =
+                std::chrono::steady_clock::now().time_since_epoch().count();
+            auto path = base / ("aura-mcp-path-policy-" +
+                                std::to_string(ticks) + "-" +
+                                std::to_string(i));
+            if (!std::filesystem::exists(path)) {
+                return path;
+            }
+        }
+        FAIL("could not allocate unique temp path");
+        return base / "aura-mcp-path-policy-failed";
+    }
+
+    std::filesystem::path root_;
+};
+
+char pathListSeparator() {
+#ifdef _WIN32
+    return ';';
+#else
+    return ':';
+#endif
 }
 
 }  // namespace
@@ -185,4 +309,98 @@ TEST_CASE("success builder rejects non-object caller data") {
     CHECK(env == nullptr);
 
     cJSON_Delete(data);
+}
+
+TEST_CASE("path policy allows files under cwd when env allowlist is unset") {
+    ScopedEnvVar env("AURA_MCP_ALLOWED_ROOTS");
+    unsetEnvVar("AURA_MCP_ALLOWED_ROOTS");
+    TempTree temp;
+    const auto file = temp.writeFile("bin/sample.bin");
+    const ScopedCurrentPath cwd(temp.root());
+
+    const AuraMcpPathDecision decision =
+        aura_mcp_path_allowed(std::filesystem::path("bin") / file.filename());
+
+    CHECK(decision.allowed);
+    CHECK(decision.error_code.empty());
+    CHECK(decision.error_message.empty());
+    CHECK(std::filesystem::path(decision.canonical_path) ==
+          std::filesystem::canonical(file));
+
+    setEnvVar("AURA_MCP_ALLOWED_ROOTS", "");
+    const AuraMcpPathDecision empty_env_decision =
+        aura_mcp_path_allowed(std::filesystem::path("bin") / file.filename());
+
+    CHECK(empty_env_decision.allowed);
+    CHECK(empty_env_decision.error_code.empty());
+    CHECK(std::filesystem::path(empty_env_decision.canonical_path) ==
+          std::filesystem::canonical(file));
+}
+
+TEST_CASE("path policy rejects sibling prefix escapes outside allowed roots") {
+    TempTree temp;
+    const auto allowed_root = temp.root() / "repo";
+    const auto sibling_root = temp.root() / "repo2";
+    std::filesystem::create_directories(allowed_root);
+    std::filesystem::create_directories(sibling_root);
+    const auto sibling_file = sibling_root / "escape.bin";
+    {
+        std::ofstream out(sibling_file, std::ios::binary);
+        REQUIRE(out.good());
+        out << "escape";
+    }
+
+    const AuraMcpPathDecision decision =
+        aura_mcp_path_allowed(sibling_file, {allowed_root});
+
+    CHECK_FALSE(decision.allowed);
+    CHECK(decision.canonical_path ==
+          std::filesystem::canonical(sibling_file).string());
+    CHECK(decision.error_code == "path_denied");
+    CHECK_FALSE(decision.error_message.empty());
+}
+
+TEST_CASE("path policy env allowlist allows a temp fixture path") {
+    ScopedEnvVar env("AURA_MCP_ALLOWED_ROOTS");
+    TempTree temp;
+    const auto file = temp.writeFile("fixture.bin");
+    setEnvVar("AURA_MCP_ALLOWED_ROOTS", temp.root().string());
+
+    const AuraMcpPathDecision decision = aura_mcp_path_allowed(file);
+
+    CHECK(decision.allowed);
+    CHECK(decision.canonical_path == std::filesystem::canonical(file).string());
+    CHECK(decision.error_code.empty());
+}
+
+TEST_CASE("path policy rejects nonexistent paths") {
+    TempTree temp;
+    const auto missing = temp.root() / "missing.bin";
+
+    const AuraMcpPathDecision decision =
+        aura_mcp_path_allowed(missing, {temp.root()});
+
+    CHECK_FALSE(decision.allowed);
+    CHECK(decision.canonical_path.empty());
+    CHECK(decision.error_code == "path_not_found");
+    CHECK_FALSE(decision.error_message.empty());
+}
+
+TEST_CASE("path policy ignores malformed and empty env entries safely") {
+    ScopedEnvVar env("AURA_MCP_ALLOWED_ROOTS");
+    TempTree temp;
+    const auto file = temp.writeFile("nested/fixture.bin");
+    const auto bad_root = temp.root() / "does-not-exist";
+    const std::string roots = std::string(1, pathListSeparator()) +
+                              bad_root.string() + pathListSeparator() +
+                              std::string(1, pathListSeparator()) +
+                              (temp.root() / "nested").string() +
+                              pathListSeparator();
+    setEnvVar("AURA_MCP_ALLOWED_ROOTS", roots);
+
+    const AuraMcpPathDecision decision = aura_mcp_path_allowed(file);
+
+    CHECK(decision.allowed);
+    CHECK(decision.canonical_path == std::filesystem::canonical(file).string());
+    CHECK(decision.error_code.empty());
 }
