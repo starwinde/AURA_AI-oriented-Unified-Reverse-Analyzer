@@ -175,6 +175,33 @@ function Assert-QtForGuiBuild {
         -Fix "Install Qt 6 and set Qt6_DIR or CMAKE_PREFIX_PATH, or rerun with -NoGui."
 }
 
+function Resolve-BuildDirPath {
+    param([string]$Path)
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return $Path
+    }
+    return (Join-Path $Root $Path)
+}
+
+function Find-AuraMcpPath {
+    param(
+        [string]$BuildDirPath,
+        [string]$ConfigName
+    )
+    $candidates = @(
+        (Join-Path $BuildDirPath "src\mcp\$ConfigName\aura-mcp.exe"),
+        (Join-Path $BuildDirPath "$ConfigName\aura-mcp.exe"),
+        (Join-Path $BuildDirPath "src\mcp\aura-mcp.exe"),
+        (Join-Path $BuildDirPath "aura-mcp.exe")
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+    return ""
+}
+
 $Root = Resolve-RepoRoot
 Assert-WindowsHost
 Set-Location $Root
@@ -319,11 +346,27 @@ if ($Build) {
         -DAURA_BUILD_TESTS=ON
 
     Write-Host "AURA install: building core targets ($Config)"
-    cmake --build $BuildDir --target aura probe_unit cli_smoke probe_engines_smoke --config $Config
+    cmake --build $BuildDir --target aura aura-mcp probe_unit cli_smoke probe_engines_smoke --config $Config
 
     if (-not $NoGui) {
         cmake --build $BuildDir --target aura-gui gui_smoke --config $Config
     }
+
+    $resolvedBuildDir = Resolve-BuildDirPath -Path $BuildDir
+    $auraMcpPath = Find-AuraMcpPath -BuildDirPath $resolvedBuildDir -ConfigName $Config
+    if ($auraMcpPath) {
+        Write-Host "AURA_MCP_PATH=$auraMcpPath"
+        Write-Host "AURA MCP next commands for a new PowerShell session:"
+        Write-Host "`$env:AURA_REPO_ROOT = `"$Root`""
+        Write-Host "`$env:AURA_MCP_ALLOWED_ROOTS = `"C:\path\to\binaries;D:\other\root`""
+        Write-Host "& `"$auraMcpPath`""
+    } else {
+        Write-Host "AURA install: aura-mcp target was requested, but the executable path was not found under $resolvedBuildDir"
+    }
+} else {
+    Write-Host "AURA MCP: run with -Build to build aura-mcp. Required runtime env vars in a new PowerShell session:"
+    Write-Host "`$env:AURA_REPO_ROOT = `"$Root`""
+    Write-Host "`$env:AURA_MCP_ALLOWED_ROOTS = `"C:\path\to\binaries;D:\other\root`""
 }
 
 Write-Host "AURA install: done"

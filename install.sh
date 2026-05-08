@@ -34,6 +34,22 @@ fail_install() {
   exit 1
 }
 
+find_aura_mcp() {
+  build_dir_path="$1"
+  for candidate in \
+    "$build_dir_path/src/mcp/aura-mcp" \
+    "$build_dir_path/aura-mcp" \
+    "$build_dir_path/src/mcp/aura-mcp.exe" \
+    "$build_dir_path/aura-mcp.exe"
+  do
+    if [ -x "$candidate" ] || [ -f "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail_install \
     "Required command '$1' was not found." \
@@ -198,7 +214,22 @@ if [ "$BUILD" -eq 1 ]; then
     -DAURA_ENABLE_RIZIN=ON \
     -DAURA_BUILD_GUI="$GUI_FLAG" \
     -DAURA_BUILD_TESTS=ON
-  cmake --build "$BUILD_DIR" --target aura probe_unit cli_smoke probe_engines_smoke
+  cmake --build "$BUILD_DIR" --target aura aura-mcp probe_unit cli_smoke probe_engines_smoke
+
+  AURA_MCP_PATH="$(find_aura_mcp "$BUILD_DIR" || true)"
+  if [ -n "$AURA_MCP_PATH" ]; then
+    echo "AURA_MCP_PATH=$AURA_MCP_PATH"
+    echo "AURA MCP next commands for a new shell:"
+    echo "export AURA_REPO_ROOT=\"$ROOT\""
+    echo "export AURA_MCP_ALLOWED_ROOTS=\"/path/to/binaries:/other/root\""
+    echo "\"$AURA_MCP_PATH\""
+  else
+    echo "AURA install: aura-mcp target was requested, but the executable path was not found under $BUILD_DIR"
+  fi
+else
+  echo "AURA MCP: run with --build to build aura-mcp. Required runtime env vars in a new shell:"
+  echo "export AURA_REPO_ROOT=\"$ROOT\""
+  echo "export AURA_MCP_ALLOWED_ROOTS=\"/path/to/binaries:/other/root\""
 fi
 
 echo "AURA install: done"

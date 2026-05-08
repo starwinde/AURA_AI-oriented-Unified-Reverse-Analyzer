@@ -122,15 +122,19 @@ child row 는 엔진 metadata 를 기존처럼 유지한다. 보호 관련 child
 노출하는 공용 API 가 아니다.
 
 **LLM Privacy Filter & Policy Gateway**:
-향후 별도 실행 파일(`aura-mcp`)로 둘 프라이버시 필터 + 정책 게이트웨이.
-LLM/agent 는 Rizin/rz-ghidra 또는 GUI RPC 에 직접 접근하지 않고 MCP tool
-을 호출한다. gateway 는 allowlist, 길이 제한, 민감 문자열 masking,
-binary path/token/key/API secret 제거, 원본 decompile 전체 반환 제한,
-사용자 승인, audit logging 같은 정책을 적용한 뒤 GUI IPC 또는 headless
-engine API 로 전달한다. Privacy Filter 는 현재 문자열 기반 MVP 에서
-시작하고, 목표 구조는 **Token Classification Model, Rule Pack, Eval Dataset
-을 결합한 민감정보 마스킹 시스템**이다. 기본 생성형 LLM 배치는 **1개**이며,
-gateway 는 두 번째 생성형 LLM 모델이 아니라 policy layer 다.
+현재 MCP V1 은 별도 실행 파일 `aura-mcp` 로 제공되는 local stdio JSON-RPC
+server 다. `AURA_REPO_ROOT` 로 repo root 를 찾아 local `aura` CLI 를 호출하고,
+binary-file tool 은 `AURA_MCP_ALLOWED_ROOTS` allowlist 가 없거나 비어 있으면
+fail-closed 된다. 현재 노출 surface 는 probe/info/analyze/function detail
+중 구현된 bridge tool 이며, raw disassembly/decompile tool 은 등록되어도
+의도적으로 deny 된다. LLM/agent 는 Rizin/rz-ghidra 또는 GUI RPC 에 직접
+접근하지 않고 MCP tool 을 호출한다. gateway 는 allowlist, 길이 제한, 민감
+문자열 masking, binary path/token/key/API secret 제거, 원본 decompile 전체
+반환 제한, 사용자 승인, audit logging 같은 정책을 점진 적용한다. Privacy
+Filter 는 현재 문자열 기반 MVP 에서 시작하고, 목표 구조는 **Token
+Classification Model, Rule Pack, Eval Dataset 을 결합한 민감정보 마스킹
+시스템**이다. 기본 생성형 LLM 배치는 **1개**이며, gateway 는 두 번째 생성형
+LLM 모델이 아니라 policy layer 다.
 _Avoid_: "중간에 LLM 모델을 배치", "2개 LLM 상시 운영" (보안 주체는 생성형 LLM 이 아니라 PII/privacy filter + policy gateway).
 
 **Strict MCP Coverage**:
