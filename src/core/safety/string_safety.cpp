@@ -10,6 +10,7 @@
 #include <initializer_list>
 #include <map>
 #include <cstdio>
+#include <fstream>
 #include <regex>
 #include <set>
 
@@ -85,6 +86,48 @@ std::vector<std::string> jsonStringArray(cJSON* obj, const char* key) {
             out.emplace_back(item->valuestring);
     }
     return out;
+}
+
+const char* modelPolicyModeToText(ModelPolicyMode mode) {
+    switch (mode) {
+        case ModelPolicyMode::Conditional:
+            return "conditional";
+        case ModelPolicyMode::Required:
+            return "required";
+        default:
+            return "disabled";
+    }
+}
+
+const char* modelFailureActionToText(ModelFailureAction action) {
+    switch (action) {
+        case ModelFailureAction::BlockExport:
+            return "block_export";
+        default:
+            return "degrade";
+    }
+}
+
+bool isSafeProfileId(const std::string& id) {
+    if (id.empty()) return false;
+    for (const unsigned char ch : id) {
+        if (std::isalnum(ch) || ch == '-' || ch == '_' || ch == '.') continue;
+        if (ch == '/') return false;
+        if (ch == '\\') return false;
+        if (ch == ' ') return false;
+        return false;
+    }
+    return true;
+}
+
+void writeStringArray(cJSON* object, const char* key,
+                     const std::vector<std::string>& values) {
+    auto* arr = cJSON_CreateArray();
+    if (!arr) return;
+    cJSON_AddItemToObject(object, key, arr);
+    for (const auto& value : values) {
+        cJSON_AddItemToArray(arr, cJSON_CreateString(value.c_str()));
+    }
 }
 
 double jsonNumber(cJSON* obj, const char* key, double fallback) {
@@ -491,7 +534,7 @@ SafetyProfileLoadResult loadDefaultSafetyProfileResult() {
 }
 
 bool containsValidAssetId(const std::vector<SafetyAssetRef>& refs,
-                          const std::string& id) {
+                         const std::string& id) {
     return std::find_if(refs.begin(), refs.end(),
                         [&](const SafetyAssetRef& ref) {
                             return ref.valid && ref.id == id;
@@ -510,6 +553,104 @@ void addMissingAssetMessages(const std::vector<std::string>& ids,
 }
 
 }  // namespace
+
+bool saveSafetyProfile(const std::string& profile_id,
+                      const SafetyProfile& profile,
+                      std::string* diagnostic) {
+    if (diagnostic) diagnostic->clear();
+    if (!isSafeProfileId(profile_id)) {
+        if (diagnostic) {
+            *diagnostic = "invalid profile id";
+        }
+        return false;
+    }
+
+    std::error_code ec;
+    const auto home = auraHome();
+    const auto target = home / "safety-profiles" / (profile_id + ".json");
+    std::filesystem::create_directories(target.parent_path(), ec);
+    if (ec) {
+        if (diagnostic) {
+            *diagnostic = "could not create safety profile directory";
+        }
+        return false;
+    }
+
+    cJSON* root = cJSON_CreateObject();
+    if (!root) {
+        if (diagnostic) *diagnostic = "failed to allocate JSON";
+        return false;
+    }
+
+    const std::string tokenModel =
+        profile.model_policy.model_id.empty()
+            ? profile.token_classification_model_id
+            : profile.model_policy.model_id;
+    const bool tokenEnabled = profile.token_classification_enabled ||
+                              profile.model_policy.enabled;
+
+    cJSON_AddNumberToObject(root, "schema_version", 1);
+    cJSON_AddStringToObject(root, "profile_id", profile_id.c_str());
+    cJSON* modelPolicy = cJSON_CreateObject();
+    if (modelPolicy) {
+        cJSON_AddBoolToObject(modelPolicy, "enabled",
+                              profile.model_policy.enabled);
+        cJSON_AddStringToObject(modelPolicy, "mode",
+                                modelPolicyModeToText(profile.model_policy.mode));
+        cJSON_AddStringToObject(modelPolicy, "model_id", tokenModel.c_str());
+        cJSON_AddNumberToObject(modelPolicy, "max_input_chars",
+                                static_cast<double>(
+                                    profile.model_policy.max_input_chars));
+        cJSON_AddNumberToObject(modelPolicy, "timeout_ms",
+                                static_cast<double>(
+                                    profile.model_policy.timeout_ms));
+        writeStringArray(modelPolicy, "run_when", profile.model_policy.run_when);
+        cJSON_AddStringToObject(
+            modelPolicy, "on_missing",
+            modelFailureActionToText(profile.model_policy.on_missing));
+        cJSON_AddStringToObject(
+            modelPolicy, "on_timeout",
+            modelFailureActionToText(profile.model_policy.on_timeout));
+        cJSON_AddStringToObject(
+            modelPolicy, "on_error",
+            modelFailureActionToText(profile.model_policy.on_error));
+        cJSON_AddItemToObject(root, "model_policy", modelPolicy);
+    } else {
+        cJSON_AddItemToObject(root, "model_policy", cJSON_CreateObject());
+    }
+
+    cJSON_AddStringToObject(root, "token_classification_model_id",
+                            tokenModel.c_str());
+    cJSON_AddBoolToObject(root, "token_classification_enabled", tokenEnabled);
+    writeStringArray(root, "rule_pack_ids", profile.rule_pack_ids);
+    writeStringArray(root, "eval_dataset_ids", profile.eval_dataset_ids);
+
+    char* out = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (!out) {
+        if (diagnostic) *diagnostic = "failed to serialize profile";
+        return false;
+    }
+
+    const std::string text = out;
+    cJSON_free(out);
+
+    std::ofstream file(target, std::ios::binary | std::ios::trunc);
+    if (!file) {
+        if (diagnostic) {
+            *diagnostic = "failed to open profile file for write";
+        }
+        return false;
+    }
+    file << text;
+    if (!file.good()) {
+        if (diagnostic) {
+            *diagnostic = "failed to write profile file";
+        }
+        return false;
+    }
+    return true;
+}
 
 SafetyAssetRegistry listSafetyAssets() {
     SafetyAssetRegistry out;

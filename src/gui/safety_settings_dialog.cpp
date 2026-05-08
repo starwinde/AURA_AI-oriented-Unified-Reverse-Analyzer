@@ -73,6 +73,25 @@ std::vector<std::string> activeModelIdsFromProfile(
     return {};
 }
 
+void applyModelIdsToProfile(aura::safety::SafetyProfile& profile,
+                           const std::vector<std::string>& modelIds) {
+    if (modelIds.empty()) {
+        profile.model_policy.enabled = false;
+        profile.model_policy.model_id.clear();
+        profile.token_classification_enabled = false;
+        profile.token_classification_model_id.clear();
+        return;
+    }
+    profile.model_policy.enabled = true;
+    profile.model_policy.model_id = modelIds.front();
+    profile.token_classification_model_id = modelIds.front();
+    profile.token_classification_enabled = true;
+    if (profile.model_policy.mode ==
+        aura::safety::ModelPolicyMode::Disabled) {
+        profile.model_policy.mode = aura::safety::ModelPolicyMode::Conditional;
+    }
+}
+
 }  // namespace
 
 SafetySettingsDialog::SafetySettingsDialog(const QString& selectedProfileId,
@@ -151,8 +170,9 @@ SafetySettingsDialog::SafetySettingsDialog(const QString& selectedProfileId,
     root->addWidget(buttons);
 
     populate();
-    connect(m_profileCombo, &QComboBox::currentIndexChanged, this,
-            &SafetySettingsDialog::updateSummary);
+    connect(m_profileCombo, &QComboBox::currentIndexChanged, this, [this]() {
+        updateSummary(/*resetSelection=*/true);
+    });
     connect(m_modelList, &QListWidget::itemChanged, this, [this]() {
         updateModelSelectionFromChecked();
         updateSummary();
@@ -200,22 +220,7 @@ std::vector<std::string> SafetySettingsDialog::selectedModelIds() const {
 
 void SafetySettingsDialog::applyModelSelectionToProfile(
     aura::safety::SafetyProfile& profile) const {
-    const auto selected = selectedModelIds();
-    if (selected.empty()) {
-        profile.model_policy.enabled = false;
-        profile.model_policy.model_id.clear();
-        profile.token_classification_enabled = false;
-        profile.token_classification_model_id.clear();
-        return;
-    }
-
-    profile.model_policy.enabled = true;
-    profile.model_policy.model_id = selected.front();
-    profile.token_classification_model_id = selected.front();
-    profile.token_classification_enabled = true;
-    if (profile.model_policy.mode == aura::safety::ModelPolicyMode::Disabled) {
-        profile.model_policy.mode = aura::safety::ModelPolicyMode::Conditional;
-    }
+    applyModelIdsToProfile(profile, selectedModelIds());
 }
 
 aura::safety::SafetyProfile SafetySettingsDialog::editedProfile() const {
@@ -322,17 +327,24 @@ void SafetySettingsDialog::addAssetRows(
     }
 }
 
-void SafetySettingsDialog::updateSummary() {
+void SafetySettingsDialog::updateSummary(bool resetSelection) {
     if (!m_summaryLabel || !m_statusLabel) return;
 
     const std::string id = currentComboProfileId(m_profileCombo).toStdString();
     const auto loaded = aura::safety::resolveSelectedSafetyProfile(id);
     m_resolvedProfileId = QString::fromStdString(loaded.profile_id);
     auto workingProfile = loaded.profile;
-    applyModelSelectionToProfile(workingProfile);
+    if (resetSelection) {
+        const auto selectedFromProfile = activeModelIdsFromProfile(workingProfile);
+        applyModelIdsToProfile(workingProfile, selectedFromProfile);
+    } else {
+        applyModelSelectionToProfile(workingProfile);
+    }
 
     std::vector<std::string> selectedModels;
-    selectedModels = selectedModelIds();
+    if (!resetSelection) {
+        selectedModels = selectedModelIds();
+    }
     if (selectedModels.empty()) {
         selectedModels = activeModelIdsFromProfile(workingProfile);
     }

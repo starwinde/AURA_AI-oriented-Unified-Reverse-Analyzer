@@ -462,6 +462,49 @@ TEST_CASE("safety profile can be loaded by id from AURA_HOME") {
           aura::safety::ModelPolicyMode::Required);
 }
 
+TEST_CASE("safety profile edits can be persisted and reloaded") {
+    namespace fs = std::filesystem;
+    const fs::path root =
+        tempRoot("aura_safety_unit_profile_save_home");
+    fs::remove_all(root);
+    fs::create_directories(root / "safety-profiles");
+
+    {
+        std::ofstream out(root / "safety-profiles" / "editable.json",
+                          std::ios::binary);
+        out << R"({
+          "schema_version": 1,
+          "profile_id": "editable",
+          "rule_pack_ids": ["editable-rules"],
+          "eval_dataset_ids": ["editable-eval"],
+          "model_policy": {
+            "enabled": true,
+            "mode": "required",
+            "model_id": "old-model"
+          }
+        })";
+    }
+
+    setEnvVar("AURA_HOME", root.string());
+    auto loaded = aura::safety::loadSafetyProfileById("editable");
+    REQUIRE(loaded.found);
+    REQUIRE(loaded.profile.model_policy.model_id == "old-model");
+
+    aura::safety::SafetyProfile edited = loaded.profile;
+    edited.model_policy.model_id = "new-model";
+    edited.model_policy.mode = aura::safety::ModelPolicyMode::Required;
+    edited.token_classification_model_id = "new-model";
+    std::string diagnostic;
+    REQUIRE(aura::safety::saveSafetyProfile("editable", edited, &diagnostic));
+    CHECK(diagnostic.empty());
+
+    const auto reloaded = aura::safety::loadSafetyProfileById("editable");
+    clearEnvVar("AURA_HOME");
+    REQUIRE(reloaded.found);
+    CHECK(reloaded.profile.model_policy.model_id == "new-model");
+    CHECK(reloaded.profile.token_classification_model_id == "new-model");
+}
+
 TEST_CASE("selected safety profile falls back to default when missing") {
     namespace fs = std::filesystem;
     const fs::path root =

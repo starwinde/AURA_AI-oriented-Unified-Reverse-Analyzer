@@ -105,6 +105,9 @@ SafetyProfileLoadResult loadSafetyProfileById(const std::string& profile_id);
 SafetyProfileLoadResult resolveSelectedSafetyProfile(
     const std::string& selected_profile_id);
 SafetyProfileValidation validateSafetyProfile(const SafetyProfile& profile);
+bool saveSafetyProfile(const std::string& profile_id,
+                      const SafetyProfile& profile,
+                      std::string* diagnostic = nullptr);
 
 std::vector<Finding> scanStringWithRulePacks(const std::string& text,
                                              const SafetyProfile& profile);

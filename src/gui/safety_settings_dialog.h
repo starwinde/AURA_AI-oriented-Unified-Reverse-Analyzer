@@ -30,7 +30,7 @@ public:
 
 private:
     void populate();
-    void updateSummary();
+    void updateSummary(bool resetSelection = false);
     void updateStatusFromEditedProfile(const aura::safety::SafetyProfile& profile,
                                       bool usedFallback,
                                       bool found);

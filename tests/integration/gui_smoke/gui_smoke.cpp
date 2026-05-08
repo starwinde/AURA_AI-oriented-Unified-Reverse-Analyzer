@@ -20,9 +20,12 @@
 #include <QDir>
 #include <QDockWidget>
 #include <QFile>
+#include <QIODevice>
+#include <QComboBox>
 #include <QMouseEvent>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QListWidget>
 #include <QPoint>
 #include <QPointF>
 #include <QSettings>
@@ -98,6 +101,62 @@ public:
     bool m_hadValue = false;
 };
 
+class AuraHomeGuard {
+public:
+    explicit AuraHomeGuard(const QString& path) {
+        m_hadValue = qEnvironmentVariableIsSet("AURA_HOME");
+        if (m_hadValue) {
+            m_oldValue = qgetenv("AURA_HOME");
+        }
+        qputenv("AURA_HOME", path.toUtf8());
+    }
+
+    ~AuraHomeGuard() {
+        if (m_hadValue) {
+            qputenv("AURA_HOME", m_oldValue);
+        } else {
+            qunsetenv("AURA_HOME");
+        }
+    }
+
+    AuraHomeGuard(const AuraHomeGuard&) = delete;
+    AuraHomeGuard& operator=(const AuraHomeGuard&) = delete;
+
+private:
+    QByteArray m_oldValue;
+    bool m_hadValue = false;
+};
+
+void writeTextFile(const QString& path, const QString& text) {
+    QFile file(path);
+    REQUIRE(file.open(QIODevice::WriteOnly | QIODevice::Text));
+    const auto bytes = text.toUtf8();
+    CHECK(file.write(bytes) == bytes.size());
+}
+
+QStringList checkedModelIds(const QListWidget* modelList) {
+    QStringList ids;
+    if (!modelList) return ids;
+    for (int i = 0; i < modelList->count(); ++i) {
+        const auto* item = modelList->item(i);
+        if (item && item->checkState() == Qt::Checked) {
+            ids.push_back(item->data(Qt::UserRole).toString());
+        }
+    }
+    return ids;
+}
+
+void setCheckedModelId(QListWidget* modelList, const QString& modelId) {
+    if (!modelList) return;
+    for (int i = 0; i < modelList->count(); ++i) {
+        auto* item = modelList->item(i);
+        if (!item) continue;
+        item->setCheckState(item->data(Qt::UserRole).toString() == modelId
+                               ? Qt::Checked
+                               : Qt::Unchecked);
+    }
+}
+
 }  // namespace
 
 TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
@@ -170,16 +229,91 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
               == QStringLiteral("deleted-profile"));
     }
 
-    SUBCASE("safety model edit means selection change only") {
+    SUBCASE("model asset management actions are discoverable") {
+        aura::gui::MainWindow mainWindow;
+        auto* modelManagerAction =
+            mainWindow.findChild<QAction*>(
+                QStringLiteral("safetyModelAssetManagerAction"));
+        auto* modelFolderAction =
+            mainWindow.findChild<QAction*>(
+                QStringLiteral("safetyModelAssetFolderAction"));
+        CHECK(modelManagerAction != nullptr);
+        CHECK(modelFolderAction != nullptr);
+    }
+
+    SUBCASE("safety model selection resets when switching profiles") {
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+
+        const QString homeSafetyRoot = home.path();
+        const QString profileRoot =
+            QDir(homeSafetyRoot).filePath(QStringLiteral("safety-profiles"));
+        const QString modelRoot =
+            QDir(homeSafetyRoot).filePath(QStringLiteral("token-classification-models"));
+        const QString modelAlphaDir =
+            QDir(modelRoot).filePath(QStringLiteral("model-alpha"));
+        const QString modelBetaDir =
+            QDir(modelRoot).filePath(QStringLiteral("model-beta"));
+
+        REQUIRE(QDir().mkpath(modelAlphaDir));
+        REQUIRE(QDir().mkpath(modelBetaDir));
+        REQUIRE(QDir().mkpath(profileRoot));
+
+        writeTextFile(QDir(modelAlphaDir).filePath(QStringLiteral("manifest.json")),
+                      QStringLiteral(R"({"model_id":"model-alpha","display_name":"alpha"})"));
+        writeTextFile(QDir(modelBetaDir).filePath(QStringLiteral("manifest.json")),
+                      QStringLiteral(R"({"model_id":"model-beta","display_name":"beta"})"));
+        writeTextFile(QDir(profileRoot).filePath(QStringLiteral("default.json")),
+                      QStringLiteral(
+                          R"({"schema_version":1,"profile_id":"default","model_policy":{"enabled":true,"mode":"conditional","model_id":"model-alpha"}})"));
+        writeTextFile(
+            QDir(profileRoot).filePath(QStringLiteral("high-security.json")),
+            QStringLiteral(
+                R"({"schema_version":1,"profile_id":"high-security","model_policy":{"enabled":true,"mode":"required","model_id":"model-beta"}})"));
+
+        AuraHomeGuard auraHome(homeSafetyRoot);
+
         aura::gui::SafetySettingsDialog dlg(QStringLiteral("default"));
+        auto* profileCombo =
+            dlg.findChild<QComboBox*>(QStringLiteral("safetyProfileCombo"));
+        auto* modelList =
+            dlg.findChild<QListWidget*>(QStringLiteral("safetyModelList"));
         auto* addBtn =
             dlg.findChild<QPushButton*>(QStringLiteral("safetyModelAddButton"));
         auto* rmBtn = dlg.findChild<QPushButton*>(
             QStringLiteral("safetyModelRemoveButton"));
+
+        REQUIRE(profileCombo != nullptr);
+        REQUIRE(modelList != nullptr);
         REQUIRE(addBtn != nullptr);
         REQUIRE(rmBtn != nullptr);
+
+        auto indexOfProfile = [&](const QString& id) {
+            return profileCombo->findData(id);
+        };
+        auto switchProfile = [&](const QString& id) {
+            const int index = indexOfProfile(id);
+            REQUIRE(index >= 0);
+            profileCombo->setCurrentIndex(index);
+            QApplication::processEvents();
+        };
+
         CHECK(addBtn->text().contains(QStringLiteral("선택")));
         CHECK(rmBtn->text().contains(QStringLiteral("해제")));
+
+        CHECK(modelList->count() >= 2);
+        switchProfile(QStringLiteral("default"));
+        CHECK(checkedModelIds(modelList) == QStringList{QStringLiteral("model-alpha")});
+
+        // User toggling should be replaced by selected profile defaults on switch.
+        setCheckedModelId(modelList, QStringLiteral("model-alpha"));
+        switchProfile(QStringLiteral("high-security"));
+        CHECK(checkedModelIds(modelList) == QStringList{QStringLiteral("model-beta")});
+
+        // Switching back resets to default model again.
+        setCheckedModelId(modelList, QStringLiteral("model-beta"));
+        switchProfile(QStringLiteral("default"));
+        CHECK(checkedModelIds(modelList) == QStringList{QStringLiteral("model-alpha")});
     }
 
     SUBCASE("analyze auto-discovers vendored Rizin without bin override") {

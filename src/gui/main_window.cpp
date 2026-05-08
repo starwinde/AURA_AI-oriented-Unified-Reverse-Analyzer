@@ -52,6 +52,7 @@
 #include <QPlainTextEdit>
 #include <QPoint>
 #include <QPushButton>
+#include <QProcess>
 #include <QSettings>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -938,6 +939,30 @@ void MainWindow::buildMenus() {
             this, &MainWindow::onSafetySettings);
     settingsMenu->addAction(safetyAct);
 
+    auto modelDir = QDir::cleanPath(QDir::homePath() +
+                                    QStringLiteral("/.aura/token-classification-models"));
+    QAction* modelManagerAct =
+        new QAction(ko ? QStringLiteral("모델 자산 관리...") : QStringLiteral("Model Asset Manager..."),
+                    this);
+    modelManagerAct->setObjectName(QStringLiteral("safetyModelAssetManagerAction"));
+    connect(modelManagerAct, &QAction::triggered, this, [modelDir] {
+        QProcess::startDetached(QStringLiteral("explorer"),
+                               QStringList() << modelDir);
+    });
+    settingsMenu->addAction(modelManagerAct);
+
+    QAction* modelFolderAct =
+        new QAction(ko ? QStringLiteral("모델 자산 폴더 열기")
+                       : QStringLiteral("Open Model Asset Folder"),
+                    this);
+    modelFolderAct->setObjectName(QStringLiteral("safetyModelAssetFolderAction"));
+    connect(modelFolderAct, &QAction::triggered, this, [modelDir] {
+        const QString cmd =
+            QStringLiteral("explorer \"%1\"").arg(modelDir);
+        QProcess::startDetached(cmd);
+    });
+    settingsMenu->addAction(modelFolderAct);
+
     auto* helpMenu = mb->addMenu(ko ? QStringLiteral("&도움말")
                                     : QStringLiteral("&Help"));
     // Phase 11.5 (P5 polish) — keyboard shortcuts cheat sheet (Ctrl+/).
@@ -1105,6 +1130,16 @@ bool MainWindow::openSafetySettingsForTest(const QString& profileId) {
 void MainWindow::onSafetySettings() {
     SafetySettingsDialog dlg(activeSafetyProfileId(), this);
     if (dlg.exec() != QDialog::Accepted) return;
+    const auto editedProfile = dlg.editedProfile();
+    std::string diagnostic;
+    if (!aura::safety::saveSafetyProfile(
+            dlg.selectedProfileId().toStdString(), editedProfile, &diagnostic)) {
+        QMessageBox::warning(
+            this, tr("Safety profile save failed"),
+            tr("Could not save safety profile: %1").arg(
+                QString::fromStdString(diagnostic)));
+        return;
+    }
     setActiveSafetyProfileId(dlg.selectedProfileId());
 }
 
