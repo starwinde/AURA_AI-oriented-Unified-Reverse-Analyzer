@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a GUI-accessible Safety Assets Settings flow so users can choose the active PII safety profile, inspect/change model, rule pack, and eval dataset selections, and have string protection use the selected profile.
+**Goal:** Add a GUI-accessible Safety Assets Settings flow so users can choose the active PII safety profile, inspect that profile's model, rule pack, and eval dataset selections, and have string protection use the selected profile.
 
-**Architecture:** Put asset discovery and profile resolution in the core safety module, not in GUI code. The GUI adds a focused settings dialog that persists the selected profile id in `QSettings`, while `MainWindow` resolves the active profile through the shared core API before scanning strings. Eval datasets are shown under an Evaluation grouping and persisted as profile configuration, but they do not directly affect live masking.
+**Architecture:** Put asset discovery and profile resolution in the core safety module, not in GUI code. The GUI adds a focused settings dialog that persists the selected profile id in `QSettings`, while `MainWindow` resolves the active profile through the shared core API before scanning strings. Model, rule pack, and eval dataset rows are derived from the selected profile. Eval datasets are shown under an Evaluation grouping, but they do not directly affect live masking.
 
 **Tech Stack:** C++17, Qt6 Widgets, `QSettings`, CMake/CTest, doctest, existing `aura::safety` module, existing `gui_smoke` offscreen Qt test.
 

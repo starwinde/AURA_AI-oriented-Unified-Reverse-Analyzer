@@ -7,15 +7,15 @@ Mode: autoplan, selective expansion
 ## Plan Summary
 
 This development should add a user-facing Safety Assets surface that lets users
-select the active PII safety profile, token classification model, rule packs,
-and eval datasets, then verifies that the selection is actually reflected in
-the GUI string-protection flow.
+select the active PII safety profile and inspect the selected profile's token
+classification model, rule packs, and eval datasets. It verifies that the
+selected profile is reflected in the GUI string-protection flow.
 
 The current repo already has the runtime asset layout under `~/.aura`, pinned
 runtime asset manifests, safety profiles, rule packs, and default GUI string
-protection. What is missing is a UI/UX layer for choosing those assets and a
-runtime contract that proves the GUI is using the selected configuration instead
-of always calling `loadDefaultSafetyProfile()`.
+protection. What is missing is a UI/UX layer for choosing the active profile
+that contains those assets and a runtime contract that proves the GUI is using
+the selected configuration instead of always calling `loadDefaultSafetyProfile()`.
 
 ## What Already Exists
 
