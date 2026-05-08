@@ -256,6 +256,7 @@ if(AURA_BUILD_TESTS)
     add_subdirectory(tests/unit/bootstrap)
     add_subdirectory(tests/unit/safety)
     add_subdirectory(tests/unit/mcp)
+    add_subdirectory(tests/integration/mcp_smoke)
 
     if(AURA_ENABLE_RIZIN)
         add_subdirectory(tests/integration/orchestrator_smoke)
