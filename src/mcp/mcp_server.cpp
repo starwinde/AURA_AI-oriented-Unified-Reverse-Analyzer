@@ -42,6 +42,25 @@ bool addOwnedArrayItem(cJSON* array, cJSON*& item) {
     return true;
 }
 
+bool hasObjectMember(const cJSON* object, const char* name) {
+    if (!cJSON_IsObject(object) || name == nullptr) {
+        return false;
+    }
+
+    const cJSON* child = object->child;
+    while (child != nullptr) {
+        if (child->string != nullptr && std::string(child->string) == name) {
+            return true;
+        }
+        child = child->next;
+    }
+    return false;
+}
+
+bool isValidJsonRpcId(const cJSON* id) {
+    return cJSON_IsString(id) || cJSON_IsNumber(id) || cJSON_IsNull(id);
+}
+
 cJSON* duplicateIdOrNull(const cJSON* id) {
     if (id == nullptr) {
         return cJSON_CreateNull();
@@ -209,11 +228,28 @@ cJSON* dispatchRequest(cJSON* request) {
         return jsonRpcError(nullptr, -32600, "Invalid Request");
     }
 
+    const bool has_id = hasObjectMember(request, "id");
     cJSON* id = cJSON_GetObjectItemCaseSensitive(request, "id");
+    if (has_id && !isValidJsonRpcId(id)) {
+        return jsonRpcError(nullptr, -32600, "Invalid Request");
+    }
+
+    cJSON* jsonrpc = cJSON_GetObjectItemCaseSensitive(request, "jsonrpc");
     cJSON* method = cJSON_GetObjectItemCaseSensitive(request, "method");
-    if (!cJSON_IsString(method) || method->valuestring == nullptr ||
-        method->valuestring[0] == '\0') {
+    const bool valid_envelope =
+        cJSON_IsString(jsonrpc) && jsonrpc->valuestring != nullptr &&
+        std::string(jsonrpc->valuestring) == "2.0" &&
+        cJSON_IsString(method) && method->valuestring != nullptr &&
+        method->valuestring[0] != '\0';
+    if (!valid_envelope) {
+        if (!has_id) {
+            return nullptr;
+        }
         return jsonRpcError(id, -32600, "Invalid Request");
+    }
+
+    if (!has_id) {
+        return nullptr;
     }
 
     const std::string method_name = method->valuestring;
