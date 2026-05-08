@@ -122,13 +122,36 @@ private:
     AuraCommandRunner runner_;
 };
 
+static std::string rizin_lookup_program() {
+    const char *override_bin = std::getenv("AURA_RIZIN_BIN");
+    if (override_bin && *override_bin) return override_bin;
+
+    const char *repo_root = std::getenv("AURA_REPO_ROOT");
+    if (!repo_root || !*repo_root) {
+        return "rizin";
+    }
+
+#ifdef _WIN32
+    const char *rel =
+        "third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/"
+        "rizin.exe";
+#else
+    const char *rel = "third_party/rizin/0.8.0-static/bin/rizin";
+#endif
+    std::filesystem::path candidate = std::filesystem::path(repo_root) / rel;
+    if (std::filesystem::exists(candidate)) return candidate.generic_string();
+
+    return "rizin";
+}
+
 }  // namespace
 
 // ── Tests ──────────────────────────────────────────────────────────────
 
 TEST_CASE("rizin probe: AVAILABLE when `rizin -v` returns version") {
+    const std::string rizin_program = rizin_lookup_program();
     FakeRunner fake;
-    fake.script("rizin", {"-v"},
+    fake.script(rizin_program.c_str(), {"-v"},
                 FakeResponse{
                     /*spawn_ok=*/true,
                     /*exit_code=*/0,
@@ -146,8 +169,9 @@ TEST_CASE("rizin probe: AVAILABLE when `rizin -v` returns version") {
 }
 
 TEST_CASE("rizin probe: ENGINE_MISSING when binary not found") {
+    const std::string rizin_program = rizin_lookup_program();
     FakeRunner fake;
-    fake.script("rizin", {"-v"},
+    fake.script(rizin_program.c_str(), {"-v"},
                 FakeResponse{
                     /*spawn_ok=*/false,
                     /*exit_code=*/-1,
@@ -394,8 +418,9 @@ TEST_CASE("retdec probe: ENGINE_MISSING when binary not found") {
 // ── Slice 9: rizin probe also surfaces stderr via raw_diagnostic ───────
 
 TEST_CASE("rizin probe: raw_diagnostic carries stderr when binary missing") {
+    const std::string rizin_program = rizin_lookup_program();
     FakeRunner fake;
-    fake.script("rizin", {"-v"},
+    fake.script(rizin_program.c_str(), {"-v"},
                 FakeResponse{
                     /*spawn_ok=*/false,
                     /*exit_code=*/-1,
@@ -553,8 +578,9 @@ TEST_CASE("rizin probe: TIMEOUT when runner flags timed_out") {
 // ── Slice 15: registry JSON envelope exposes raw_diagnostic field ─────
 
 TEST_CASE("probe_registry: collect_all envelope exposes raw_diagnostic per engine") {
+    const std::string rizin_program = rizin_lookup_program();
     FakeRunner fake;
-    fake.script("rizin", {"-v"},
+    fake.script(rizin_program.c_str(), {"-v"},
                 FakeResponse{false, -1, "", "rizin-stderr-marker"});
     fake.script("ghidra-decomp", {"--version"},
                 FakeResponse{false, -1, "", "ENOENT"});
@@ -649,9 +675,10 @@ static int64_t fake_clock_fn(void *ctx) {
 }
 
 TEST_CASE("probe_cache: serves cached envelope within TTL, refreshes after expiry") {
+    const std::string rizin_program = rizin_lookup_program();
     FakeRunner fake;
     // Initial scripts: rizin AVAILABLE, others unscripted (= ENGINE_MISSING).
-    fake.script("rizin", {"-v"},
+    fake.script(rizin_program.c_str(), {"-v"},
                 FakeResponse{true, 0, "rizin 0.8.0 build\n", ""});
 
     fake_now_ms = 1000;
@@ -666,7 +693,7 @@ TEST_CASE("probe_cache: serves cached envelope within TTL, refreshes after expir
     free(j1);
 
     // Re-script rizin as missing. Within TTL → cache hit, old result.
-    fake.script("rizin", {"-v"},
+    fake.script(rizin_program.c_str(), {"-v"},
                 FakeResponse{false, -1, "", "ENOENT"});
     fake_now_ms = 4000;  // 3 s elapsed, still under 5 s TTL
     char *j2 = nullptr;
@@ -688,9 +715,10 @@ TEST_CASE("probe_cache: serves cached envelope within TTL, refreshes after expir
 // ── Slice 6: probe_registry — collect_all + JSON envelope ──────────────
 
 TEST_CASE("probe_registry: collect_all emits JSON object with 5 engine keys") {
+    const std::string rizin_program = rizin_lookup_program();
     FakeRunner fake;
     // Script all five engines as ENGINE_MISSING (simplest uniform case).
-    fake.script("rizin", {"-v"},
+    fake.script(rizin_program.c_str(), {"-v"},
                 FakeResponse{false, -1, "", "ENOENT"});
     fake.script("ghidra-decomp", {"--version"},
                 FakeResponse{false, -1, "", "ENOENT"});
@@ -749,9 +777,10 @@ TEST_CASE("ghidra-decomp probe: ENGINE_MISSING when binary not found") {
 // already GREEN per slices 16-21.
 
 TEST_CASE("probe_registry: collect_all envelope surfaces TIMEOUT status") {
+    const std::string rizin_program = rizin_lookup_program();
     FakeRunner fake;
     // rizin spawns OK but is killed by the timeout watchdog.
-    fake.script("rizin", {"-v"},
+    fake.script(rizin_program.c_str(), {"-v"},
                 FakeResponse{/*spawn_ok=*/true, /*exit_code=*/-1,
                              /*stdout=*/"", /*stderr=*/"killed by timer",
                              /*timed_out=*/true});
@@ -813,8 +842,9 @@ TEST_CASE("aura_probe_status_str: stable wire identifiers for all 7 statuses") {
 // check. Pin the wire type with an unquoted-digit lookahead.
 
 TEST_CASE("probe_registry: probed_at_ms serializes as numeric JSON value") {
+    const std::string rizin_program = rizin_lookup_program();
     FakeRunner fake;
-    fake.script("rizin", {"-v"},
+    fake.script(rizin_program.c_str(), {"-v"},
                 FakeResponse{true, 0, "rizin 0.8.0 build\n", ""});
     fake.script("ghidra-decomp", {"--version"},
                 FakeResponse{false, -1, "", "ENOENT"});
@@ -862,8 +892,9 @@ TEST_CASE("probe_registry: probed_at_ms serializes as numeric JSON value") {
 // engine_id="ghidra-decomp". Pin the invariant for all 5 engines.
 
 TEST_CASE("probe_registry: parent key matches child engine_id for all 5 engines") {
+    const std::string rizin_program = rizin_lookup_program();
     FakeRunner fake;
-    fake.script("rizin", {"-v"},
+    fake.script(rizin_program.c_str(), {"-v"},
                 FakeResponse{true, 0, "rizin 0.8.0 build\n", ""});
     fake.script("ghidra-decomp", {"--version"},
                 FakeResponse{true, 0, "ghidra-decomp 11.0\n", ""});
@@ -1012,8 +1043,9 @@ TEST_CASE("angr probe: parsed version 9.2.x stays AVAILABLE") {
 // state the required version so the user knows what to upgrade to.
 
 TEST_CASE("rizin probe: parsed version below 0.7 yields VERSION_MISMATCH") {
+    const std::string rizin_program = rizin_lookup_program();
     FakeRunner fake;
-    fake.script("rizin", {"-v"},
+    fake.script(rizin_program.c_str(), {"-v"},
                 FakeResponse{true, 0, "rizin 0.6.3 @ linux-x86-64\n", ""});
 
     AuraProbeResult result{};
@@ -1030,8 +1062,9 @@ TEST_CASE("rizin probe: parsed version below 0.7 yields VERSION_MISMATCH") {
 // (guards against the new gate accidentally rejecting good versions).
 
 TEST_CASE("rizin probe: parsed version 0.8.x stays AVAILABLE") {
+    const std::string rizin_program = rizin_lookup_program();
     FakeRunner fake;
-    fake.script("rizin", {"-v"},
+    fake.script(rizin_program.c_str(), {"-v"},
                 FakeResponse{true, 0, "rizin 0.8.0 @ linux-x86-64\n", ""});
 
     AuraProbeResult result{};
@@ -1049,6 +1082,7 @@ TEST_CASE("rizin probe: parsed version 0.8.x stays AVAILABLE") {
 // for its host without re-probing locally.
 
 TEST_CASE("probe_registry: per-OS install_hint fields appear in JSON envelope") {
+    const std::string rizin_program = rizin_lookup_program();
     FakeRunner fake;
     // Drive ghidra-decomp into ENGINE_MISSING — that branch we know
     // populates all three per-OS slots.
@@ -1056,7 +1090,7 @@ TEST_CASE("probe_registry: per-OS install_hint fields appear in JSON envelope") 
                 FakeResponse{false, -1, "", "execvp ENOENT"});
     // Other engines: any spawn-fail is fine; we are only asserting on
     // ghidra-decomp's slot in the envelope.
-    fake.script("rizin", {"-v"},
+    fake.script(rizin_program.c_str(), {"-v"},
                 FakeResponse{false, -1, "", "execvp ENOENT"});
     fake.script("java", {"-version"},
                 FakeResponse{false, -1, "", "execvp ENOENT"});
