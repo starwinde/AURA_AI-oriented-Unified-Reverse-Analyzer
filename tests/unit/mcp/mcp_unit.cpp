@@ -3,6 +3,7 @@
 
 #include "aura/mcp/mcp_envelope.h"
 #include "mcp_path_policy.h"
+#include "mcp_tools.h"
 
 #include "cJSON.h"
 
@@ -25,6 +26,24 @@ std::string stringField(const cJSON* root, const char* name) {
     REQUIRE(cJSON_IsString(item));
     REQUIRE(item->valuestring != nullptr);
     return item->valuestring;
+}
+
+bool hasToolNamed(const cJSON* tools, const char* name) {
+    const cJSON* tool = nullptr;
+    cJSON_ArrayForEach(tool, tools) {
+        const cJSON* tool_name = field(tool, "name");
+        if (cJSON_IsString(tool_name) && tool_name->valuestring != nullptr &&
+            std::string(tool_name->valuestring) == name) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string errorCode(const cJSON* envelope) {
+    const cJSON* error = field(envelope, "error");
+    REQUIRE(cJSON_IsObject(error));
+    return stringField(error, "code");
 }
 
 void setEnvVar(const char* name, const std::string& value) {
@@ -396,4 +415,107 @@ TEST_CASE("path policy ignores malformed and empty env entries safely") {
     CHECK(decision.allowed);
     CHECK(decision.canonical_path == std::filesystem::canonical(file).string());
     CHECK(decision.error_code.empty());
+}
+
+TEST_CASE("mcp tool registry lists protected and raw tool names") {
+    cJSON* tools = aura_mcp_tools_list_json();
+    REQUIRE(cJSON_IsArray(tools));
+
+    CHECK(hasToolNamed(tools, "aura_probe_engines"));
+    CHECK(hasToolNamed(tools, "aura_info"));
+    CHECK(hasToolNamed(tools, "aura_analyze"));
+    CHECK(hasToolNamed(tools, "aura_list_functions"));
+    CHECK(hasToolNamed(tools, "aura_get_disassembly"));
+    CHECK(hasToolNamed(tools, "aura_get_cfg"));
+    CHECK(hasToolNamed(tools, "aura_get_llm_context"));
+    CHECK(hasToolNamed(tools, "aura_get_raw_disassembly"));
+    CHECK(hasToolNamed(tools, "aura_get_raw_decompile"));
+
+    cJSON_Delete(tools);
+}
+
+TEST_CASE("mcp tool registry objects include input schemas") {
+    cJSON* tools = aura_mcp_tools_list_json();
+    REQUIRE(cJSON_IsArray(tools));
+    REQUIRE(cJSON_GetArraySize(tools) > 0);
+
+    const cJSON* tool = nullptr;
+    cJSON_ArrayForEach(tool, tools) {
+        CHECK(cJSON_IsString(field(tool, "name")));
+        CHECK(cJSON_IsString(field(tool, "description")));
+        CHECK(cJSON_IsObject(field(tool, "inputSchema")));
+    }
+
+    cJSON_Delete(tools);
+}
+
+TEST_CASE("probe engine tool schema does not require binary arguments") {
+    cJSON* tools = aura_mcp_tools_list_json();
+    REQUIRE(cJSON_IsArray(tools));
+
+    const cJSON* probe_tool = nullptr;
+    const cJSON* tool = nullptr;
+    cJSON_ArrayForEach(tool, tools) {
+        const cJSON* tool_name = field(tool, "name");
+        if (cJSON_IsString(tool_name) && tool_name->valuestring != nullptr &&
+            std::string(tool_name->valuestring) == "aura_probe_engines") {
+            probe_tool = tool;
+            break;
+        }
+    }
+    REQUIRE(probe_tool != nullptr);
+
+    const cJSON* schema = field(probe_tool, "inputSchema");
+    REQUIRE(cJSON_IsObject(schema));
+    CHECK(stringField(schema, "type") == "object");
+    const cJSON* required = field(schema, "required");
+    REQUIRE(cJSON_IsArray(required));
+    CHECK(cJSON_GetArraySize(required) == 0);
+
+    cJSON_Delete(tools);
+}
+
+TEST_CASE("raw mcp tools are denied by default") {
+    cJSON* env =
+        aura_mcp_call_tool_json("aura_get_raw_disassembly", nullptr);
+    REQUIRE(env != nullptr);
+    CHECK(aura_mcp_envelope_is_valid(env) == 1);
+    CHECK(stringField(env, "status") == "error");
+    CHECK(stringField(env, "disclosure") == "protected");
+    CHECK(errorCode(env) == "raw_access_denied");
+    cJSON_Delete(env);
+
+    env = aura_mcp_call_tool_json("aura_get_raw_decompile", nullptr);
+    REQUIRE(env != nullptr);
+    CHECK(aura_mcp_envelope_is_valid(env) == 1);
+    CHECK(stringField(env, "status") == "error");
+    CHECK(stringField(env, "disclosure") == "protected");
+    CHECK(errorCode(env) == "raw_access_denied");
+    cJSON_Delete(env);
+}
+
+TEST_CASE("known protected mcp tool placeholder is not implemented") {
+    cJSON* env = aura_mcp_call_tool_json("aura_analyze", nullptr);
+    REQUIRE(env != nullptr);
+    CHECK(aura_mcp_envelope_is_valid(env) == 1);
+    CHECK(stringField(env, "status") == "error");
+    CHECK(stringField(env, "disclosure") == "protected");
+    CHECK(errorCode(env) == "tool_not_implemented");
+    cJSON_Delete(env);
+}
+
+TEST_CASE("unknown and null mcp tool names are not found") {
+    cJSON* env = aura_mcp_call_tool_json("aura_missing", nullptr);
+    REQUIRE(env != nullptr);
+    CHECK(aura_mcp_envelope_is_valid(env) == 1);
+    CHECK(stringField(env, "status") == "error");
+    CHECK(errorCode(env) == "tool_not_found");
+    cJSON_Delete(env);
+
+    env = aura_mcp_call_tool_json(nullptr, nullptr);
+    REQUIRE(env != nullptr);
+    CHECK(aura_mcp_envelope_is_valid(env) == 1);
+    CHECK(stringField(env, "status") == "error");
+    CHECK(errorCode(env) == "tool_not_found");
+    cJSON_Delete(env);
 }

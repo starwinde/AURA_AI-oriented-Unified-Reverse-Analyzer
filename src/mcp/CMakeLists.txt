@@ -1,6 +1,7 @@
 add_library(aura_mcp_core STATIC
     mcp_envelope.cpp
     mcp_path_policy.cpp
+    mcp_tools.cpp
 )
 target_include_directories(aura_mcp_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
