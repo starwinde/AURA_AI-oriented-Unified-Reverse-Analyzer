@@ -3,7 +3,8 @@
 
 - **Status**: Accepted
 - **Date**: 2026-05-07
-- **Related**: ADR-0054, ADR-0056, ADR-0057, PRD D-39, PRD D-42
+- **Related**: ADR-0054, ADR-0056, ADR-0057, PRD D-39, PRD D-42, ADR-0059
+- ADR-0059 defines whether Safety UI model edits are selection edits or asset edits.
 
 ## Context
 
