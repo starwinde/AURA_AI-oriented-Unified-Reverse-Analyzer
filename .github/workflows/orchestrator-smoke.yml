@@ -153,10 +153,8 @@ jobs:
         shell: pwsh
         run: |
           $bin = (Resolve-Path "third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin.exe").Path
-          $sleigh = (Resolve-Path "third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/lib/rizin/plugins/rz_ghidra_sleigh").Path
           "AURA_RIZIN_BIN=$bin" | Out-File -Append $env:GITHUB_ENV
           "AURA_RIZIN_PATH=$bin" | Out-File -Append $env:GITHUB_ENV
-          "SLEIGHHOME=$sleigh" | Out-File -Append $env:GITHUB_ENV
 
       - name: Run ctest (all integration labels)
         run: ctest --test-dir build-smoke --output-on-failure -C Debug -L integration
