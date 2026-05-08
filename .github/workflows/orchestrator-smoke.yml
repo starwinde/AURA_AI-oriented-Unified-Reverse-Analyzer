@@ -15,10 +15,13 @@ on:
       - 'tests/integration/**'
       - 'tests/fixtures/**'
       - 'third_party/rizin/manifest.json'
+      - 'third_party/rz-ghidra/manifest.json'
       - 'third_party/doctest/**'
       - 'third_party/CLI11/**'
       - 'scripts/fetch_external_tools.sh'
       - 'scripts/fetch_external_tools.ps1'
+      - 'install.sh'
+      - 'install.ps1'
       - 'CMakeLists.txt'
       - '.github/workflows/orchestrator-smoke.yml'
   pull_request:
@@ -29,10 +32,13 @@ on:
       - 'tests/integration/**'
       - 'tests/fixtures/**'
       - 'third_party/rizin/manifest.json'
+      - 'third_party/rz-ghidra/manifest.json'
       - 'third_party/doctest/**'
       - 'third_party/CLI11/**'
       - 'scripts/fetch_external_tools.sh'
       - 'scripts/fetch_external_tools.ps1'
+      - 'install.sh'
+      - 'install.ps1'
       - 'CMakeLists.txt'
       - '.github/workflows/orchestrator-smoke.yml'
   workflow_dispatch:
@@ -64,6 +70,9 @@ jobs:
 
       - name: Fetch external tools (Rizin)
         run: bash scripts/fetch_external_tools.sh
+
+      - name: Verify root installer lightweight path
+        run: ./install.sh --skip-safety-assets
 
       - name: Verify Rizin binary
         run: |
@@ -121,6 +130,10 @@ jobs:
       - name: Fetch external tools (Rizin)
         shell: pwsh
         run: ./scripts/fetch_external_tools.ps1
+
+      - name: Verify root installer lightweight path
+        shell: pwsh
+        run: ./install.ps1 -SkipSafetyAssets
 
       - name: Verify Rizin binary
         shell: pwsh

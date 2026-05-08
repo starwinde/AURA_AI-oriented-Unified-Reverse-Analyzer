@@ -119,6 +119,15 @@ The full install creates a user runtime registry under `~/.aura`:
 The default token classification model is large. First install may download
 about 3GB. The files are runtime assets and are not committed to Git.
 
+Rizin `0.8.0` is the mandatory reference engine. Extracted Rizin/rz-ghidra
+binaries are runtime artifacts and are not committed to Git; fetch scripts must
+download and verify the Rizin bundle before AURA can use the vendored path.
+rz-ghidra `0.8.0` is the preferred pseudo-C provider when present, but the
+installer must not be described as installing it automatically until the
+fetch/install scripts actually do that. If pseudo-C support is absent, AURA must
+show deterministic install guidance and must not fabricate pseudo-C from
+disassembly output.
+
 For a lightweight Rizin/GUI setup without model or dataset downloads:
 
 ```powershell

@@ -77,6 +77,7 @@ third_party/capstone/build/
 # External runtime tools fetched by scripts/fetch_external_tools.{sh,ps1}
 # (manifest.json is committed; extracted prebuilt is not). See ADR-0032.
 third_party/rizin/[0-9]*/
+third_party/rz-ghidra/[0-9]*/
 
 # Optional external engines/data are resolved by env var, PATH, or a local
 # runtime drop. Do not vendor their full upstream source trees in this repo.

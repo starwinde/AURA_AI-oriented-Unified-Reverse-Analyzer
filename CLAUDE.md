@@ -39,7 +39,7 @@ AURA는 C/C++로 구현하는 외부 엔진 통합형 리버스 엔지니어링 
 3. **MVP 집중**: 플러그인 시스템, 스크립트 인터페이스는 MVP 이후로 유보.
 4. **정적 링크 우선**: AURA 가 직접 빌드하는 의존성은 가능하면 정적 링크. 외부 도구는 별도 프로세스 (D-27 Rizin subprocess-only 정책).
 5. **외부 의존성 채택 기준** (D-26, 2026-04-26 reformulation): 라이선스 호환 (Apache 2.0 / MIT / BSD / Public Domain) + foundational commodity (산업 표준 존재 영역) + AURA 차별점 아님 = extract 우선 검토. **Differentiation 영역** (LLM 통합, UX, 협업, project DB, AI rename) = 커스텀 유지. 신규 의존성 도입은 `rules.md §10` 사용자 확인 gate 적용.
-6. **Rizin 실행 기준 (ADR-0052, 2026-05-06)**: 현재 적용 기준은 **Rizin 0.8.0 shared64 + rz-ghidra 0.8.0** 이다. 기본 Windows 경로는 `third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/bin/rizin.exe`, `SLEIGHHOME` 은 같은 prefix 의 `lib/rizin/plugins/rz_ghidra_sleigh` 를 사용한다. 0.8.2 계열은 신규 시연/테스트 기준으로 사용하지 않는다.
+6. **Rizin 실행 기준 (ADR-0052, 2026-05-06)**: 현재 필수 reference engine 은 fetch script 가 내려받아 검증한 **Rizin 0.8.0 shared64** 이다. 추출된 `third_party/rizin/0.8.0-shared/...` 바이너리는 Git 에 커밋하지 않는다. rz-ghidra 0.8.0 은 존재할 때 preferred pseudo-C provider 이지만, fetch/install script 가 실제 설치하기 전까지 자동 설치된다고 문서화하지 않는다. 부재 시 CLI/GUI 는 deterministic install guidance 를 노출하고 pseudo-C 를 조작해 만들지 않는다. 0.8.2 계열은 신규 시연/테스트 기준으로 사용하지 않는다.
 7. **보안 제품 경고 처리 (ADR-0052)**: Defender/SmartScreen/EDR 이 AURA/Rizin/rz-ghidra 를 cyber security risk 로 표시할 수 있다. 이는 RE 도구의 외부 analyzer/plugin DLL/임의 바이너리 분석 특성상 예상 가능한 경고이며, 코드로 우회하지 않는다. 출처/버전/경로/해시와 로컬 분석/LLM 자동 전송 없음 원칙을 문서로 설명한다.
 
 ---
