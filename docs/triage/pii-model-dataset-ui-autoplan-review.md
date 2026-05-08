@@ -209,5 +209,7 @@ Eval dataset selection
 ## Final Recommendation
 
 Approve the feature with one scope correction: call it **Safety Assets Settings**
-and make profile selection the primary UX. Model and rule pack choices affect
-runtime detection. Eval dataset choices affect evaluation/reporting only.
+and make profile selection the primary UX. In the current implementation, rule
+pack choices affect live runtime string detection. Model choices and model
+policy are surfaced and validated but are not yet wired into live masking. Eval
+dataset choices affect evaluation/reporting only.

@@ -1116,13 +1116,15 @@ uses **Settings → Safety Assets** to choose the active safety profile.
 
 The active safety profile controls:
 
-- the token classification model used by the PII policy;
+- the token classification model selected for future model-backed PII policy;
 - the rule packs used for live string detection;
 - the eval datasets used for evaluation and reports;
 - the model policy, including whether missing model execution degrades or blocks.
 
-Rule packs and the selected model affect live string protection. Eval datasets
-are evaluation inputs; changing them does not directly change live masking.
+In the current implementation, rule packs affect live string protection. The
+selected model and model policy are visible and validated but are not yet wired
+into live masking. Eval datasets are evaluation inputs; changing them does not
+directly change live masking.
 
 Custom assets can be added under:
 
