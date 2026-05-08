@@ -184,6 +184,5 @@ TEST_CASE("success builder rejects non-object caller data") {
                                            "protected");
     CHECK(env == nullptr);
 
-    // The rejected node remains caller-owned. Do not delete it here because
-    // the pre-fix implementation incorrectly consumed it on failure.
+    cJSON_Delete(data);
 }
