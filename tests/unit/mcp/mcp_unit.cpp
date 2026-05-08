@@ -536,22 +536,32 @@ TEST_CASE("raw mcp tools are denied by default") {
 TEST_CASE("mcp tool dispatch does not take ownership of caller args") {
     cJSON* args = cJSON_CreateObject();
     REQUIRE(args != nullptr);
-    REQUIRE(cJSON_AddStringToObject(args, "binary_path", "sample.bin") !=
+    REQUIRE(cJSON_AddStringToObject(args, "unused", "sample.bin") !=
             nullptr);
 
     cJSON* env = aura_mcp_call_tool_json("aura_analyze", args);
     REQUIRE(env != nullptr);
     CHECK(aura_mcp_envelope_is_valid(env) == 1);
-    CHECK(errorCode(env) == "tool_not_implemented");
+    CHECK(errorCode(env) == "invalid_arguments");
     cJSON_Delete(env);
 
     CHECK(cJSON_IsObject(args));
-    CHECK(stringField(args, "binary_path") == "sample.bin");
+    CHECK(stringField(args, "unused") == "sample.bin");
     cJSON_Delete(args);
 }
 
-TEST_CASE("known protected mcp tool placeholder is not implemented") {
+TEST_CASE("bridged protected mcp tool validates missing arguments") {
     cJSON* env = aura_mcp_call_tool_json("aura_analyze", nullptr);
+    REQUIRE(env != nullptr);
+    CHECK(aura_mcp_envelope_is_valid(env) == 1);
+    CHECK(stringField(env, "status") == "error");
+    CHECK(stringField(env, "disclosure") == "protected");
+    CHECK(errorCode(env) == "invalid_arguments");
+    cJSON_Delete(env);
+}
+
+TEST_CASE("known non-bridge protected mcp tool placeholder is not implemented") {
+    cJSON* env = aura_mcp_call_tool_json("aura_list_functions", nullptr);
     REQUIRE(env != nullptr);
     CHECK(aura_mcp_envelope_is_valid(env) == 1);
     CHECK(stringField(env, "status") == "error");

@@ -95,6 +95,34 @@ void unsetEnvVar(const char* name) {
 #endif
 }
 
+std::string getEnvVar(const char* name) {
+    const char* value = std::getenv(name);
+    return value != nullptr ? value : "";
+}
+
+class ScopedEnvVar {
+  public:
+    explicit ScopedEnvVar(const char* name)
+        : name_(name), had_value_(std::getenv(name) != nullptr),
+          old_value_(getEnvVar(name)) {}
+
+    ~ScopedEnvVar() {
+        if (had_value_) {
+            setEnvVar(name_, old_value_);
+        } else {
+            unsetEnvVar(name_);
+        }
+    }
+
+    ScopedEnvVar(const ScopedEnvVar&) = delete;
+    ScopedEnvVar& operator=(const ScopedEnvVar&) = delete;
+
+  private:
+    const char* name_;
+    bool        had_value_;
+    std::string old_value_;
+};
+
 fs::path findRepoRoot() {
     fs::path cur = fs::current_path();
     for (;;) {
@@ -332,6 +360,8 @@ TEST_CASE("aura-mcp validates request envelopes and suppresses notifications") {
 TEST_CASE("aura_info fails closed when allowed roots are missing") {
     const char* exe_env = std::getenv("AURA_MCP_BIN");
     REQUIRE(exe_env != nullptr);
+    ScopedEnvVar repo_root_env("AURA_REPO_ROOT");
+    ScopedEnvVar allowed_roots_env("AURA_MCP_ALLOWED_ROOTS");
 
     const fs::path repo_root = findRepoRoot();
     REQUIRE(!repo_root.empty());
@@ -363,13 +393,12 @@ TEST_CASE("aura_info fails closed when allowed roots are missing") {
 TEST_CASE("aura-mcp bridges probe, info, and analyze through aura CLI") {
     const char* exe_env = std::getenv("AURA_MCP_BIN");
     REQUIRE(exe_env != nullptr);
+    ScopedEnvVar repo_root_env("AURA_REPO_ROOT");
+    ScopedEnvVar allowed_roots_env("AURA_MCP_ALLOWED_ROOTS");
 
     const fs::path repo_root = findRepoRoot();
     REQUIRE(!repo_root.empty());
-    if (!cliLooksAvailable(repo_root)) {
-        WARN("aura CLI is not built in build-trim-gui; skipping bridge smoke");
-        return;
-    }
+    REQUIRE(cliLooksAvailable(repo_root));
 
     const fs::path fixture =
         repo_root / "tests" / "fixtures" / "bin" / "elf_smoke.x86_64";
