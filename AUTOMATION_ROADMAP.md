@@ -34,8 +34,8 @@
 > env var guidance 를 출력한다. 구현된 bridge surface 는
 > `aura_probe_engines`, `aura_info`, `aura_analyze`,
 > `aura_get_disassembly`, `aura_get_cfg`, `aura_get_llm_context` 이며,
-> `aura_list_functions` 는 등록만 되고 미구현, raw disassembly/decompile 은
-> 의도적으로 deny. Protected output 은 analyze string masking, disassembly
+> `aura_list_functions` 는 V1 surface 에서 제외된 후속 작업이고, raw
+> disassembly/decompile 은 의도적으로 deny. Protected output 은 analyze string masking, disassembly
 > raw text/op_str omission, raw access denial 을 현재 계약으로 둔다.
 
 | Phase | 제목 | 상태 | 위치 |
