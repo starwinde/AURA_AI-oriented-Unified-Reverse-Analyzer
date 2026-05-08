@@ -25,15 +25,23 @@ public:
                                   QWidget* parent = nullptr);
 
     QString selectedProfileId() const;
+    aura::safety::SafetyProfile editedProfile() const;
     QString statusText() const;
 
 private:
     void populate();
     void updateSummary();
+    void updateStatusFromEditedProfile(const aura::safety::SafetyProfile& profile,
+                                      bool usedFallback,
+                                      bool found);
     void addAssetRows(QListWidget* list,
                       const std::vector<aura::safety::SafetyAssetRef>& refs,
                       const std::vector<std::string>& selectedIds,
                       bool showEmptyMessage);
+    void applyModelSelectionToProfile(
+        aura::safety::SafetyProfile& profile) const;
+    std::vector<std::string> selectedModelIds() const;
+    void updateModelSelectionFromChecked();
 
     aura::safety::SafetyAssetRegistry m_registry;
     QString m_initialProfileId;

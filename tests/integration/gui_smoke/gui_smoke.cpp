@@ -22,6 +22,7 @@
 #include <QFile>
 #include <QMouseEvent>
 #include <QPlainTextEdit>
+#include <QPushButton>
 #include <QPoint>
 #include <QPointF>
 #include <QSettings>
@@ -38,6 +39,7 @@
 #include "string_table_model.h"
 #include "cfg_pane.h"
 #include "hex_pane.h"
+#include "safety_settings_dialog.h"
 #include <QImage>
 #include <QStackedWidget>
 #include <QString>
@@ -166,6 +168,18 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         aura::gui::MainWindow second;
         CHECK(second.activeSafetyProfileIdForTest()
               == QStringLiteral("deleted-profile"));
+    }
+
+    SUBCASE("safety model edit means selection change only") {
+        aura::gui::SafetySettingsDialog dlg(QStringLiteral("default"));
+        auto* addBtn =
+            dlg.findChild<QPushButton*>(QStringLiteral("safetyModelAddButton"));
+        auto* rmBtn = dlg.findChild<QPushButton*>(
+            QStringLiteral("safetyModelRemoveButton"));
+        REQUIRE(addBtn != nullptr);
+        REQUIRE(rmBtn != nullptr);
+        CHECK(addBtn->text().contains(QStringLiteral("선택")));
+        CHECK(rmBtn->text().contains(QStringLiteral("해제")));
     }
 
     SUBCASE("analyze auto-discovers vendored Rizin without bin override") {
