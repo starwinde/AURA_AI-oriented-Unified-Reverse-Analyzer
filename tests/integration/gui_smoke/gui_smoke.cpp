@@ -53,6 +53,7 @@
 
 #include "code_syntax_highlighter.h"
 #include "main_window.h"
+#include "aura/safety/string_safety.h"
 
 namespace {
 
@@ -246,8 +247,6 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         REQUIRE(home.isValid());
 
         const QString homeSafetyRoot = home.path();
-        const QString profileRoot =
-            QDir(homeSafetyRoot).filePath(QStringLiteral("safety-profiles"));
         const QString modelRoot =
             QDir(homeSafetyRoot).filePath(QStringLiteral("token-classification-models"));
         const QString modelAlphaDir =
@@ -257,21 +256,44 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
 
         REQUIRE(QDir().mkpath(modelAlphaDir));
         REQUIRE(QDir().mkpath(modelBetaDir));
-        REQUIRE(QDir().mkpath(profileRoot));
 
         writeTextFile(QDir(modelAlphaDir).filePath(QStringLiteral("manifest.json")),
                       QStringLiteral(R"({"model_id":"model-alpha","display_name":"alpha"})"));
         writeTextFile(QDir(modelBetaDir).filePath(QStringLiteral("manifest.json")),
                       QStringLiteral(R"({"model_id":"model-beta","display_name":"beta"})"));
-        writeTextFile(QDir(profileRoot).filePath(QStringLiteral("default.json")),
-                      QStringLiteral(
-                          R"({"schema_version":1,"profile_id":"default","model_policy":{"enabled":true,"mode":"conditional","model_id":"model-alpha"}})"));
-        writeTextFile(
-            QDir(profileRoot).filePath(QStringLiteral("high-security.json")),
-            QStringLiteral(
-                R"({"schema_version":1,"profile_id":"high-security","model_policy":{"enabled":true,"mode":"required","model_id":"model-beta"}})"));
-
         AuraHomeGuard auraHome(homeSafetyRoot);
+
+        aura::safety::SafetyProfile defaultProfile;
+        defaultProfile.model_policy.enabled = true;
+        defaultProfile.model_policy.mode =
+            aura::safety::ModelPolicyMode::Conditional;
+        defaultProfile.model_policy.model_id = "model-alpha";
+        defaultProfile.rule_pack_ids = {};
+        defaultProfile.eval_dataset_ids = {};
+        defaultProfile.token_classification_model_id = "model-alpha";
+        defaultProfile.token_classification_enabled = true;
+
+        aura::safety::SafetyProfile highSecurityProfile;
+        highSecurityProfile.model_policy.enabled = true;
+        highSecurityProfile.model_policy.mode =
+            aura::safety::ModelPolicyMode::Required;
+        highSecurityProfile.model_policy.model_id = "model-beta";
+        highSecurityProfile.rule_pack_ids = {};
+        highSecurityProfile.eval_dataset_ids = {};
+        highSecurityProfile.token_classification_model_id = "model-beta";
+        highSecurityProfile.token_classification_enabled = true;
+
+        std::string profileDiagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", defaultProfile, &profileDiagnostic));
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "high-security", highSecurityProfile, &profileDiagnostic));
+
+        const auto loadedDefaultForTest =
+            aura::safety::resolveSelectedSafetyProfile(
+                QStringLiteral("default").toStdString());
+        REQUIRE(loadedDefaultForTest.found);
+        CHECK(loadedDefaultForTest.profile.model_policy.model_id == "model-alpha");
 
         aura::gui::SafetySettingsDialog dlg(QStringLiteral("default"));
         auto* profileCombo =
@@ -302,18 +324,50 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         CHECK(rmBtn->text().contains(QStringLiteral("해제")));
 
         CHECK(modelList->count() >= 2);
+        QStringList rowIds;
+        for (int i = 0; i < modelList->count(); ++i) {
+            auto* item = modelList->item(i);
+            REQUIRE(item != nullptr);
+            rowIds.push_back(item->data(Qt::UserRole).toString());
+        }
+        CHECK(rowIds.contains(QStringLiteral("model-alpha")));
+        CHECK(rowIds.contains(QStringLiteral("model-beta")));
+
+        auto requireCheckedModel = [&](const QListWidget* list,
+                                      const char* expected) {
+            const auto checked = checkedModelIds(list);
+            CHECK(checked.size() == 1);
+            if (checked.empty()) return;
+
+            const QByteArray actual = checked.front().toUtf8();
+            const QByteArray expectedBytes(expected);
+            CHECK(actual == expectedBytes);
+        };
+
+        const int defaultIndex = indexOfProfile(QStringLiteral("default"));
+        const int highIndex = indexOfProfile(QStringLiteral("high-security"));
+        REQUIRE(defaultIndex >= 0);
+        REQUIRE(highIndex >= 0);
+        REQUIRE(defaultIndex != highIndex);
+        if (profileCombo->currentIndex() == defaultIndex) {
+            profileCombo->setCurrentIndex(highIndex);
+        } else {
+            profileCombo->setCurrentIndex(defaultIndex);
+        }
+        QApplication::processEvents();
         switchProfile(QStringLiteral("default"));
-        CHECK(checkedModelIds(modelList) == QStringList{QStringLiteral("model-alpha")});
+        requireCheckedModel(modelList, "model-alpha");
+
+        setCheckedModelId(modelList, QStringLiteral("model-alpha"));
 
         // User toggling should be replaced by selected profile defaults on switch.
-        setCheckedModelId(modelList, QStringLiteral("model-alpha"));
         switchProfile(QStringLiteral("high-security"));
-        CHECK(checkedModelIds(modelList) == QStringList{QStringLiteral("model-beta")});
+        requireCheckedModel(modelList, "model-beta");
 
         // Switching back resets to default model again.
         setCheckedModelId(modelList, QStringLiteral("model-beta"));
         switchProfile(QStringLiteral("default"));
-        CHECK(checkedModelIds(modelList) == QStringList{QStringLiteral("model-alpha")});
+        requireCheckedModel(modelList, "model-alpha");
     }
 
     SUBCASE("analyze auto-discovers vendored Rizin without bin override") {
