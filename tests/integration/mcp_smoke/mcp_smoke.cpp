@@ -8,6 +8,7 @@ extern "C" {
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <string>
 
@@ -17,6 +18,8 @@ extern "C" {
 #endif
 
 namespace {
+
+namespace fs = std::filesystem;
 
 std::string quotePath(const std::string& path) {
 #ifdef _WIN32
@@ -74,6 +77,47 @@ std::string runCommand(const std::string& cmd) {
     const int rc = pclose(pipe);
     CHECK(rc == 0);
     return out;
+}
+
+void setEnvVar(const char* name, const std::string& value) {
+#ifdef _WIN32
+    _putenv_s(name, value.c_str());
+#else
+    setenv(name, value.c_str(), 1);
+#endif
+}
+
+void unsetEnvVar(const char* name) {
+#ifdef _WIN32
+    _putenv_s(name, "");
+#else
+    unsetenv(name);
+#endif
+}
+
+fs::path findRepoRoot() {
+    fs::path cur = fs::current_path();
+    for (;;) {
+        if (fs::exists(cur / "tests" / "fixtures" / "bin" /
+                       "elf_smoke.x86_64")) {
+            return cur;
+        }
+        if (!cur.has_parent_path() || cur == cur.parent_path()) {
+            break;
+        }
+        cur = cur.parent_path();
+    }
+    return {};
+}
+
+bool cliLooksAvailable(const fs::path& repo_root) {
+#ifdef _WIN32
+    return fs::exists(repo_root / "build-trim-gui" / "src" / "cli" /
+                      "Release" / "aura.exe");
+#else
+    return fs::exists(repo_root / "build-trim-gui" / "src" / "cli" /
+                      "aura");
+#endif
 }
 
 cJSON* parseLine(const std::string& text, int line_index) {
@@ -282,5 +326,84 @@ TEST_CASE("aura-mcp validates request envelopes and suppresses notifications") {
     cJSON_Delete(invalid_id_object);
     cJSON_Delete(invalid_id_array);
     cJSON_Delete(invalid_id_bool);
+    std::remove(input_path.c_str());
+}
+
+TEST_CASE("aura_info fails closed when allowed roots are missing") {
+    const char* exe_env = std::getenv("AURA_MCP_BIN");
+    REQUIRE(exe_env != nullptr);
+
+    const fs::path repo_root = findRepoRoot();
+    REQUIRE(!repo_root.empty());
+    const fs::path fixture =
+        repo_root / "tests" / "fixtures" / "bin" / "elf_smoke.x86_64";
+    REQUIRE(fs::exists(fixture));
+
+    unsetEnvVar("AURA_MCP_ALLOWED_ROOTS");
+    setEnvVar("AURA_REPO_ROOT", repo_root.string());
+
+    const std::string input_path = tempInputPath("no_allowed_roots");
+    {
+        std::ofstream input(input_path, std::ios::binary);
+        REQUIRE(input.good());
+        input << "{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"tools/call\","
+                 "\"params\":{\"name\":\"aura_info\",\"arguments\":"
+              << "{\"binary_path\":\"" << fixture.generic_string()
+              << "\"}}}\n";
+    }
+
+    const std::string out = runMcpWithInput(exe_env, input_path);
+    CHECK(out.find("\"id\":20") != std::string::npos);
+    CHECK(out.find("no_allowed_roots") != std::string::npos);
+    CHECK(out.find("\\\"status\\\":\\\"error\\\"") != std::string::npos);
+
+    std::remove(input_path.c_str());
+}
+
+TEST_CASE("aura-mcp bridges probe, info, and analyze through aura CLI") {
+    const char* exe_env = std::getenv("AURA_MCP_BIN");
+    REQUIRE(exe_env != nullptr);
+
+    const fs::path repo_root = findRepoRoot();
+    REQUIRE(!repo_root.empty());
+    if (!cliLooksAvailable(repo_root)) {
+        WARN("aura CLI is not built in build-trim-gui; skipping bridge smoke");
+        return;
+    }
+
+    const fs::path fixture =
+        repo_root / "tests" / "fixtures" / "bin" / "elf_smoke.x86_64";
+    REQUIRE(fs::exists(fixture));
+
+    setEnvVar("AURA_REPO_ROOT", repo_root.string());
+    setEnvVar("AURA_MCP_ALLOWED_ROOTS", repo_root.string());
+
+    const std::string input_path = tempInputPath("bridge");
+    {
+        std::ofstream input(input_path, std::ios::binary);
+        REQUIRE(input.good());
+        input << "{\"jsonrpc\":\"2.0\",\"id\":30,\"method\":\"tools/call\","
+                 "\"params\":{\"name\":\"aura_probe_engines\","
+                 "\"arguments\":{}}}\n";
+        input << "{\"jsonrpc\":\"2.0\",\"id\":31,\"method\":\"tools/call\","
+                 "\"params\":{\"name\":\"aura_info\",\"arguments\":"
+              << "{\"binary_path\":\"" << fixture.generic_string()
+              << "\"}}}\n";
+        input << "{\"jsonrpc\":\"2.0\",\"id\":32,\"method\":\"tools/call\","
+                 "\"params\":{\"name\":\"aura_analyze\",\"arguments\":"
+              << "{\"binary_path\":\"" << fixture.generic_string()
+              << "\"}}}\n";
+    }
+
+    const std::string out = runMcpWithInput(exe_env, input_path);
+    CHECK(out.find("\"id\":30") != std::string::npos);
+    CHECK(out.find("\"id\":31") != std::string::npos);
+    CHECK(out.find("\"id\":32") != std::string::npos);
+    CHECK(out.find("mcp_schema_version") != std::string::npos);
+    CHECK(out.find("aura_probe_engines") != std::string::npos);
+    CHECK(out.find("sha256") != std::string::npos);
+    CHECK(out.find("functions") != std::string::npos);
+    CHECK(out.find("aura_cli") != std::string::npos);
+
     std::remove(input_path.c_str());
 }

@@ -1,4 +1,5 @@
 add_library(aura_mcp_core STATIC
+    mcp_cli_bridge.cpp
     mcp_envelope.cpp
     mcp_path_policy.cpp
     mcp_tools.cpp

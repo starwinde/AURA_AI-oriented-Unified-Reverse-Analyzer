@@ -1,6 +1,7 @@
 #include "mcp_tools.h"
 
 #include "aura/mcp/mcp_envelope.h"
+#include "mcp_cli_bridge.h"
 
 extern "C" {
 #include "cJSON.h"
@@ -209,8 +210,6 @@ extern "C" cJSON* aura_mcp_tools_list_json() {
 
 extern "C" cJSON* aura_mcp_call_tool_json(const char* name,
                                            cJSON*      args_or_null) {
-    (void)args_or_null;
-
     const ToolSpec* tool = findTool(name);
     if (tool == nullptr) {
         return aura_mcp_envelope_error("unknown/1.0",
@@ -226,6 +225,11 @@ extern "C" cJSON* aura_mcp_call_tool_json(const char* name,
                                        "raw_access_denied",
                                        "Raw MCP tools are disabled by default",
                                        "protected");
+    }
+
+    if (streq(name, "aura_probe_engines") || streq(name, "aura_info") ||
+        streq(name, "aura_analyze")) {
+        return aura_mcp_cli_bridge_call_json(name, args_or_null);
     }
 
     return aura_mcp_envelope_error("protected/1.0",
