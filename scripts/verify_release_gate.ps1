@@ -30,6 +30,9 @@ try {
     Invoke-Step "Build mcp_unit" {
         cmake --build $BuildDir --config $Config --target mcp_unit
     }
+    Invoke-Step "Build mcp_smoke" {
+        cmake --build $BuildDir --config $Config --target mcp_smoke
+    }
     Invoke-Step "Build full tree" {
         cmake --build $BuildDir --config $Config
     }

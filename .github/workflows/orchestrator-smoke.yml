@@ -89,6 +89,7 @@ jobs:
 
       - name: Build orchestrator_smoke + cli_smoke + gui_smoke
         run: |
+          cmake --build build-smoke --target mcp_smoke -j$(nproc)
           cmake --build build-smoke --target orchestrator_smoke -j$(nproc)
           cmake --build build-smoke --target cli_smoke -j$(nproc)
           cmake --build build-smoke --target probe_engines_smoke -j$(nproc)
@@ -157,6 +158,7 @@ jobs:
 
       - name: Build orchestrator_smoke + cli_smoke + gui_smoke (Debug)
         run: |
+          cmake --build build-smoke --target mcp_smoke --config Debug -- /m
           cmake --build build-smoke --target orchestrator_smoke --config Debug -- /m
           cmake --build build-smoke --target cli_smoke --config Debug -- /m
           cmake --build build-smoke --target probe_engines_smoke --config Debug -- /m

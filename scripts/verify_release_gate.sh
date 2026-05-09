@@ -23,5 +23,6 @@ run_step() {
 
 run_step "Build probe_unit" cmake --build "$BUILD_DIR" --config "$CONFIG" --target probe_unit
 run_step "Build mcp_unit" cmake --build "$BUILD_DIR" --config "$CONFIG" --target mcp_unit
+run_step "Build mcp_smoke" cmake --build "$BUILD_DIR" --config "$CONFIG" --target mcp_smoke
 run_step "Build full tree" cmake --build "$BUILD_DIR" --config "$CONFIG"
 run_step "Run full CTest suite" ctest --test-dir "$BUILD_DIR" -C "$CONFIG" --output-on-failure

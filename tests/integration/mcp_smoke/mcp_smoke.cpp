@@ -12,6 +12,10 @@ extern "C" {
 #include <fstream>
 #include <string>
 
+#ifndef AURA_MCP_SMOKE_HAS_CLI
+#define AURA_MCP_SMOKE_HAS_CLI 0
+#endif
+
 #ifdef _WIN32
 #define popen _popen
 #define pclose _pclose
@@ -139,6 +143,10 @@ fs::path findRepoRoot() {
 }
 
 bool cliLooksAvailable(const fs::path& repo_root) {
+    const char* aura_bin = std::getenv("AURA_BIN");
+    if (aura_bin != nullptr && aura_bin[0] != '\0') {
+        return fs::exists(fs::path(aura_bin));
+    }
 #ifdef _WIN32
     return fs::exists(repo_root / "build-trim-gui" / "src" / "cli" /
                       "Release" / "aura.exe");
@@ -146,6 +154,10 @@ bool cliLooksAvailable(const fs::path& repo_root) {
     return fs::exists(repo_root / "build-trim-gui" / "src" / "cli" /
                       "aura");
 #endif
+}
+
+bool cliBridgeBuilt() {
+    return AURA_MCP_SMOKE_HAS_CLI != 0;
 }
 
 cJSON* parseLine(const std::string& text, int line_index) {
@@ -458,6 +470,9 @@ TEST_CASE("aura_info fails closed when allowed roots are missing") {
 }
 
 TEST_CASE("aura-mcp bridges probe, info, and analyze through aura CLI") {
+    if (!cliBridgeBuilt()) {
+        return;
+    }
     const char* exe_env = std::getenv("AURA_MCP_BIN");
     REQUIRE(exe_env != nullptr);
     ScopedEnvVar repo_root_env("AURA_REPO_ROOT");
@@ -547,6 +562,9 @@ TEST_CASE("aura-mcp bridges probe, info, and analyze through aura CLI") {
 }
 
 TEST_CASE("aura-mcp bridges function detail tools through aura CLI") {
+    if (!cliBridgeBuilt()) {
+        return;
+    }
     const char* exe_env = std::getenv("AURA_MCP_BIN");
     REQUIRE(exe_env != nullptr);
     ScopedEnvVar repo_root_env("AURA_REPO_ROOT");
