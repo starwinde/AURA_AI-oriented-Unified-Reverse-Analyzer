@@ -32,7 +32,26 @@ tests (Phase 2--8) which validate individual module behavior.
 - Compiler: GCC/Clang with C11/C++17
 - Build types: Release + ASAN Debug
 - LM Studio: `http://localhost:1234/v1` (model: `openai/gpt-oss-20b`)
-- ctest baseline: 20/20 PASS
+- Historical MVP ctest baseline: 20/20 PASS
+- Current local release gate: `build-trim-gui` Release, 12/12 PASS as of 2026-05-09
+
+---
+
+## Local Release Gate
+
+Use the release-gate wrapper before merging or shipping a branch:
+
+```powershell
+.\scripts\verify_release_gate.ps1
+```
+
+The wrapper intentionally rebuilds `probe_unit` and `mcp_unit` before the full CTest pass. Running raw `ctest` first can execute stale test binaries when only a subset of targets was rebuilt.
+
+Expected current `build-trim-gui` Release result:
+
+```text
+100% tests passed, 0 tests failed out of 12
+```
 
 ---
 

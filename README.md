@@ -294,6 +294,30 @@ cd build && make package  # aura_2.0.0_arm64.deb + aura-2.0.0-Linux.tar.gz
 cmake --build build --target docs  # docs/api/html/
 ```
 
+### Release verification
+
+The release gate expects a configured `build-trim-gui` tree. If it does not
+exist yet, configure it first:
+
+```powershell
+cmake -S . -B build-trim-gui -DCMAKE_BUILD_TYPE=Release
+```
+
+Before merging or pushing a completed branch on Windows:
+
+```powershell
+.\scripts\verify_release_gate.ps1
+```
+
+On Linux or WSL:
+
+```sh
+sh scripts/verify_release_gate.sh build-trim-gui Release
+```
+
+Pass a different build directory/configuration only when that tree is already
+configured and contains the AURA test targets.
+
 ---
 
 ## Project Structure

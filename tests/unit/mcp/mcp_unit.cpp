@@ -259,6 +259,29 @@ TEST_CASE("error envelope has ADR-0057 shape and validates") {
     cJSON_Delete(env);
 }
 
+TEST_CASE("error envelope rejects empty or null code/message") {
+    CHECK(aura_mcp_envelope_error("aura_probe_engines/1.0",
+                                  "probe_result",
+                                  nullptr,
+                                  "missing code",
+                                  "protected") == nullptr);
+    CHECK(aura_mcp_envelope_error("aura_probe_engines/1.0",
+                                  "probe_result",
+                                  "",
+                                  "missing code",
+                                  "protected") == nullptr);
+    CHECK(aura_mcp_envelope_error("aura_probe_engines/1.0",
+                                  "probe_result",
+                                  "missing message",
+                                  nullptr,
+                                  "protected") == nullptr);
+    CHECK(aura_mcp_envelope_error("aura_probe_engines/1.0",
+                                  "probe_result",
+                                  "missing message",
+                                  "",
+                                  "protected") == nullptr);
+}
+
 TEST_CASE("warning append adds warning strings and preserves validity") {
     cJSON* env = aura_mcp_envelope_success("aura_probe_engines/1.0",
                                            "probe_result",

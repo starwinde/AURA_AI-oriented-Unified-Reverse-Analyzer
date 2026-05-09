@@ -1,5 +1,9 @@
 #include "aura/mcp/mcp_envelope.h"
 
+extern "C" {
+#include "cJSON.h"
+}
+
 #include <cstring>
 
 namespace {
@@ -10,9 +14,7 @@ bool nonempty(const char* value) {
     return value != nullptr && value[0] != '\0';
 }
 
-bool stringFieldEquals(const cJSON* object,
-                       const char*  name,
-                       const char*  expected) {
+bool stringFieldEquals(const cJSON* object, const char* name, const char* expected) {
     const cJSON* item = cJSON_GetObjectItemCaseSensitive(object, name);
     return cJSON_IsString(item) && item->valuestring != nullptr &&
            std::strcmp(item->valuestring, expected) == 0;
@@ -27,10 +29,6 @@ bool addString(cJSON* object, const char* name, const char* value) {
     return cJSON_AddStringToObject(object, name, value) != nullptr;
 }
 
-bool addNull(cJSON* object, const char* name) {
-    return cJSON_AddNullToObject(object, name) != nullptr;
-}
-
 bool addOwnedItem(cJSON* object, const char* name, cJSON* item) {
     return item != nullptr && cJSON_AddItemToObject(object, name, item);
 }
@@ -39,12 +37,12 @@ bool addOwnedArrayItem(cJSON* array, cJSON* item) {
     return item != nullptr && cJSON_AddItemToArray(array, item);
 }
 
-cJSON* createBaseEnvelope(const char* tool_schema_version,
-                          const char* kind,
-                          const char* status,
-                          const char* disclosure) {
-    if (!nonempty(tool_schema_version) || !nonempty(kind) ||
-        !nonempty(status) || !nonempty(disclosure)) {
+cJSON* base(const char* tool_schema_version,
+            const char* kind,
+            const char* status,
+            const char* disclosure) {
+    if (!nonempty(tool_schema_version) || !nonempty(kind) || !nonempty(status) ||
+        !nonempty(disclosure)) {
         return nullptr;
     }
 
@@ -59,15 +57,9 @@ cJSON* createBaseEnvelope(const char* tool_schema_version,
         !addString(root, "kind", kind) ||
         !addString(root, "status", status) ||
         !addString(root, "disclosure", disclosure) ||
-        !addNull(root, "audit") ||
+        !cJSON_AddNullToObject(root, "audit") ||
         !addOwnedItem(root, "warnings", warnings)) {
         cJSON_Delete(warnings);
-        cJSON_Delete(root);
-        return nullptr;
-    }
-
-    const cJSON* audit = cJSON_GetObjectItemCaseSensitive(root, "audit");
-    if (!cJSON_IsArray(warnings) || !cJSON_IsNull(audit)) {
         cJSON_Delete(root);
         return nullptr;
     }
@@ -78,52 +70,50 @@ cJSON* createBaseEnvelope(const char* tool_schema_version,
 }  // namespace
 
 extern "C" cJSON* aura_mcp_envelope_success(const char* tool_schema_version,
-                                             const char* kind,
-                                             cJSON*      data_or_null,
-                                             const char* disclosure) {
+                                            const char* kind,
+                                            cJSON*      data_or_null,
+                                            const char* disclosure) {
     if (data_or_null != nullptr && !cJSON_IsObject(data_or_null)) {
         return nullptr;
     }
 
-    cJSON* root =
-        createBaseEnvelope(tool_schema_version, kind, "ok", disclosure);
+    cJSON* root = base(tool_schema_version, kind, "ok", disclosure);
     if (root == nullptr) {
         return nullptr;
     }
 
+    if (!cJSON_AddNullToObject(root, "error")) {
+        cJSON_Delete(root);
+        return nullptr;
+    }
+
     cJSON* data = data_or_null != nullptr ? data_or_null : cJSON_CreateObject();
-    const bool caller_owned_data = data_or_null != nullptr;
     if (data == nullptr) {
         cJSON_Delete(root);
         return nullptr;
     }
 
-    if (!addNull(root, "error") || !addOwnedItem(root, "data", data)) {
-        if (!caller_owned_data) {
+    if (!addOwnedItem(root, "data", data)) {
+        if (data_or_null == nullptr) {
             cJSON_Delete(data);
         }
         cJSON_Delete(root);
         return nullptr;
     }
 
-    if (!aura_mcp_envelope_is_valid(root)) {
-        cJSON_Delete(root);
-        return nullptr;
-    }
     return root;
 }
 
 extern "C" cJSON* aura_mcp_envelope_error(const char* tool_schema_version,
-                                           const char* kind,
-                                           const char* code,
-                                           const char* message,
-                                           const char* disclosure) {
+                                          const char* kind,
+                                          const char* code,
+                                          const char* message,
+                                          const char* disclosure) {
     if (!nonempty(code) || !nonempty(message)) {
         return nullptr;
     }
 
-    cJSON* root =
-        createBaseEnvelope(tool_schema_version, kind, "error", disclosure);
+    cJSON* root = base(tool_schema_version, kind, "error", disclosure);
     if (root == nullptr) {
         return nullptr;
     }
@@ -134,24 +124,25 @@ extern "C" cJSON* aura_mcp_envelope_error(const char* tool_schema_version,
         return nullptr;
     }
 
+    if (!cJSON_AddNullToObject(root, "data")) {
+        cJSON_Delete(error);
+        cJSON_Delete(root);
+        return nullptr;
+    }
+
     if (!addString(error, "code", code) ||
         !addString(error, "message", message) ||
-        !addNull(root, "data") ||
         !addOwnedItem(root, "error", error)) {
         cJSON_Delete(error);
         cJSON_Delete(root);
         return nullptr;
     }
 
-    if (!aura_mcp_envelope_is_valid(root)) {
-        cJSON_Delete(root);
-        return nullptr;
-    }
     return root;
 }
 
-extern "C" cJSON* aura_mcp_envelope_add_warning(cJSON*      envelope,
-                                                 const char* warning) {
+extern "C" cJSON* aura_mcp_envelope_add_warning(cJSON* envelope,
+                                                const char* warning) {
     if (!cJSON_IsObject(envelope) || !nonempty(warning)) {
         return nullptr;
     }
@@ -187,6 +178,7 @@ extern "C" int aura_mcp_envelope_is_valid(const cJSON* envelope) {
     if (!cJSON_IsArray(warnings) || !cJSON_IsNull(audit)) {
         return 0;
     }
+
     const cJSON* warning = nullptr;
     cJSON_ArrayForEach(warning, warnings) {
         if (!cJSON_IsString(warning) || !nonempty(warning->valuestring)) {
@@ -207,7 +199,6 @@ extern "C" int aura_mcp_envelope_is_valid(const cJSON* envelope) {
 
     const cJSON* data = cJSON_GetObjectItemCaseSensitive(envelope, "data");
     const cJSON* error = cJSON_GetObjectItemCaseSensitive(envelope, "error");
-
     if (is_ok) {
         return cJSON_IsObject(data) && cJSON_IsNull(error) ? 1 : 0;
     }
@@ -215,8 +206,5 @@ extern "C" int aura_mcp_envelope_is_valid(const cJSON* envelope) {
     if (!cJSON_IsNull(data) || !cJSON_IsObject(error)) {
         return 0;
     }
-    return hasStringField(error, "code") &&
-                   hasStringField(error, "message")
-               ? 1
-               : 0;
+    return hasStringField(error, "code") && hasStringField(error, "message") ? 1 : 0;
 }
