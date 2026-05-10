@@ -330,6 +330,9 @@ public:
     bool setStringDisplayModeAt(int stringRow, int displayMode);
     QString stringProtectedValueAt(int stringRow) const;
     bool analyzeBinaryAt(int row, AuraAnalysisLevel level);
+    bool analyzeBinaryAt(int row,
+                         AuraAnalysisLevel level,
+                         bool enableStringProtection);
     bool decompileFunctionAt(int functionRow);  // for test
     bool disassembleFunctionAt(int functionRow);  // for test (Phase 11.3.7)
     bool renameFunctionAt(int functionRow, const QString& newName);
@@ -514,7 +517,9 @@ private:
     void saveUiState();
 
     int  selectedProjectRow() const;
-    bool runAnalyze(int row, AuraAnalysisLevel level);
+    bool runAnalyze(int row,
+                    AuraAnalysisLevel level,
+                    bool enableStringProtection);
     bool runDecompile(quint64 funcAddr);
     AuraArtifactCacheKey decompileArtifactKey(quint64 funcAddr,
                                               const QString& backend) const;

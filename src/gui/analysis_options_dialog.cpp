@@ -2,6 +2,7 @@
 
 #include "analysis_options_dialog.h"
 
+#include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -41,6 +42,21 @@ AnalysisOptionsDialog::AnalysisOptionsDialog(const QString& binaryPath,
     form->addRow(ko ? QStringLiteral("바이너리:")
                     : QStringLiteral("Binary:"), pathEdit);
     outer->addLayout(form);
+
+    m_enableStringProtection = new QCheckBox(
+        ko ? QStringLiteral("문자열 마스킹/보호 스캔 사용")
+           : QStringLiteral("Enable string masking/protection scan"),
+        this);
+    m_enableStringProtection->setChecked(false);
+    outer->addWidget(m_enableStringProtection);
+
+    auto* protectionHint = new QLabel(
+        ko ? QStringLiteral("켜면 이번 분석에서 문자열 안전 스캔과 마스킹 후보를 생성합니다.")
+           : QStringLiteral("When enabled, this analysis generates string safety findings and masked values."),
+        this);
+    protectionHint->setStyleSheet(QStringLiteral("color: gray;"));
+    protectionHint->setWordWrap(true);
+    outer->addWidget(protectionHint);
 
     // Level radio group.
     auto* levelBox    = new QGroupBox(
@@ -88,6 +104,10 @@ AuraAnalysisLevel AnalysisOptionsDialog::selectedLevel() const {
     if (m_radioAdvanced && m_radioAdvanced->isChecked())
         return AURA_ANALYSIS_LEVEL_ADVANCED;
     return AURA_ANALYSIS_LEVEL_FULL;
+}
+
+bool AnalysisOptionsDialog::stringProtectionEnabled() const {
+    return m_enableStringProtection && m_enableStringProtection->isChecked();
 }
 
 }  // namespace aura::gui

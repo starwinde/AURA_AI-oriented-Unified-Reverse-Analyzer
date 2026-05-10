@@ -2095,7 +2095,9 @@ int MainWindow::selectedProjectRow() const {
     return idx.isValid() ? idx.row() : -1;
 }
 
-bool MainWindow::runAnalyze(int row, AuraAnalysisLevel level) {
+bool MainWindow::runAnalyze(int row,
+                            AuraAnalysisLevel level,
+                            bool enableStringProtection) {
     const auto* rec = m_projectModel ? m_projectModel->recordAt(row) : nullptr;
     if (!rec) return false;
 
@@ -2233,8 +2235,17 @@ bool MainWindow::runAnalyze(int row, AuraAnalysisLevel level) {
         const AuraStringRecord* str =
             aura_rizin_analyze_body_strings(body);
         m_strings.reserve(static_cast<int>(body->strings_count));
-        const auto safetyProfile = activeSafetyProfile();
-        updateSafetyStatusText();
+        aura::safety::SafetyProfile safetyProfile;
+        if (enableStringProtection) {
+            safetyProfile = activeSafetyProfile();
+            updateSafetyStatusText();
+        } else {
+            m_safetyStatusText =
+                useKoreanUi()
+                    ? QStringLiteral("Safety: 이번 분석에서 비활성화")
+                    : QStringLiteral("Safety: disabled for this analysis");
+            if (statusBar()) statusBar()->showMessage(m_safetyStatusText, 4000);
+        }
         for (size_t i = 0; str && i < body->strings_count; ++i) {
             GuiStringRecord s;
             s.stringId = str[i].string_id;
@@ -2252,47 +2263,60 @@ bool MainWindow::runAnalyze(int row, AuraAnalysisLevel level) {
             s.content = QString::fromUtf8(str[i].content[0] ? str[i].content : "");
             s.source  = QString::fromUtf8(str[i].provenance.source);
 
-            auto findings = aura::safety::scanStringWithRulePacks(
-                s.content.toStdString(), safetyProfile);
-            const auto protectedView =
-                aura::safety::buildProtectedStringView(s.content.toStdString(),
-                                                       std::string(),
-                                                       std::move(findings));
-            s.maskedContent = QString::fromStdString(protectedView.masked);
-            s.protectedValue =
-                QString::fromStdString(protectedView.protected_value);
-            s.hasProtection = !protectedView.findings.empty();
-            for (const auto& f : protectedView.findings) {
-                GuiStringRecord::ProtectionFinding gf;
-                gf.detectorId = QString::fromStdString(f.detector_id);
-                gf.kind = QString::fromStdString(f.kind);
-                gf.startOffset = static_cast<int>(f.start);
-                gf.endOffset = static_cast<int>(f.end);
-                gf.confidence = f.confidence;
-                gf.maskToken = QString::fromStdString(f.mask_token);
-                s.findings.push_back(std::move(gf));
+            if (enableStringProtection) {
+                auto findings = aura::safety::scanStringWithRulePacks(
+                    s.content.toStdString(), safetyProfile);
+                const auto protectedView =
+                    aura::safety::buildProtectedStringView(s.content.toStdString(),
+                                                           std::string(),
+                                                           std::move(findings));
+                s.maskedContent = QString::fromStdString(protectedView.masked);
+                s.protectedValue =
+                    QString::fromStdString(protectedView.protected_value);
+                s.hasProtection = !protectedView.findings.empty();
+                for (const auto& f : protectedView.findings) {
+                    GuiStringRecord::ProtectionFinding gf;
+                    gf.detectorId = QString::fromStdString(f.detector_id);
+                    gf.kind = QString::fromStdString(f.kind);
+                    gf.startOffset = static_cast<int>(f.start);
+                    gf.endOffset = static_cast<int>(f.end);
+                    gf.confidence = f.confidence;
+                    gf.maskToken = QString::fromStdString(f.mask_token);
+                    s.findings.push_back(std::move(gf));
+                }
+                if (s.hasProtection) {
+                    QStringList tokens;
+                    for (const auto& f : s.findings) tokens << f.maskToken;
+                    tokens.removeDuplicates();
+                    s.protectionSummary =
+                        useKoreanUi()
+                            ? QStringLiteral("마스킹 가능: %1")
+                                  .arg(tokens.join(QStringLiteral(", ")))
+                            : QStringLiteral("Maskable: %1")
+                                  .arg(tokens.join(QStringLiteral(", ")));
+                }
+                refreshProtectedValue(s);
+            } else {
+                s.maskedContent.clear();
+                s.protectedValue = s.content;
+                s.exportValue = s.content;
+                s.hasProtection = false;
+                s.findings.clear();
+                s.protectionSummary.clear();
             }
-            if (s.hasProtection) {
-                QStringList tokens;
-                for (const auto& f : s.findings) tokens << f.maskToken;
-                tokens.removeDuplicates();
-                s.protectionSummary =
-                    useKoreanUi()
-                        ? QStringLiteral("마스킹 가능: %1")
-                              .arg(tokens.join(QStringLiteral(", ")))
-                        : QStringLiteral("Maskable: %1")
-                              .arg(tokens.join(QStringLiteral(", ")));
-            }
-            refreshProtectedValue(s);
             m_strings.push_back(std::move(s));
         }
-        applyStoredStringOverrides(m_projectPath,
-                                   currentFingerprintHex(m_currentSha256),
-                                   &m_strings);
+        if (enableStringProtection) {
+            applyStoredStringOverrides(m_projectPath,
+                                       currentFingerprintHex(m_currentSha256),
+                                       &m_strings);
+        }
         if (m_stringsModel) m_stringsModel->setStrings(m_strings);
-        persistStringProtectionRows(m_projectPath,
-                                    currentFingerprintHex(m_currentSha256),
-                                    m_strings);
+        if (enableStringProtection) {
+            persistStringProtectionRows(m_projectPath,
+                                        currentFingerprintHex(m_currentSha256),
+                                        m_strings);
+        }
 
         // Phase 11.4.3 (P4.PP1 C4): mirror call_edges / variables /
         // type_facts so generateTypePropagationCandidates can walk
@@ -2396,8 +2420,12 @@ bool MainWindow::runAnalyze(int row, AuraAnalysisLevel level) {
         return false;
     }
 
-    statusBar()->showMessage(
-        QStringLiteral("분석 완료: 함수 %1개").arg(m_functions.size()));
+    QString analyzeDoneMessage =
+        QStringLiteral("분석 완료: 함수 %1개").arg(m_functions.size());
+    if (!enableStringProtection) {
+        analyzeDoneMessage += QStringLiteral(" | ") + m_safetyStatusText;
+    }
+    statusBar()->showMessage(analyzeDoneMessage);
 
     if (m_decompilePane) {
         m_decompilePane->clearCache();
@@ -2479,9 +2507,13 @@ bool MainWindow::runAnalyze(int row, AuraAnalysisLevel level) {
             for (auto* b : bodies) if (b) std::free(b);
         }
 
-        statusBar()->showMessage(
+        QString decompileDoneMessage =
             QStringLiteral("분석 완료: 함수 %1개 (decompile cache: %2/%1)")
-                .arg(N).arg(filled + cacheHits));
+                .arg(N).arg(filled + cacheHits);
+        if (!enableStringProtection) {
+            decompileDoneMessage += QStringLiteral(" | ") + m_safetyStatusText;
+        }
+        statusBar()->showMessage(decompileDoneMessage);
         m_decompilePane->showPlaceholder(
             QStringLiteral("// 좌측 함수 목록에서 함수를 선택하세요."));
     }
@@ -2499,6 +2531,15 @@ bool MainWindow::runAnalyze(int row, AuraAnalysisLevel level) {
         }
         m_fullDisasmPane->setFunctionLabels(labels);
         runFullDisasmOverview();
+        if (!enableStringProtection && statusBar()) {
+            const QString currentStatus = statusBar()->currentMessage();
+            if (!currentStatus.contains(m_safetyStatusText)) {
+                statusBar()->showMessage(
+                    currentStatus.isEmpty()
+                        ? m_safetyStatusText
+                        : currentStatus + QStringLiteral(" | ") + m_safetyStatusText);
+            }
+        }
     }
 
     // Wire selection → decompile (re-bind every analyze, since model reset
@@ -2522,7 +2563,13 @@ bool MainWindow::runAnalyze(int row, AuraAnalysisLevel level) {
 }
 
 bool MainWindow::analyzeBinaryAt(int row, AuraAnalysisLevel level) {
-    return runAnalyze(row, level);
+    return analyzeBinaryAt(row, level, true);
+}
+
+bool MainWindow::analyzeBinaryAt(int row,
+                                 AuraAnalysisLevel level,
+                                 bool enableStringProtection) {
+    return runAnalyze(row, level, enableStringProtection);
 }
 
 bool MainWindow::runDecompile(quint64 funcAddr) {
@@ -3517,7 +3564,7 @@ void MainWindow::onAnalyzeClicked() {
 
     AnalysisOptionsDialog dlg(QString::fromUtf8(rec->path), this);
     if (dlg.exec() != QDialog::Accepted) return;
-    runAnalyze(row, dlg.selectedLevel());
+    runAnalyze(row, dlg.selectedLevel(), dlg.stringProtectionEnabled());
 }
 
 void MainWindow::onTableDoubleClicked(const QModelIndex& idx) {
@@ -3526,7 +3573,7 @@ void MainWindow::onTableDoubleClicked(const QModelIndex& idx) {
     if (!rec) return;
     AnalysisOptionsDialog dlg(QString::fromUtf8(rec->path), this);
     if (dlg.exec() != QDialog::Accepted) return;
-    runAnalyze(idx.row(), dlg.selectedLevel());
+    runAnalyze(idx.row(), dlg.selectedLevel(), dlg.stringProtectionEnabled());
 }
 
 void MainWindow::onNewProject() {

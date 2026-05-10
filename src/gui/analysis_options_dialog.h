@@ -13,6 +13,7 @@ extern "C" {
 }
 
 class QRadioButton;
+class QCheckBox;
 
 namespace aura::gui {
 
@@ -23,8 +24,10 @@ public:
                                    QWidget*       parent = nullptr);
 
     AuraAnalysisLevel selectedLevel() const;
+    bool stringProtectionEnabled() const;
 
 private:
+    QCheckBox*    m_enableStringProtection = nullptr;
     QRadioButton* m_radioFull  = nullptr;
     QRadioButton* m_radioQuick = nullptr;
     QRadioButton* m_radioAdvanced = nullptr;

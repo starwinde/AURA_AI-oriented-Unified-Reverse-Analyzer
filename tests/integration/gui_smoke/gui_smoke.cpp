@@ -53,6 +53,7 @@
 #include <cstdlib>
 
 #include "code_syntax_highlighter.h"
+#include "analysis_options_dialog.h"
 #include "main_window.h"
 #include "aura/safety/string_safety.h"
 
@@ -311,6 +312,9 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
     const QString fixture = QDir(repoRoot())
         .filePath(QStringLiteral("tests/fixtures/bin/elf_smoke.x86_64"));
     REQUIRE(QFile::exists(fixture));
+    const QString stringFixture = QDir(repoRoot())
+        .filePath(QStringLiteral("tests/fixtures/bin/pe_smoke.x86_64.exe"));
+    REQUIRE(QFile::exists(stringFixture));
 
     aura::gui::MainWindow window;
 
@@ -382,6 +386,14 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
                 QStringLiteral("safetyModelAssetFolderAction"));
         CHECK(modelManagerAction != nullptr);
         CHECK(modelFolderAction != nullptr);
+    }
+
+    SUBCASE("analysis options dialog defaults string protection off") {
+        aura::gui::AnalysisOptionsDialog dlg(
+            QStringLiteral("C:/tmp/aura-test-binary.exe"));
+
+        CHECK_FALSE(dlg.stringProtectionEnabled());
+        CHECK(dlg.selectedLevel() == AURA_ANALYSIS_LEVEL_FULL);
     }
 
     SUBCASE("safety model selection resets when switching profiles") {
@@ -2241,6 +2253,24 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         CHECK(mdl->columnCount() == 1);
     }
 
+    SUBCASE("string protection can be disabled for analyze") {
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL, false));
+
+        const auto strs = window.stringList();
+        REQUIRE_FALSE(strs.isEmpty());
+
+        for (const auto& s : strs) {
+            CHECK_FALSE(s.hasProtection);
+            CHECK(s.maskedContent.isEmpty());
+            CHECK(s.protectedValue == s.content);
+            CHECK(s.exportValue == s.content);
+            CHECK(s.findings.isEmpty());
+            CHECK(s.protectionSummary.isEmpty());
+        }
+    }
+
     SUBCASE("strings tree maps child metadata rows back to their string row") {
         aura::gui::StringTableModel model;
         QVector<aura::gui::GuiStringRecord> rows;
@@ -2412,6 +2442,26 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         CHECK(reopened.stringProtectedValueAt(0) == QStringLiteral("[PERSISTED_1]"));
         CHECK(reopened.stringList()[0].alias == QStringLiteral("persisted_label"));
         CHECK(reopened.stringList()[0].maskedContent == QStringLiteral("[PERSISTED_1]"));
+    }
+
+    SUBCASE("stored string overrides do not reapply when protection is disabled") {
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL, true));
+        REQUIRE_FALSE(window.stringList().isEmpty());
+
+        REQUIRE(window.setStringAliasAt(0, QStringLiteral("disabled_alias")));
+        REQUIRE(window.setStringMaskTokenAt(0, QStringLiteral("DISABLED_MASK")));
+        REQUIRE(window.setStringDisplayModeAt(0, 2));
+        CHECK(window.stringProtectedValueAt(0) == QStringLiteral("[DISABLED_MASK]"));
+
+        aura::gui::MainWindow reopened;
+        REQUIRE(reopened.openProject(dbPath));
+        REQUIRE(reopened.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL, false));
+        REQUIRE_FALSE(reopened.stringList().isEmpty());
+        CHECK(reopened.stringList()[0].alias.isEmpty());
+        CHECK(reopened.stringList()[0].maskedContent.isEmpty());
+        CHECK(reopened.stringProtectedValueAt(0) == reopened.stringList()[0].content);
     }
 
     SUBCASE("symbols dock + list API populated after analyze (Phase 11.3.5)") {
