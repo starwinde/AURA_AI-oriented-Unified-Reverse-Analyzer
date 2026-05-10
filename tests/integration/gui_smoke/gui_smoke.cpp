@@ -23,6 +23,7 @@
 #include <QFile>
 #include <QIODevice>
 #include <QComboBox>
+#include <QLabel>
 #include <QMouseEvent>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -50,6 +51,7 @@
 #include <QTableView>
 #include <QTemporaryDir>
 
+#include <algorithm>
 #include <cstdlib>
 
 #include "code_syntax_highlighter.h"
@@ -342,6 +344,22 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         CHECK(sqliteTableExists(dbPath, "analysis_artifacts"));
     }
 
+    SUBCASE("safety settings dialog localizes Korean UI labels") {
+        const SettingsKeyGuard guard(QStringLiteral("ui/language"));
+        QSettings settings(QStringLiteral("AURA"), QStringLiteral("aura-gui"));
+        settings.setValue(QStringLiteral("ui/language"), QStringLiteral("ko"));
+
+        aura::gui::SafetySettingsDialog dlg(QStringLiteral("default"));
+        CHECK(dlg.windowTitle() == QStringLiteral("안전 자산"));
+        CHECK(dlg.statusText().contains(QStringLiteral("프로필")));
+        auto* summaryLabel =
+            dlg.findChild<QLabel*>(QStringLiteral("safetySummaryLabel"));
+        REQUIRE(summaryLabel != nullptr);
+        CHECK(summaryLabel->text().contains(QStringLiteral("프로필:")));
+        CHECK(summaryLabel->text().contains(QStringLiteral("모델:")));
+        CHECK(summaryLabel->text().contains(QStringLiteral("규칙 팩:")));
+    }
+
     SUBCASE("safety settings profile selection persists through QSettings") {
         const SettingsKeyGuard guard(QStringLiteral("safety/activeProfileId"));
 
@@ -407,14 +425,30 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
             QDir(modelRoot).filePath(QStringLiteral("model-alpha"));
         const QString modelBetaDir =
             QDir(modelRoot).filePath(QStringLiteral("model-beta"));
+        const QString rulePackRoot =
+            QDir(homeSafetyRoot).filePath(QStringLiteral("rule-packs"));
+        const QString ruleAlphaDir =
+            QDir(rulePackRoot).filePath(QStringLiteral("rule-alpha"));
+        const QString ruleBetaDir =
+            QDir(rulePackRoot).filePath(QStringLiteral("rule-beta"));
 
         REQUIRE(QDir().mkpath(modelAlphaDir));
         REQUIRE(QDir().mkpath(modelBetaDir));
+        REQUIRE(QDir().mkpath(ruleAlphaDir));
+        REQUIRE(QDir().mkpath(ruleBetaDir));
 
         writeTextFile(QDir(modelAlphaDir).filePath(QStringLiteral("manifest.json")),
                       QStringLiteral(R"({"model_id":"model-alpha","display_name":"alpha"})"));
         writeTextFile(QDir(modelBetaDir).filePath(QStringLiteral("manifest.json")),
                       QStringLiteral(R"({"model_id":"model-beta","display_name":"beta"})"));
+        writeTextFile(QDir(ruleAlphaDir).filePath(QStringLiteral("manifest.json")),
+                      QStringLiteral(R"({"schema_version":1,"pack_id":"rule-alpha","display_name":"alpha rules","rules_file":"rules.json"})"));
+        writeTextFile(QDir(ruleAlphaDir).filePath(QStringLiteral("rules.json")),
+                      QStringLiteral(R"({"schema_version":1,"rules":[{"id":"rule-alpha/test","kind":"test_alpha","pattern":"ALPHA-[0-9]+","confidence":0.90}]})"));
+        writeTextFile(QDir(ruleBetaDir).filePath(QStringLiteral("manifest.json")),
+                      QStringLiteral(R"({"schema_version":1,"pack_id":"rule-beta","display_name":"beta rules","rules_file":"rules.json"})"));
+        writeTextFile(QDir(ruleBetaDir).filePath(QStringLiteral("rules.json")),
+                      QStringLiteral(R"({"schema_version":1,"rules":[{"id":"rule-beta/test","kind":"test_beta","pattern":"BETA-[0-9]+","confidence":0.90}]})"));
         AuraHomeGuard auraHome(homeSafetyRoot);
 
         aura::safety::SafetyProfile defaultProfile;
@@ -422,7 +456,7 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         defaultProfile.model_policy.mode =
             aura::safety::ModelPolicyMode::Conditional;
         defaultProfile.model_policy.model_id = "model-alpha";
-        defaultProfile.rule_pack_ids = {};
+        defaultProfile.rule_pack_ids = {"rule-alpha"};
         defaultProfile.eval_dataset_ids = {};
         defaultProfile.token_classification_model_id = "model-alpha";
         defaultProfile.token_classification_enabled = true;
@@ -432,7 +466,7 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         highSecurityProfile.model_policy.mode =
             aura::safety::ModelPolicyMode::Required;
         highSecurityProfile.model_policy.model_id = "model-beta";
-        highSecurityProfile.rule_pack_ids = {};
+        highSecurityProfile.rule_pack_ids = {"rule-beta"};
         highSecurityProfile.eval_dataset_ids = {};
         highSecurityProfile.token_classification_model_id = "model-beta";
         highSecurityProfile.token_classification_enabled = true;
@@ -458,11 +492,20 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
             dlg.findChild<QPushButton*>(QStringLiteral("safetyModelAddButton"));
         auto* rmBtn = dlg.findChild<QPushButton*>(
             QStringLiteral("safetyModelRemoveButton"));
+        auto* rulePackList =
+            dlg.findChild<QListWidget*>(QStringLiteral("safetyRulePackList"));
+        auto* rulePackAddBtn = dlg.findChild<QPushButton*>(
+            QStringLiteral("safetyRulePackAddButton"));
+        auto* rulePackRmBtn = dlg.findChild<QPushButton*>(
+            QStringLiteral("safetyRulePackRemoveButton"));
 
         REQUIRE(profileCombo != nullptr);
         REQUIRE(modelList != nullptr);
         REQUIRE(addBtn != nullptr);
         REQUIRE(rmBtn != nullptr);
+        REQUIRE(rulePackList != nullptr);
+        REQUIRE(rulePackAddBtn != nullptr);
+        REQUIRE(rulePackRmBtn != nullptr);
 
         auto indexOfProfile = [&](const QString& id) {
             return profileCombo->findData(id);
@@ -476,6 +519,8 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
 
         CHECK(addBtn->text().contains(QStringLiteral("선택")));
         CHECK(rmBtn->text().contains(QStringLiteral("해제")));
+        CHECK(rulePackAddBtn->text().contains(QStringLiteral("선택")));
+        CHECK(rulePackRmBtn->text().contains(QStringLiteral("해제")));
 
         CHECK(modelList->count() >= 2);
         QStringList rowIds;
@@ -498,6 +543,56 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
             CHECK(actual == expectedBytes);
         };
 
+        auto checkedRulePackIds = [&](const QListWidget* list) {
+            QStringList ids;
+            REQUIRE(list != nullptr);
+            for (int i = 0; i < list->count(); ++i) {
+                const auto* item = list->item(i);
+                REQUIRE(item != nullptr);
+                if (item->checkState() == Qt::Checked) {
+                    ids.push_back(item->data(Qt::UserRole).toString());
+                }
+            }
+            ids.sort();
+            return ids;
+        };
+        auto clickRulePackSelection = [&](const QString& rulePackId,
+                                          bool checked) {
+            REQUIRE(rulePackList != nullptr);
+            REQUIRE(rulePackAddBtn != nullptr);
+            REQUIRE(rulePackRmBtn != nullptr);
+            for (int i = 0; i < rulePackList->count(); ++i) {
+                auto* item = rulePackList->item(i);
+                REQUIRE(item != nullptr);
+                if (item->data(Qt::UserRole).toString() == rulePackId) {
+                    rulePackList->setCurrentRow(i);
+                    QApplication::processEvents();
+                    if (checked) {
+                        rulePackAddBtn->click();
+                    } else {
+                        rulePackRmBtn->click();
+                    }
+                    QApplication::processEvents();
+                    return;
+                }
+            }
+            FAIL_CHECK("rule pack id not found: "
+                       << rulePackId.toStdString());
+        };
+        auto requireCheckedRulePacks = [&](std::initializer_list<const char*> ids) {
+            QStringList expected;
+            for (const char* id : ids) {
+                expected.push_back(QString::fromUtf8(id));
+            }
+            expected.sort();
+            CHECK(checkedRulePackIds(rulePackList) == expected);
+        };
+        auto sortedEditedRulePackIds = [&]() {
+            auto ids = dlg.editedProfile().rule_pack_ids;
+            std::sort(ids.begin(), ids.end());
+            return ids;
+        };
+
         const int defaultIndex = indexOfProfile(QStringLiteral("default"));
         const int highIndex = indexOfProfile(QStringLiteral("high-security"));
         REQUIRE(defaultIndex >= 0);
@@ -511,17 +606,37 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         QApplication::processEvents();
         switchProfile(QStringLiteral("default"));
         requireCheckedModel(modelList, "model-alpha");
+        requireCheckedRulePacks({"rule-alpha"});
+
+        clickRulePackSelection(QStringLiteral("rule-beta"), true);
+        requireCheckedRulePacks({"rule-alpha", "rule-beta"});
+        CHECK(sortedEditedRulePackIds()
+              == std::vector<std::string>{"rule-alpha", "rule-beta"});
+
+        clickRulePackSelection(QStringLiteral("rule-alpha"), false);
+        requireCheckedRulePacks({"rule-beta"});
+        CHECK(sortedEditedRulePackIds()
+              == std::vector<std::string>{"rule-beta"});
+
+        clickRulePackSelection(QStringLiteral("rule-beta"), false);
+        requireCheckedRulePacks({});
+        CHECK(sortedEditedRulePackIds()
+              == std::vector<std::string>{"rule-alpha", "rule-beta"});
 
         setCheckedModelId(modelList, QStringLiteral("model-alpha"));
 
         // User toggling should be replaced by selected profile defaults on switch.
         switchProfile(QStringLiteral("high-security"));
         requireCheckedModel(modelList, "model-beta");
+        requireCheckedRulePacks({"rule-beta"});
 
         // Switching back resets to default model again.
         setCheckedModelId(modelList, QStringLiteral("model-beta"));
+        clickRulePackSelection(QStringLiteral("rule-alpha"), true);
+        requireCheckedRulePacks({"rule-alpha", "rule-beta"});
         switchProfile(QStringLiteral("default"));
         requireCheckedModel(modelList, "model-alpha");
+        requireCheckedRulePacks({"rule-alpha"});
     }
 
     SUBCASE("analyze auto-discovers vendored Rizin without bin override") {

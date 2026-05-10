@@ -41,6 +41,9 @@ private:
     void applyModelSelectionToProfile(
         aura::safety::SafetyProfile& profile) const;
     std::vector<std::string> selectedModelIds() const;
+    void applyRulePackSelectionToProfile(
+        aura::safety::SafetyProfile& profile) const;
+    std::vector<std::string> selectedRulePackIds() const;
     void updateModelSelectionFromChecked();
 
     aura::safety::SafetyAssetRegistry m_registry;
