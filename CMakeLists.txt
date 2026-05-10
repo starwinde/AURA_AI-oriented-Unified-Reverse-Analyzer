@@ -123,6 +123,7 @@ set(AURA_CORE_SOURCES
     src/core/override_view.c
     src/core/override_pipeline.c
     src/core/project_binaries.c
+    src/core/artifact_cache.c
     src/core/string_protection_store.c
     src/core/safety/protected_export.cpp
     src/core/safety/string_safety.cpp
@@ -257,6 +258,7 @@ if(AURA_BUILD_TESTS)
     add_subdirectory(tests/unit/bootstrap)
     add_subdirectory(tests/unit/safety)
     add_subdirectory(tests/unit/mcp)
+    add_subdirectory(tests/unit/artifact_cache)
     add_subdirectory(tests/integration/mcp_smoke)
 
     if(AURA_ENABLE_RIZIN)

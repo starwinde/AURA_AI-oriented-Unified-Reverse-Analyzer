@@ -63,11 +63,15 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <functional>
+#include <limits>
 
 extern "C" {
+#include "cJSON.h"
 #include "orchestrator.h"
 #include "engine_probe.h"
 #include "rizin_adapter.h"
@@ -182,6 +186,127 @@ bool resolveRipRelativeTarget(const GuiInstructionRecord& ix, quint64* out) {
     return true;
 }
 
+QString uint64JsonString(quint64 value) {
+    return QString::number(value);
+}
+
+bool parseDecimalUInt64String(const char* raw, quint64* out) {
+    if (!raw || !out || *raw == '\0') return false;
+    for (const char* p = raw; *p; ++p) {
+        if (*p < '0' || *p > '9') return false;
+    }
+    bool ok = false;
+    const quint64 value = QString::fromUtf8(raw).toULongLong(&ok, 10);
+    if (!ok) return false;
+    *out = value;
+    return true;
+}
+
+bool parseJsonUInt64(const cJSON* item, quint64* out) {
+    if (!item || !out) return false;
+    if (cJSON_IsString(item) && item->valuestring) {
+        return parseDecimalUInt64String(item->valuestring, out);
+    }
+    if (!cJSON_IsNumber(item)) return false;
+    const double value = item->valuedouble;
+    if (!std::isfinite(value) || value < 0.0 ||
+        std::floor(value) != value) {
+        return false;
+    }
+    constexpr long double kUInt64LimitExclusive =
+        18446744073709551616.0L;
+    if (static_cast<long double>(value) >= kUInt64LimitExclusive) {
+        return false;
+    }
+    const quint64 cast = static_cast<quint64>(value);
+    if (static_cast<double>(cast) != value) return false;
+    *out = cast;
+    return true;
+}
+
+bool parseJsonUInt32(const cJSON* item, quint32* out) {
+    if (!cJSON_IsNumber(item) || !out) return false;
+    const double value = item->valuedouble;
+    if (!std::isfinite(value) || value < 0.0 ||
+        std::floor(value) != value ||
+        value > static_cast<double>(std::numeric_limits<quint32>::max())) {
+        return false;
+    }
+    const quint32 cast = static_cast<quint32>(value);
+    if (static_cast<double>(cast) != value) return false;
+    *out = cast;
+    return true;
+}
+
+bool parseJsonNonNegativeInt(const cJSON* item, int* out) {
+    if (!cJSON_IsNumber(item) || !out) return false;
+    const double value = item->valuedouble;
+    if (!std::isfinite(value) || value < 0.0 ||
+        std::floor(value) != value ||
+        value > static_cast<double>(std::numeric_limits<int>::max())) {
+        return false;
+    }
+    const int cast = static_cast<int>(value);
+    if (static_cast<double>(cast) != value) return false;
+    *out = cast;
+    return true;
+}
+
+bool parseJsonString(const cJSON* object, const char* name, QString* out) {
+    if (!object || !name || !out) return false;
+    const cJSON* item = cJSON_GetObjectItemCaseSensitive(object, name);
+    if (!cJSON_IsString(item) || !item->valuestring) return false;
+    *out = QString::fromUtf8(item->valuestring);
+    return true;
+}
+
+bool addJsonItemToObject(cJSON* object, const char* name, cJSON* item) {
+    if (!object || !name || !item) {
+        if (item) cJSON_Delete(item);
+        return false;
+    }
+    if (!cJSON_AddItemToObject(object, name, item)) {
+        cJSON_Delete(item);
+        return false;
+    }
+    return true;
+}
+
+bool addJsonItemToArray(cJSON* array, cJSON* item) {
+    if (!array || !item) {
+        if (item) cJSON_Delete(item);
+        return false;
+    }
+    if (!cJSON_AddItemToArray(array, item)) {
+        cJSON_Delete(item);
+        return false;
+    }
+    return true;
+}
+
+bool addJsonNumber(cJSON* object, const char* name, double value) {
+    return addJsonItemToObject(object, name, cJSON_CreateNumber(value));
+}
+
+bool addJsonString(cJSON* object, const char* name, const QString& value) {
+    const QByteArray utf8 = value.toUtf8();
+    return addJsonItemToObject(
+        object, name, cJSON_CreateString(utf8.constData()));
+}
+
+bool addJsonUInt64(cJSON* object, const char* name, quint64 value) {
+    return addJsonString(object, name, uint64JsonString(value));
+}
+
+QString printJson(cJSON* root) {
+    if (!root) return {};
+    char* raw = cJSON_PrintUnformatted(root);
+    if (!raw) return {};
+    const QString out = QString::fromUtf8(raw);
+    cJSON_free(raw);
+    return out;
+}
+
 QString findRepoRootForGui() {
     if (const char* env = std::getenv("AURA_REPO_ROOT")) {
         if (*env) return QString::fromUtf8(env);
@@ -271,11 +396,22 @@ QString currentFingerprintHex(const QByteArray& digest) {
     return QString::fromLatin1(hex);
 }
 
-void copyUtf8(char* dst, size_t cap, const QString& src) {
-    if (!dst || cap == 0) return;
-    const QByteArray bytes = src.toUtf8();
-    std::strncpy(dst, bytes.constData(), cap - 1);
-    dst[cap - 1] = '\0';
+bool isValidArtifactFingerprint(const QString& fingerprint) {
+    return !fingerprint.isEmpty() && fingerprint != QStringLiteral("unknown");
+}
+
+bool isPersistentDecompileBackend(const QString& backend) {
+    return backend == QStringLiteral("rizin/pdgj (rz-ghidra)") ||
+           backend == QStringLiteral("rizin/pddj (jsdec JSON)") ||
+           backend == QStringLiteral("rizin/pdd (jsdec text)");
+}
+
+QVector<QString> persistentDecompileBackends() {
+    return {
+        QStringLiteral("rizin/pdgj (rz-ghidra)"),
+        QStringLiteral("rizin/pddj (jsdec JSON)"),
+        QStringLiteral("rizin/pdd (jsdec text)")
+    };
 }
 
 QString sha256HexForText(const QString& text) {
@@ -289,6 +425,102 @@ QString sha256HexForText(const QString& text) {
     aura_sha256_final(&ctx, digest);
     aura_sha256_hex(digest, hex);
     return QString::fromLatin1(hex);
+}
+
+QString rizinAdapterVersionLabel() {
+    static QHash<QString, QString> labelsByExecIdentity;
+    constexpr int kOutputCap = 4096;
+    constexpr qint64 kReadChunkCap = 512;
+    constexpr int kVersionTimeoutMs = 2000;
+
+    const QString exec = resolveRizinExecForGui();
+    const QFileInfo execInfo(exec);
+    const QString cleanExec = exec.isEmpty()
+        ? QStringLiteral("<unresolved>")
+        : QDir::cleanPath(execInfo.absoluteFilePath());
+    const QString cacheIdentity = QStringLiteral("%1|%2|%3")
+        .arg(cleanExec)
+        .arg(execInfo.exists() ? execInfo.lastModified().toMSecsSinceEpoch()
+                               : -1)
+        .arg(execInfo.exists() ? execInfo.size() : -1);
+    if (labelsByExecIdentity.contains(cacheIdentity)) {
+        return labelsByExecIdentity.value(cacheIdentity);
+    }
+
+    QString status = QStringLiteral("fail");
+    QString versionOutput;
+    if (!exec.isEmpty() && execInfo.exists()) {
+        QProcess proc;
+        proc.setProgram(exec);
+        proc.setArguments({QStringLiteral("--version")});
+        proc.setProcessChannelMode(QProcess::MergedChannels);
+        proc.start();
+        QByteArray versionBytes;
+        versionBytes.reserve(kOutputCap);
+        auto drainVersionOutput = [&]() {
+            while (proc.bytesAvailable() > 0) {
+                const qint64 toRead =
+                    std::min(proc.bytesAvailable(), kReadChunkCap);
+                const QByteArray chunk = proc.read(toRead);
+                if (chunk.isEmpty()) break;
+
+                const int remaining = kOutputCap - versionBytes.size();
+                if (remaining > 0) {
+                    const int take =
+                        std::min(remaining, static_cast<int>(chunk.size()));
+                    versionBytes.append(chunk.constData(), take);
+                }
+            }
+        };
+
+        bool finished = false;
+        if (proc.waitForStarted(1000)) {
+            const qint64 deadline =
+                QDateTime::currentMSecsSinceEpoch() + kVersionTimeoutMs;
+            while (proc.state() != QProcess::NotRunning) {
+                const qint64 remaining =
+                    deadline - QDateTime::currentMSecsSinceEpoch();
+                if (remaining <= 0) break;
+                if (proc.waitForReadyRead(
+                        static_cast<int>(std::min<qint64>(100, remaining)))) {
+                    drainVersionOutput();
+                } else {
+                    drainVersionOutput();
+                }
+            }
+            finished = proc.state() == QProcess::NotRunning ||
+                       proc.waitForFinished(0);
+            drainVersionOutput();
+        }
+
+        if (finished && proc.exitStatus() == QProcess::NormalExit &&
+            proc.exitCode() == 0) {
+            status = QStringLiteral("ok");
+            versionOutput = QString::fromUtf8(versionBytes).trimmed();
+        } else {
+            proc.kill();
+            proc.waitForFinished(250);
+            drainVersionOutput();
+            versionOutput = QStringLiteral("version-command-failed:%1")
+                .arg(proc.errorString());
+        }
+    } else {
+        versionOutput = QStringLiteral("resolved-path-missing");
+    }
+
+    const QString material = QStringLiteral("path=%1\nstatus=%2\nversion=%3")
+        .arg(cleanExec, status, versionOutput);
+    const QString label = QStringLiteral("rizin:%1:%2")
+        .arg(status, sha256HexForText(material).left(32));
+    labelsByExecIdentity.insert(cacheIdentity, label);
+    return label;
+}
+
+void copyUtf8(char* dst, size_t cap, const QString& src) {
+    if (!dst || cap == 0) return;
+    const QByteArray bytes = src.toUtf8();
+    std::strncpy(dst, bytes.constData(), cap - 1);
+    dst[cap - 1] = '\0';
 }
 
 void refreshProtectedValue(GuiStringRecord& s) {
@@ -991,6 +1223,10 @@ void MainWindow::buildStatusBar() {
 
 void MainWindow::closeProject() {
     if (m_projectModel) m_projectModel->setRegistry(nullptr);
+    if (m_artifactCache) {
+        aura_artifact_cache_close(m_artifactCache);
+        m_artifactCache = nullptr;
+    }
     if (m_projectDb) {
         aura_project_binaries_close(m_projectDb);
         m_projectDb = nullptr;
@@ -1776,8 +2012,17 @@ bool MainWindow::openProject(const QString& path) {
                                   .arg(path));
         return false;
     }
+    AuraArtifactCache* ac = aura_artifact_cache_open(pathUtf8.constData());
+    if (!ac) {
+        aura_project_binaries_close(pb);
+        QMessageBox::critical(this, QStringLiteral("Open Project"),
+                              QStringLiteral("artifact cache 열기 실패:\n%1")
+                                  .arg(path));
+        return false;
+    }
     AuraOverrideStore* os = aura_override_store_open(pathUtf8.constData());
     if (!os) {
+        aura_artifact_cache_close(ac);
         aura_project_binaries_close(pb);
         QMessageBox::critical(this, QStringLiteral("Open Project"),
                               QStringLiteral("Override store 열기 실패:\n%1")
@@ -1786,6 +2031,7 @@ bool MainWindow::openProject(const QString& path) {
     }
 
     m_projectDb     = pb;
+    m_artifactCache = ac;
     m_overrideStore = os;
     m_projectPath   = path;
     if (m_projectModel) m_projectModel->setRegistry(pb);
@@ -2168,54 +2414,74 @@ bool MainWindow::runAnalyze(int row, AuraAnalysisLevel level) {
 
         QVector<quint64> addrs;
         addrs.reserve(N);
-        for (const auto& fn : m_functions) addrs.push_back(fn.entry);
-
-        QVector<AuraRizinDecompileBody*> bodies(N, nullptr);
-        uint32_t backend_used = AURA_RIZIN_DEC_BACKEND_NONE;
-        const QByteArray batchRizinExec = resolveRizinExecForGui().toUtf8();
-        const char* exec = batchRizinExec.isEmpty()
-            ? nullptr
-            : batchRizinExec.constData();
-        const QByteArray binPathUtf8 = m_currentBinaryPath.toUtf8();
-        // Generous timeout — N functions × ~0.1s each + aaa pass.
-        const int batchTimeout = std::max(60, 30 + N / 10);
-        int rc = aura_rizin_decompile_batch_run(
-            exec, binPathUtf8.constData(),
-            reinterpret_cast<const uint64_t*>(addrs.constData()),
-            static_cast<size_t>(N),
-            batchTimeout,
-            bodies.data(),
-            &backend_used);
-
-        int filled = 0;
-        if (rc == 0) {
-            const QString label = backendLabel(backend_used);
-            for (int i = 0; i < N; ++i) {
-                if (!bodies[i]) continue;
-                const char* btext = aura_rizin_decompile_body_text(bodies[i]);
-                // Phase 11.3.7 (P2.F2 C4): also stash the line map so
-                // cursor-clicks in DecompilePane resolve to addresses.
-                const auto* lm =
-                    aura_rizin_decompile_body_line_map(bodies[i]);
-                DecompileLineAddrMap lineMap;
-                for (size_t k = 0; lm && k < bodies[i]->line_map_count; ++k) {
-                    lineMap.insert(static_cast<int>(lm[k].line),
-                                   lm[k].addr);
-                }
-                m_decompilePane->cache(addrs[i], label,
-                                       QString::fromUtf8(btext ? btext : ""),
-                                       lineMap);
-                std::free(bodies[i]);
-                bodies[i] = nullptr;
-                ++filled;
+        int cacheHits = 0;
+        for (const auto& fn : m_functions) {
+            QString cachedBackend;
+            QString cachedText;
+            DecompileLineAddrMap cachedLineMap;
+            if (loadDecompileArtifact(fn.entry, &cachedBackend,
+                                      &cachedText, &cachedLineMap)) {
+                m_decompilePane->cache(fn.entry, cachedBackend, cachedText,
+                                       cachedLineMap);
+                ++cacheHits;
+            } else {
+                addrs.push_back(fn.entry);
             }
         }
-        // Free any orphans on error.
-        for (auto* b : bodies) if (b) std::free(b);
+
+        int filled = 0;
+        if (!addrs.isEmpty()) {
+            const int missCount = addrs.size();
+            QVector<AuraRizinDecompileBody*> bodies(missCount, nullptr);
+            uint32_t backend_used = AURA_RIZIN_DEC_BACKEND_NONE;
+            const QByteArray batchRizinExec = resolveRizinExecForGui().toUtf8();
+            const char* exec = batchRizinExec.isEmpty()
+                ? nullptr
+                : batchRizinExec.constData();
+            const QByteArray binPathUtf8 = m_currentBinaryPath.toUtf8();
+            // Generous timeout — miss count × ~0.1s each + aaa pass.
+            const int batchTimeout = std::max(60, 30 + missCount / 10);
+            int rc = aura_rizin_decompile_batch_run(
+                exec, binPathUtf8.constData(),
+                reinterpret_cast<const uint64_t*>(addrs.constData()),
+                static_cast<size_t>(missCount),
+                batchTimeout,
+                bodies.data(),
+                &backend_used);
+
+            if (rc == 0) {
+                const QString label = backendLabel(backend_used);
+                for (int i = 0; i < missCount; ++i) {
+                    if (!bodies[i]) continue;
+                    const char* btext =
+                        aura_rizin_decompile_body_text(bodies[i]);
+                    // Phase 11.3.7 (P2.F2 C4): also stash the line map so
+                    // cursor-clicks in DecompilePane resolve to addresses.
+                    const auto* lm =
+                        aura_rizin_decompile_body_line_map(bodies[i]);
+                    DecompileLineAddrMap lineMap;
+                    for (size_t k = 0;
+                         lm && k < bodies[i]->line_map_count;
+                         ++k) {
+                        lineMap.insert(static_cast<int>(lm[k].line),
+                                       lm[k].addr);
+                    }
+                    const QString bodyText =
+                        QString::fromUtf8(btext ? btext : "");
+                    m_decompilePane->cache(addrs[i], label, bodyText, lineMap);
+                    storeDecompileArtifact(addrs[i], label, bodyText, lineMap);
+                    std::free(bodies[i]);
+                    bodies[i] = nullptr;
+                    ++filled;
+                }
+            }
+            // Free any orphans on error.
+            for (auto* b : bodies) if (b) std::free(b);
+        }
 
         statusBar()->showMessage(
             QStringLiteral("분석 완료: 함수 %1개 (decompile cache: %2/%1)")
-                .arg(N).arg(filled));
+                .arg(N).arg(filled + cacheHits));
         m_decompilePane->showPlaceholder(
             QStringLiteral("// 좌측 함수 목록에서 함수를 선택하세요."));
     }
@@ -2266,6 +2532,22 @@ bool MainWindow::runDecompile(quint64 funcAddr) {
         m_decompilePane->showDecompile(funcAddr,
                                        m_decompilePane->cachedBackend(funcAddr),
                                        m_decompilePane->cachedText(funcAddr));
+        return true;
+    }
+
+    QString cachedBackend;
+    QString cachedText;
+    DecompileLineAddrMap cachedLineMap;
+    if (loadDecompileArtifact(funcAddr, &cachedBackend,
+                              &cachedText, &cachedLineMap)) {
+        m_decompilePane->cache(funcAddr, cachedBackend, cachedText,
+                               cachedLineMap);
+        m_decompilePane->showDecompile(funcAddr, cachedBackend,
+                                       cachedText);
+        statusBar()->showMessage(
+            QStringLiteral("Decompile cache hit: 0x%1 [%2]")
+                .arg(funcAddr, 0, 16)
+                .arg(cachedBackend));
         return true;
     }
 
@@ -2341,12 +2623,80 @@ bool MainWindow::runDecompile(quint64 funcAddr) {
     }
 
     m_decompilePane->cache(funcAddr, backend, text, lineMap);
+    storeDecompileArtifact(funcAddr, backend, text, lineMap);
     m_decompilePane->showDecompile(funcAddr, backend, text);
     statusBar()->showMessage(
         QStringLiteral("Decompile 완료: 0x%1 [%2]")
             .arg(funcAddr, 0, 16)
             .arg(backend));
     return true;
+}
+
+AuraArtifactCacheKey MainWindow::decompileArtifactKey(
+    quint64 funcAddr,
+    const QString& backend) const {
+    AuraArtifactCacheKey key{};
+    const QString fingerprint = currentFingerprintHex(m_currentSha256);
+    if (isValidArtifactFingerprint(fingerprint)) {
+        copyUtf8(key.binary_fingerprint, sizeof(key.binary_fingerprint),
+                 fingerprint);
+    }
+    copyUtf8(key.engine_id, sizeof(key.engine_id), QStringLiteral("rizin"));
+    copyUtf8(key.engine_version, sizeof(key.engine_version),
+             rizinAdapterVersionLabel());
+    key.request_type = AURA_ENGINE_REQ_DECOMPILE;
+    copyUtf8(key.artifact_kind, sizeof(key.artifact_kind),
+             QStringLiteral("decompile.function"));
+    copyUtf8(key.backend, sizeof(key.backend), backend);
+    key.schema_version = 1;
+    key.function_addr = funcAddr;
+    key.window_addr = 0;
+    key.window_count = 0;
+    copyUtf8(key.options_hash, sizeof(key.options_hash),
+             QStringLiteral("default"));
+    return key;
+}
+
+bool MainWindow::loadDecompileArtifact(
+    quint64 funcAddr,
+    QString* backend,
+    QString* text,
+    DecompileLineAddrMap* lineMap) const {
+    if (!m_artifactCache || !backend || !text || !lineMap) return false;
+    const QString fingerprint = currentFingerprintHex(m_currentSha256);
+    if (!isValidArtifactFingerprint(fingerprint)) return false;
+
+    for (const QString& candidate : persistentDecompileBackends()) {
+        AuraArtifactCacheKey key = decompileArtifactKey(funcAddr, candidate);
+        char* payload = nullptr;
+        const int hit = aura_artifact_cache_get(m_artifactCache, &key, &payload);
+        if (hit != 1 || !payload) continue;
+
+        const QString json = QString::fromUtf8(payload);
+        aura_artifact_cache_free_payload(payload);
+        if (parseDecompileArtifactPayload(json, text, lineMap)) {
+            *backend = candidate;
+            return true;
+        }
+    }
+    return false;
+}
+
+void MainWindow::storeDecompileArtifact(
+    quint64 funcAddr,
+    const QString& backend,
+    const QString& text,
+    const DecompileLineAddrMap& lineMap) const {
+    if (!m_artifactCache || text.isEmpty()) return;
+    const QString fingerprint = currentFingerprintHex(m_currentSha256);
+    if (!isValidArtifactFingerprint(fingerprint)) return;
+    if (!isPersistentDecompileBackend(backend)) return;
+
+    AuraArtifactCacheKey key = decompileArtifactKey(funcAddr, backend);
+    const QString payload = artifactPayloadForDecompile(text, lineMap);
+    if (payload.isEmpty()) return;
+    aura_artifact_cache_put(m_artifactCache, &key,
+                            payload.toUtf8().constData());
 }
 
 bool MainWindow::decompileFunctionAt(int functionRow) {
@@ -2596,6 +2946,291 @@ MainWindow::computeFlowArrows(const QVector<GuiInstructionRecord>& ins) {
     return arrows;
 }
 
+QString MainWindow::artifactPayloadForDecompile(
+    const QString& text,
+    const DecompileLineAddrMap& lineMap) {
+    cJSON* root = cJSON_CreateObject();
+    if (!root) return {};
+    if (!addJsonNumber(root, "schema_version", 1) ||
+        !addJsonString(root, "kind", QStringLiteral("decompile")) ||
+        !addJsonString(root, "text", text)) {
+        cJSON_Delete(root);
+        return {};
+    }
+
+    cJSON* entries = cJSON_CreateArray();
+    if (!addJsonItemToObject(root, "line_map", entries)) {
+        cJSON_Delete(root);
+        return {};
+    }
+
+    QVector<int> lines;
+    lines.reserve(lineMap.size());
+    for (auto it = lineMap.constBegin(); it != lineMap.constEnd(); ++it) {
+        lines.push_back(it.key());
+    }
+    std::sort(lines.begin(), lines.end());
+    for (int line : lines) {
+        cJSON* entry = cJSON_CreateObject();
+        if (!entry) {
+            cJSON_Delete(root);
+            return {};
+        }
+        if (!addJsonNumber(entry, "line", line) ||
+            !addJsonUInt64(entry, "addr", lineMap.value(line))) {
+            cJSON_Delete(entry);
+            cJSON_Delete(root);
+            return {};
+        }
+        if (!addJsonItemToArray(entries, entry)) {
+            cJSON_Delete(root);
+            return {};
+        }
+    }
+
+    const QString out = printJson(root);
+    cJSON_Delete(root);
+    return out;
+}
+
+bool MainWindow::parseDecompileArtifactPayload(
+    const QString& payload,
+    QString* text,
+    DecompileLineAddrMap* lineMap) {
+    if (!text || !lineMap) return false;
+    cJSON* root = cJSON_Parse(payload.toUtf8().constData());
+    if (!root) return false;
+
+    QString parsedText;
+    QString parsedKind;
+    DecompileLineAddrMap parsedMap;
+    bool ok = cJSON_IsObject(root) &&
+              parseJsonString(root, "kind", &parsedKind) &&
+              parsedKind == QStringLiteral("decompile") &&
+              parseJsonString(root, "text", &parsedText);
+    const cJSON* entries = cJSON_GetObjectItemCaseSensitive(root, "line_map");
+    ok = ok && cJSON_IsArray(entries);
+    const cJSON* entry = nullptr;
+    cJSON_ArrayForEach(entry, entries) {
+        if (!ok) break;
+        const cJSON* lineItem =
+            cJSON_GetObjectItemCaseSensitive(entry, "line");
+        const cJSON* addrItem =
+            cJSON_GetObjectItemCaseSensitive(entry, "addr");
+        int line = -1;
+        if (!parseJsonNonNegativeInt(lineItem, &line)) {
+            ok = false;
+            break;
+        }
+        quint64 addr = 0;
+        if (!parseJsonUInt64(addrItem, &addr)) {
+            ok = false;
+            break;
+        }
+        parsedMap.insert(line, addr);
+    }
+
+    cJSON_Delete(root);
+    if (!ok) return false;
+    *text = parsedText;
+    *lineMap = parsedMap;
+    return true;
+}
+
+QString MainWindow::artifactPayloadForDisasm(
+    const QVector<GuiInstructionRecord>& instructions,
+    const QString& arrowText) {
+    cJSON* root = cJSON_CreateObject();
+    if (!root) return {};
+    if (!addJsonNumber(root, "schema_version", 1) ||
+        !addJsonString(root, "kind", QStringLiteral("disasm")) ||
+        !addJsonString(root, "arrow_text", arrowText)) {
+        cJSON_Delete(root);
+        return {};
+    }
+
+    cJSON* rows = cJSON_CreateArray();
+    if (!addJsonItemToObject(root, "instructions", rows)) {
+        cJSON_Delete(root);
+        return {};
+    }
+
+    for (const GuiInstructionRecord& ix : instructions) {
+        cJSON* row = cJSON_CreateObject();
+        if (!row) {
+            cJSON_Delete(root);
+            return {};
+        }
+        if (!addJsonUInt64(row, "addr", ix.addr) ||
+            !addJsonNumber(row, "size", ix.size) ||
+            !addJsonString(row, "bytes", ix.bytes) ||
+            !addJsonString(row, "mnemonic", ix.mnemonic) ||
+            !addJsonString(row, "opStr", ix.opStr) ||
+            !addJsonString(row, "type", ix.type) ||
+            !addJsonUInt64(row, "jump", ix.jump) ||
+            !addJsonUInt64(row, "fail", ix.fail) ||
+            !addJsonString(row, "source", ix.source)) {
+            cJSON_Delete(row);
+            cJSON_Delete(root);
+            return {};
+        }
+        if (!addJsonItemToArray(rows, row)) {
+            cJSON_Delete(root);
+            return {};
+        }
+    }
+
+    const QString out = printJson(root);
+    cJSON_Delete(root);
+    return out;
+}
+
+bool MainWindow::parseDisasmArtifactPayload(
+    const QString& payload,
+    QVector<GuiInstructionRecord>* instructions,
+    QString* arrowText) {
+    if (!instructions || !arrowText) return false;
+    cJSON* root = cJSON_Parse(payload.toUtf8().constData());
+    if (!root) return false;
+
+    QVector<GuiInstructionRecord> parsedInstructions;
+    QString parsedArrowText;
+    QString parsedKind;
+    bool ok = cJSON_IsObject(root) &&
+              parseJsonString(root, "kind", &parsedKind) &&
+              parsedKind == QStringLiteral("disasm") &&
+              parseJsonString(root, "arrow_text", &parsedArrowText);
+    const cJSON* rows =
+        cJSON_GetObjectItemCaseSensitive(root, "instructions");
+    ok = ok && cJSON_IsArray(rows);
+
+    const cJSON* row = nullptr;
+    cJSON_ArrayForEach(row, rows) {
+        if (!ok) break;
+        GuiInstructionRecord ix;
+        ok = parseJsonUInt64(
+                 cJSON_GetObjectItemCaseSensitive(row, "addr"), &ix.addr) &&
+             parseJsonUInt32(
+                 cJSON_GetObjectItemCaseSensitive(row, "size"), &ix.size) &&
+             parseJsonString(row, "bytes", &ix.bytes) &&
+             parseJsonString(row, "mnemonic", &ix.mnemonic) &&
+             parseJsonString(row, "opStr", &ix.opStr) &&
+             parseJsonString(row, "type", &ix.type) &&
+             parseJsonUInt64(
+                 cJSON_GetObjectItemCaseSensitive(row, "jump"), &ix.jump) &&
+             parseJsonUInt64(
+                 cJSON_GetObjectItemCaseSensitive(row, "fail"), &ix.fail) &&
+             parseJsonString(row, "source", &ix.source);
+        if (ok) parsedInstructions.push_back(ix);
+    }
+
+    cJSON_Delete(root);
+    if (!ok) return false;
+    *instructions = parsedInstructions;
+    *arrowText = parsedArrowText;
+    return true;
+}
+
+AuraArtifactCacheKey MainWindow::disasmArtifactKey(
+    quint64 funcAddr,
+    const QString& artifactKind,
+    int windowCount) const {
+    AuraArtifactCacheKey key{};
+    const QString fingerprint = currentFingerprintHex(m_currentSha256);
+    if (isValidArtifactFingerprint(fingerprint)) {
+        copyUtf8(key.binary_fingerprint, sizeof(key.binary_fingerprint),
+                 fingerprint);
+    }
+    copyUtf8(key.engine_id, sizeof(key.engine_id), QStringLiteral("rizin"));
+    copyUtf8(key.engine_version, sizeof(key.engine_version),
+             rizinAdapterVersionLabel());
+    key.request_type = AURA_ENGINE_REQ_DISASM;
+    copyUtf8(key.artifact_kind, sizeof(key.artifact_kind), artifactKind);
+    copyUtf8(key.backend, sizeof(key.backend), QStringLiteral("rizin/pdf"));
+    key.schema_version = 1;
+    key.function_addr =
+        artifactKind == QStringLiteral("disasm.function") ? funcAddr : 0;
+    key.window_addr =
+        artifactKind == QStringLiteral("disasm.window") ? funcAddr : 0;
+    key.window_count =
+        artifactKind == QStringLiteral("disasm.window") ? windowCount : 0;
+    copyUtf8(key.options_hash, sizeof(key.options_hash),
+             QStringLiteral("default"));
+    return key;
+}
+
+bool MainWindow::loadDisasmArtifact(
+    quint64 funcAddr,
+    QVector<GuiInstructionRecord>* instructions,
+    QString* text) const {
+    if (!m_artifactCache || !instructions || !text) return false;
+    const QString fingerprint = currentFingerprintHex(m_currentSha256);
+    if (!isValidArtifactFingerprint(fingerprint)) return false;
+
+    AuraArtifactCacheKey key =
+        disasmArtifactKey(funcAddr, QStringLiteral("disasm.function"), 0);
+    char* payload = nullptr;
+    const int hit = aura_artifact_cache_get(m_artifactCache, &key, &payload);
+    if (hit != 1 || !payload) return false;
+
+    const QString json = QString::fromUtf8(payload);
+    aura_artifact_cache_free_payload(payload);
+    return parseDisasmArtifactPayload(json, instructions, text);
+}
+
+void MainWindow::storeDisasmArtifact(
+    quint64 funcAddr,
+    const QVector<GuiInstructionRecord>& instructions,
+    const QString& text) const {
+    if (!m_artifactCache || instructions.isEmpty()) return;
+    const QString fingerprint = currentFingerprintHex(m_currentSha256);
+    if (!isValidArtifactFingerprint(fingerprint)) return;
+
+    AuraArtifactCacheKey key =
+        disasmArtifactKey(funcAddr, QStringLiteral("disasm.function"), 0);
+    const QString payload = artifactPayloadForDisasm(instructions, text);
+    if (payload.isEmpty()) return;
+    aura_artifact_cache_put(m_artifactCache, &key,
+                            payload.toUtf8().constData());
+}
+
+bool MainWindow::loadFullDisasmWindowArtifact(
+    quint64 addr,
+    int count,
+    QVector<GuiInstructionRecord>* instructions,
+    QString* text) const {
+    if (!m_artifactCache || !instructions || !text) return false;
+    const QString fingerprint = currentFingerprintHex(m_currentSha256);
+    if (!isValidArtifactFingerprint(fingerprint)) return false;
+
+    AuraArtifactCacheKey key =
+        disasmArtifactKey(addr, QStringLiteral("disasm.window"), count);
+    char* payload = nullptr;
+    const int hit = aura_artifact_cache_get(m_artifactCache, &key, &payload);
+    if (hit != 1 || !payload) return false;
+
+    const QString json = QString::fromUtf8(payload);
+    aura_artifact_cache_free_payload(payload);
+    return parseDisasmArtifactPayload(json, instructions, text);
+}
+
+void MainWindow::storeFullDisasmWindowArtifact(
+    quint64 addr,
+    int count,
+    const QVector<GuiInstructionRecord>& instructions,
+    const QString& text) const {
+    if (!m_artifactCache || instructions.isEmpty()) return;
+    const QString fingerprint = currentFingerprintHex(m_currentSha256);
+    if (!isValidArtifactFingerprint(fingerprint)) return;
+
+    AuraArtifactCacheKey key =
+        disasmArtifactKey(addr, QStringLiteral("disasm.window"), count);
+    const QString payload = artifactPayloadForDisasm(instructions, text);
+    if (payload.isEmpty()) return;
+    aura_artifact_cache_put(m_artifactCache, &key,
+                            payload.toUtf8().constData());
+}
+
 void MainWindow::assignFlowArrowLanes(QVector<GuiFlowArrow>& arrows,
                                       int maxLanes) {
     if (arrows.isEmpty()) return;
@@ -2662,6 +3297,18 @@ bool MainWindow::runDisasm(quint64 funcAddr) {
         return true;
     }
 
+    QVector<GuiInstructionRecord> cachedIns;
+    QString cachedText;
+    if (loadDisasmArtifact(funcAddr, &cachedIns, &cachedText)) {
+        m_disasmPane->cache(funcAddr, cachedIns);
+        m_disasmPane->showDisasm(funcAddr, cachedIns);
+        m_disasmPane->setArrowText(funcAddr, cachedText);
+        statusBar()->showMessage(
+            QStringLiteral("Disassembly cache hit: 0x%1")
+                .arg(funcAddr, 0, 16));
+        return true;
+    }
+
     AuraOrchestrator* orch = aura_orchestrator_create();
     if (!orch) return false;
 
@@ -2723,6 +3370,7 @@ bool MainWindow::runDisasm(quint64 funcAddr) {
     m_disasmPane->cache(funcAddr, ins);
     m_disasmPane->showDisasm(funcAddr, ins);
     m_disasmPane->setArrowText(funcAddr, arrowText);
+    storeDisasmArtifact(funcAddr, ins, arrowText);
     return true;
 }
 
@@ -2730,6 +3378,22 @@ bool MainWindow::runFullDisasmWindow(quint64 addr, int count) {
     if (m_currentBinaryPath.isEmpty() || !m_fullDisasmPane) return false;
     if (count <= 0) count = 128;
     if (count > 256) count = 256;
+
+    QVector<GuiInstructionRecord> cachedIns;
+    QString cachedText;
+    if (loadFullDisasmWindowArtifact(addr, count, &cachedIns, &cachedText)) {
+        if (cachedText.isEmpty()) {
+            m_fullDisasmPane->showInstructions(addr, count, cachedIns);
+        } else {
+            m_fullDisasmPane->showMixedListing(addr, count, cachedText,
+                                               cachedIns);
+        }
+        m_fullDisasmPane->setArrowText(addr, cachedText);
+        statusBar()->showMessage(
+            QStringLiteral("전체 디스어셈블리 cache hit: 0x%1")
+                .arg(addr, 0, 16));
+        return true;
+    }
 
     statusBar()->showMessage(
         QStringLiteral("전체 디스어셈블리 로드 중: 0x%1").arg(addr, 0, 16));
@@ -2810,6 +3474,7 @@ bool MainWindow::runFullDisasmWindow(quint64 addr, int count) {
         m_fullDisasmPane->showMixedListing(addr, count, arrowText, ins);
     }
     m_fullDisasmPane->setArrowText(addr, arrowText);
+    storeFullDisasmWindowArtifact(addr, count, ins, arrowText);
     statusBar()->showMessage(
         QStringLiteral("전체 디스어셈블리 완료: 0x%1 (%2 instructions)")
             .arg(addr, 0, 16)

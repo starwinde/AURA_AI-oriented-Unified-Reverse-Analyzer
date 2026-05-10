@@ -3,12 +3,15 @@
 
 #pragma once
 
+#include "decompile_pane.h"
+
 #include <QMainWindow>
 #include <QStack>
 #include <QString>
 #include <QVector>
 
 extern "C" {
+#include "artifact_cache.h"
 #include "engine_request.h"
 #include "project_binaries.h"
 #include "override_identity.h"
@@ -362,6 +365,21 @@ public:
     static QVector<GuiFlowArrow>
     computeFlowArrows(const QVector<GuiInstructionRecord>& ins);
 
+    static QString
+    artifactPayloadForDecompile(const QString& text,
+                                const DecompileLineAddrMap& lineMap);
+    static bool
+    parseDecompileArtifactPayload(const QString& payload,
+                                  QString* text,
+                                  DecompileLineAddrMap* lineMap);
+    static QString
+    artifactPayloadForDisasm(const QVector<GuiInstructionRecord>& instructions,
+                             const QString& arrowText);
+    static bool
+    parseDisasmArtifactPayload(const QString& payload,
+                               QVector<GuiInstructionRecord>* instructions,
+                               QString* arrowText);
+
     // Phase 11.6 T2 C1: assign each in-function arrow to a "lane" so
     // arrows don't overlap when painted in the gutter. Algorithm:
     //   - sort by length (shortest first), then by srcLine
@@ -498,6 +516,36 @@ private:
     int  selectedProjectRow() const;
     bool runAnalyze(int row, AuraAnalysisLevel level);
     bool runDecompile(quint64 funcAddr);
+    AuraArtifactCacheKey decompileArtifactKey(quint64 funcAddr,
+                                              const QString& backend) const;
+    bool loadDecompileArtifact(quint64 funcAddr,
+                               QString* backend,
+                               QString* text,
+                               DecompileLineAddrMap* lineMap) const;
+    void storeDecompileArtifact(quint64 funcAddr,
+                                const QString& backend,
+                                const QString& text,
+                                const DecompileLineAddrMap& lineMap) const;
+    AuraArtifactCacheKey disasmArtifactKey(quint64 funcAddr,
+                                           const QString& artifactKind,
+                                           int windowCount) const;
+    bool loadDisasmArtifact(quint64 funcAddr,
+                            QVector<GuiInstructionRecord>* instructions,
+                            QString* text) const;
+    void storeDisasmArtifact(
+        quint64 funcAddr,
+        const QVector<GuiInstructionRecord>& instructions,
+        const QString& text) const;
+    bool loadFullDisasmWindowArtifact(
+        quint64 addr,
+        int count,
+        QVector<GuiInstructionRecord>* instructions,
+        QString* text) const;
+    void storeFullDisasmWindowArtifact(
+        quint64 addr,
+        int count,
+        const QVector<GuiInstructionRecord>& instructions,
+        const QString& text) const;
     /* runDisasm now in public section (Phase 11.3.7 RPC needs access). */
 
     // Override pipeline.
@@ -550,6 +598,7 @@ private:
 
     // Project state.
     AuraProjectBinaries* m_projectDb      = nullptr;
+    AuraArtifactCache*    m_artifactCache = nullptr;
     AuraOverrideStore*   m_overrideStore  = nullptr;
     QString              m_projectPath;
     QString              m_currentBinaryPath;

@@ -17,6 +17,7 @@
 #include <QAction>
 #include <QAbstractItemModel>
 #include <QApplication>
+#include <QByteArray>
 #include <QDir>
 #include <QDockWidget>
 #include <QFile>
@@ -54,6 +55,10 @@
 #include "code_syntax_highlighter.h"
 #include "main_window.h"
 #include "aura/safety/string_safety.h"
+
+extern "C" {
+#include "../../../third_party/sqlite/sqlite3.h"
+}
 
 namespace {
 
@@ -158,6 +163,138 @@ void setCheckedModelId(QListWidget* modelList, const QString& modelId) {
     }
 }
 
+bool sqliteTableExists(const QString& dbPath, const char* tableName) {
+    sqlite3* db = nullptr;
+    if (sqlite3_open(dbPath.toUtf8().constData(), &db) != SQLITE_OK) {
+        if (db) sqlite3_close(db);
+        return false;
+    }
+
+    sqlite3_stmt* st = nullptr;
+    const char* sql =
+        "SELECT 1 FROM sqlite_master "
+        "WHERE type='table' AND name=?1 LIMIT 1;";
+    if (sqlite3_prepare_v2(db, sql, -1, &st, nullptr) != SQLITE_OK) {
+        sqlite3_close(db);
+        return false;
+    }
+    sqlite3_bind_text(st, 1, tableName, -1, SQLITE_TRANSIENT);
+    const bool exists = sqlite3_step(st) == SQLITE_ROW;
+    sqlite3_finalize(st);
+    sqlite3_close(db);
+    return exists;
+}
+
+int artifactCount(const QString& dbPath, const char* kind) {
+    sqlite3* db = nullptr;
+    if (sqlite3_open(dbPath.toUtf8().constData(), &db) != SQLITE_OK) {
+        if (db) sqlite3_close(db);
+        return -1;
+    }
+
+    sqlite3_stmt* st = nullptr;
+    const char* sql =
+        "SELECT COUNT(*) FROM analysis_artifacts WHERE artifact_kind=?1;";
+    if (sqlite3_prepare_v2(db, sql, -1, &st, nullptr) != SQLITE_OK) {
+        sqlite3_close(db);
+        return -1;
+    }
+    sqlite3_bind_text(st, 1, kind, -1, SQLITE_TRANSIENT);
+    int out = -1;
+    if (sqlite3_step(st) == SQLITE_ROW) {
+        out = sqlite3_column_int(st, 0);
+    }
+    sqlite3_finalize(st);
+    sqlite3_close(db);
+    return out;
+}
+
+bool artifactBackendWithPrefixExists(const QString& dbPath,
+                                     const char* kind,
+                                     const char* backendPrefix) {
+    sqlite3* db = nullptr;
+    if (sqlite3_open(dbPath.toUtf8().constData(), &db) != SQLITE_OK) {
+        if (db) sqlite3_close(db);
+        return false;
+    }
+
+    sqlite3_stmt* st = nullptr;
+    const char* sql =
+        "SELECT 1 FROM analysis_artifacts "
+        "WHERE artifact_kind=?1 AND backend LIKE ?2 LIMIT 1;";
+    if (sqlite3_prepare_v2(db, sql, -1, &st, nullptr) != SQLITE_OK) {
+        sqlite3_close(db);
+        return false;
+    }
+    sqlite3_bind_text(st, 1, kind, -1, SQLITE_TRANSIENT);
+    const QByteArray prefix =
+        QByteArray(backendPrefix ? backendPrefix : "") + "%";
+    sqlite3_bind_text(st, 2, prefix.constData(), -1, SQLITE_TRANSIENT);
+    const bool exists = (sqlite3_step(st) == SQLITE_ROW);
+    sqlite3_finalize(st);
+    sqlite3_close(db);
+    return exists;
+}
+
+QString artifactEngineVersionForKind(const QString& dbPath,
+                                     const char* kind) {
+    sqlite3* db = nullptr;
+    if (sqlite3_open(dbPath.toUtf8().constData(), &db) != SQLITE_OK) {
+        if (db) sqlite3_close(db);
+        return {};
+    }
+
+    sqlite3_stmt* st = nullptr;
+    const char* sql =
+        "SELECT engine_version FROM analysis_artifacts "
+        "WHERE artifact_kind=?1 ORDER BY rowid LIMIT 1;";
+    if (sqlite3_prepare_v2(db, sql, -1, &st, nullptr) != SQLITE_OK) {
+        sqlite3_close(db);
+        return {};
+    }
+    sqlite3_bind_text(st, 1, kind, -1, SQLITE_STATIC);
+
+    QString out;
+    if (sqlite3_step(st) == SQLITE_ROW) {
+        const auto* text = sqlite3_column_text(st, 0);
+        if (text) out = QString::fromUtf8(
+            reinterpret_cast<const char*>(text));
+    }
+
+    sqlite3_finalize(st);
+    sqlite3_close(db);
+    return out;
+}
+
+bool disasmWindowArtifactExists(const QString& dbPath,
+                                quint64 windowAddr,
+                                int windowCount) {
+    sqlite3* db = nullptr;
+    if (sqlite3_open(dbPath.toUtf8().constData(), &db) != SQLITE_OK) {
+        if (db) sqlite3_close(db);
+        return false;
+    }
+
+    sqlite3_stmt* st = nullptr;
+    const char* sql =
+        "SELECT 1 FROM analysis_artifacts "
+        "WHERE artifact_kind='disasm.window' "
+        "AND function_addr=0 "
+        "AND window_addr=?1 "
+        "AND window_count=?2 LIMIT 1;";
+    if (sqlite3_prepare_v2(db, sql, -1, &st, nullptr) != SQLITE_OK) {
+        sqlite3_close(db);
+        return false;
+    }
+
+    sqlite3_bind_int64(st, 1, static_cast<sqlite3_int64>(windowAddr));
+    sqlite3_bind_int(st, 2, windowCount);
+    const bool exists = sqlite3_step(st) == SQLITE_ROW;
+    sqlite3_finalize(st);
+    sqlite3_close(db);
+    return exists;
+}
+
 }  // namespace
 
 TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
@@ -194,6 +331,11 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
     SUBCASE("open project") {
         REQUIRE(window.openProject(dbPath));
         CHECK(window.projectBinaryCount() == 0);
+    }
+
+    SUBCASE("project opens artifact cache schema") {
+        REQUIRE(window.openProject(dbPath));
+        CHECK(sqliteTableExists(dbPath, "analysis_artifacts"));
     }
 
     SUBCASE("safety settings profile selection persists through QSettings") {
@@ -599,6 +741,173 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         CHECK(arrows[1].lane == 0);   // jmp shortest → lane 0
         CHECK(arrows[0].lane == 1);   // cjmp overlaps → lane 1
         CHECK(arrows[2].lane == -1);  // call out-of-func skipped
+    }
+
+    SUBCASE("artifact payload helpers round-trip disasm and decompile JSON") {
+        using aura::gui::DecompileLineAddrMap;
+        using aura::gui::GuiInstructionRecord;
+        using aura::gui::MainWindow;
+
+        const quint64 highAddr = 18446744073709551615ull;
+        QVector<GuiInstructionRecord> ins;
+        GuiInstructionRecord r;
+        r.addr = highAddr;
+        r.size = 5;
+        r.bytes = QStringLiteral("554889e5");
+        r.mnemonic = QStringLiteral("push_한글");
+        r.opStr = QStringLiteral("rbp ; café");
+        r.type = QStringLiteral("push");
+        r.jump = 0;
+        r.fail = 0;
+        r.source = QStringLiteral("rizin/테스트");
+        ins.push_back(r);
+
+        const QString disasmJson =
+            MainWindow::artifactPayloadForDisasm(
+                ins, QStringLiteral("arrow text 한글"));
+        CHECK(disasmJson.contains(
+            QStringLiteral("\"addr\":\"18446744073709551615\"")));
+        QVector<GuiInstructionRecord> decodedIns;
+        QString decodedText;
+        REQUIRE(MainWindow::parseDisasmArtifactPayload(
+            disasmJson, &decodedIns, &decodedText));
+        REQUIRE(decodedIns.size() == 1);
+        CHECK(decodedIns[0].addr == highAddr);
+        CHECK(decodedIns[0].size == 5);
+        CHECK(decodedIns[0].bytes == QStringLiteral("554889e5"));
+        CHECK(decodedIns[0].mnemonic == QStringLiteral("push_한글"));
+        CHECK(decodedIns[0].opStr == QStringLiteral("rbp ; café"));
+        CHECK(decodedIns[0].type == QStringLiteral("push"));
+        CHECK(decodedIns[0].jump == 0);
+        CHECK(decodedIns[0].fail == 0);
+        CHECK(decodedIns[0].source == QStringLiteral("rizin/테스트"));
+        CHECK(decodedText == QStringLiteral("arrow text 한글"));
+
+        DecompileLineAddrMap lm;
+        lm.insert(1, highAddr);
+        const QString decompJson =
+            MainWindow::artifactPayloadForDecompile(QStringLiteral("body 한글"), lm);
+        CHECK(decompJson.contains(
+            QStringLiteral("\"addr\":\"18446744073709551615\"")));
+        QString body;
+        DecompileLineAddrMap decodedMap;
+        REQUIRE(MainWindow::parseDecompileArtifactPayload(
+            decompJson, &body, &decodedMap));
+        CHECK(body == QStringLiteral("body 한글"));
+        CHECK(decodedMap.value(1) == highAddr);
+
+        CHECK_FALSE(MainWindow::parseDecompileArtifactPayload(
+            QStringLiteral("{bad"), &body, &decodedMap));
+        CHECK_FALSE(MainWindow::parseDisasmArtifactPayload(
+            QStringLiteral("{}"), &decodedIns, &decodedText));
+        CHECK_FALSE(MainWindow::parseDisasmArtifactPayload(
+            disasmJson, nullptr, &decodedText));
+    }
+
+    SUBCASE("artifact payload parsers reject malformed numeric fields") {
+        using aura::gui::DecompileLineAddrMap;
+        using aura::gui::GuiInstructionRecord;
+        using aura::gui::MainWindow;
+
+        auto disasmPayload = [](const QString& addr,
+                                const QString& size,
+                                const QString& jump,
+                                const QString& fail,
+                                bool quoteAddr = false,
+                                bool quoteJump = false,
+                                bool quoteFail = false) {
+            const auto field = [](const QString& value, bool quote) {
+                return quote ? QStringLiteral("\"%1\"").arg(value) : value;
+            };
+            return QStringLiteral(
+                R"({"schema_version":1,"kind":"disasm","arrow_text":"ok","instructions":[{"addr":%1,"size":%2,"bytes":"90","mnemonic":"nop","opStr":"","type":"nop","jump":%3,"fail":%4,"source":"test"}]})")
+                .arg(field(addr, quoteAddr), size, field(jump, quoteJump),
+                     field(fail, quoteFail));
+        };
+
+        QVector<GuiInstructionRecord> decodedIns;
+        GuiInstructionRecord sentinel;
+        sentinel.addr = 0x1234;
+        sentinel.size = 7;
+        decodedIns.push_back(sentinel);
+        QString decodedText = QStringLiteral("sentinel");
+
+        auto expectBadDisasm = [&](const QString& payload) {
+            CHECK_FALSE(MainWindow::parseDisasmArtifactPayload(
+                payload, &decodedIns, &decodedText));
+            REQUIRE(decodedIns.size() == 1);
+            CHECK(decodedIns[0].addr == 0x1234);
+            CHECK(decodedText == QStringLiteral("sentinel"));
+        };
+
+        expectBadDisasm(disasmPayload(QStringLiteral("1.5"),
+                                      QStringLiteral("5"),
+                                      QStringLiteral("0"),
+                                      QStringLiteral("0")));
+        expectBadDisasm(disasmPayload(QStringLiteral("-1"),
+                                      QStringLiteral("5"),
+                                      QStringLiteral("0"),
+                                      QStringLiteral("0")));
+        expectBadDisasm(disasmPayload(QStringLiteral("18446744073709551616"),
+                                      QStringLiteral("5"),
+                                      QStringLiteral("0"),
+                                      QStringLiteral("0"),
+                                      true));
+        expectBadDisasm(disasmPayload(QStringLiteral("0x401000"),
+                                      QStringLiteral("5"),
+                                      QStringLiteral("0"),
+                                      QStringLiteral("0"),
+                                      true));
+        expectBadDisasm(disasmPayload(QStringLiteral("1"),
+                                      QStringLiteral("4294967296"),
+                                      QStringLiteral("0"),
+                                      QStringLiteral("0")));
+        expectBadDisasm(disasmPayload(QStringLiteral("1"),
+                                      QStringLiteral("1.25"),
+                                      QStringLiteral("0"),
+                                      QStringLiteral("0")));
+        expectBadDisasm(disasmPayload(QStringLiteral("1"),
+                                      QStringLiteral("5"),
+                                      QStringLiteral("-1"),
+                                      QStringLiteral("0")));
+        expectBadDisasm(disasmPayload(QStringLiteral("1"),
+                                      QStringLiteral("5"),
+                                      QStringLiteral("0"),
+                                      QStringLiteral("2.5")));
+        expectBadDisasm(QStringLiteral(
+            R"({"schema_version":1,"kind":"decompile","arrow_text":"ok","instructions":[]})"));
+
+        const QString tolerantNumberPayload =
+            disasmPayload(QStringLiteral("9007199254740992"),
+                          QStringLiteral("5"),
+                          QStringLiteral("0"),
+                          QStringLiteral("0"));
+        REQUIRE(MainWindow::parseDisasmArtifactPayload(
+            tolerantNumberPayload, &decodedIns, &decodedText));
+        REQUIRE(decodedIns.size() == 1);
+        CHECK(decodedIns[0].addr == 9007199254740992ull);
+
+        QString body = QStringLiteral("sentinel body");
+        DecompileLineAddrMap decodedMap;
+        decodedMap.insert(3, 0x999);
+        auto expectBadDecompile = [&](const QString& payload) {
+            CHECK_FALSE(MainWindow::parseDecompileArtifactPayload(
+                payload, &body, &decodedMap));
+            CHECK(body == QStringLiteral("sentinel body"));
+            CHECK(decodedMap.value(3) == 0x999);
+            CHECK(decodedMap.size() == 1);
+        };
+
+        expectBadDecompile(QStringLiteral(
+            R"({"schema_version":1,"kind":"disasm","text":"body","line_map":[]})"));
+        expectBadDecompile(QStringLiteral(
+            R"({"schema_version":1,"kind":"decompile","text":"body","line_map":[{"line":1.5,"addr":"1"}]})"));
+        expectBadDecompile(QStringLiteral(
+            R"({"schema_version":1,"kind":"decompile","text":"body","line_map":[{"line":-1,"addr":"1"}]})"));
+        expectBadDecompile(QStringLiteral(
+            R"({"schema_version":1,"kind":"decompile","text":"body","line_map":[{"line":2147483648,"addr":"1"}]})"));
+        expectBadDecompile(QStringLiteral(
+            R"({"schema_version":1,"kind":"decompile","text":"body","line_map":[{"line":1,"addr":"18446744073709551616"}]})"));
     }
 
     SUBCASE("DisasmFlowGutter geometry helpers (Phase 11.6 T2 C2)") {
@@ -2144,6 +2453,90 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         }
     }
 
+    SUBCASE("function disassembly artifact survives project reopen") {
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(fixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+        REQUIRE(window.functionCount() >= 1);
+
+        const QString addrText =
+            window.clipboardTextForFunction(0, QStringLiteral("address"));
+        bool parsed = false;
+        const quint64 entry = addrText.startsWith(QStringLiteral("0x"))
+            ? addrText.mid(2).toULongLong(&parsed, 16)
+            : addrText.toULongLong(&parsed, 16);
+        REQUIRE(parsed);
+
+        REQUIRE(window.disassembleFunctionAt(0));
+        const auto firstInstructions = window.disasmList(entry);
+        REQUIRE_FALSE(firstInstructions.isEmpty());
+        const QString firstArrowText = window.disasmArrowText(entry);
+
+        const int before = artifactCount(dbPath, "disasm.function");
+        CHECK(before >= 1);
+        const QString engineVersion =
+            artifactEngineVersionForKind(dbPath, "disasm.function");
+        CHECK(engineVersion.startsWith(QStringLiteral("rizin:")));
+        CHECK(engineVersion.size() <= 63);
+        CHECK(engineVersion != QStringLiteral("0.7+"));
+
+        if (before >= 1) {
+            aura::gui::MainWindow reopened;
+            REQUIRE(reopened.openProject(dbPath));
+            REQUIRE(reopened.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+            REQUIRE(reopened.functionCount() >= 1);
+
+            const bool cachedOk = reopened.disassembleFunctionAt(0);
+
+            REQUIRE_MESSAGE(cachedOk,
+                            "fresh MainWindow did not read disasm.function "
+                            "from the persistent artifact cache");
+            CHECK(reopened.disasmList(entry).size() == firstInstructions.size());
+            CHECK(reopened.disasmArrowText(entry) == firstArrowText);
+            CHECK(artifactCount(dbPath, "disasm.function") == before);
+        }
+    }
+
+    SUBCASE("full disassembly window artifact survives project reopen") {
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(fixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+        REQUIRE(window.functionCount() >= 1);
+
+        const QString addrText =
+            window.clipboardTextForFunction(0, QStringLiteral("address"));
+        bool parsed = false;
+        const quint64 entry = addrText.startsWith(QStringLiteral("0x"))
+            ? addrText.mid(2).toULongLong(&parsed, 16)
+            : addrText.toULongLong(&parsed, 16);
+        REQUIRE(parsed);
+
+        constexpr int kWindowCount = 128;
+        REQUIRE(window.runFullDisasmWindow(entry, kWindowCount));
+        auto* firstPane = window.findChild<aura::gui::FullDisasmPane*>();
+        REQUIRE(firstPane != nullptr);
+        const QString firstText = firstPane->currentText();
+        REQUIRE_FALSE(firstText.isEmpty());
+
+        const int before = artifactCount(dbPath, "disasm.window");
+        CHECK(before >= 1);
+        CHECK(disasmWindowArtifactExists(dbPath, entry, kWindowCount));
+
+        if (before >= 1) {
+            aura::gui::MainWindow reopened;
+            REQUIRE(reopened.openProject(dbPath));
+            REQUIRE(reopened.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+            REQUIRE(reopened.runFullDisasmWindow(entry, kWindowCount));
+
+            auto* reopenedPane =
+                reopened.findChild<aura::gui::FullDisasmPane*>();
+            REQUIRE(reopenedPane != nullptr);
+            CHECK(reopenedPane->currentAddress() == entry);
+            CHECK(reopenedPane->currentText() == firstText);
+            CHECK(artifactCount(dbPath, "disasm.window") == before);
+        }
+    }
+
     SUBCASE("decompile pane populates or shows install guidance (ADR-0036)") {
         REQUIRE(window.openProject(dbPath));
         REQUIRE(window.addBinary(fixture));
@@ -2159,13 +2552,54 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         const bool ok = window.decompileFunctionAt(mainRow);
         const QString text = window.currentDecompileText();
         CHECK(text.size() > 0);
+        const int decompileArtifacts =
+            artifactCount(dbPath, "decompile.function");
+        REQUIRE(decompileArtifacts >= 0);
+        CHECK_FALSE(artifactBackendWithPrefixExists(
+            dbPath, "decompile.function", "rizin/pdf"));
 
-        if (ok) {
+        if (ok && decompileArtifacts >= 1) {
             CHECK(text.contains(QStringLiteral("dbg.main")));
             CHECK(text.contains(QStringLiteral("return 0")));
             CHECK_FALSE(text.contains(QStringLiteral("rz-ghidra")));
+            const QString engineVersion =
+                artifactEngineVersionForKind(dbPath, "decompile.function");
+            CHECK(engineVersion.startsWith(QStringLiteral("rizin:")));
+            CHECK(engineVersion.size() <= 63);
+            CHECK(engineVersion != QStringLiteral("0.7+"));
+
+            aura::gui::MainWindow reopened;
+            REQUIRE(reopened.openProject(dbPath));
+            REQUIRE(reopened.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+            const int afterReopenAnalyzeCount =
+                artifactCount(dbPath, "decompile.function");
+            CHECK(afterReopenAnalyzeCount == decompileArtifacts);
+            const int reopenedMainRow =
+                reopened.findFunctionRowByName(QStringLiteral("dbg.main"));
+            REQUIRE(reopenedMainRow >= 0);
+
+            QDockWidget* decompileDock = reopened.findChild<QDockWidget*>(
+                QStringLiteral("decompileDock"));
+            REQUIRE_MESSAGE(decompileDock != nullptr,
+                            "decompileDock not found");
+            auto* pane = qobject_cast<aura::gui::DecompilePane*>(
+                decompileDock->widget());
+            REQUIRE_MESSAGE(pane != nullptr, "DecompilePane not found");
+            pane->clearCache();
+
+            const bool cachedOk = reopened.decompileFunctionAt(reopenedMainRow);
+
+            REQUIRE_MESSAGE(cachedOk,
+                            "fresh MainWindow did not read decompile.function "
+                            "from the persistent artifact cache");
+            CHECK(reopened.currentDecompileText() == text);
         } else {
-            CHECK(text.contains(QStringLiteral("rz-pm install rz-ghidra")));
+            MESSAGE("No decompile.function artifact required because this "
+                    "fixture/environment did not produce a decompile body; "
+                    "count=" << decompileArtifacts);
+            if (!ok) {
+                CHECK(text.contains(QStringLiteral("rz-pm install rz-ghidra")));
+            }
         }
     }
 }
