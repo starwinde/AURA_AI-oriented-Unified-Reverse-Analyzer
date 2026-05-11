@@ -64,6 +64,92 @@ TEST_CASE("rule pack scan detects common sensitive strings") {
     CHECK(phone[0].kind == "phone_number");
 }
 
+TEST_CASE("string protection mode text round-trips") {
+    CHECK(aura::safety::stringProtectionModeToText(
+              aura::safety::StringProtectionMode::Off) == std::string("off"));
+    CHECK(aura::safety::stringProtectionModeToText(
+              aura::safety::StringProtectionMode::ScanOnly) ==
+          std::string("scan-only"));
+    CHECK(aura::safety::stringProtectionModeToText(
+              aura::safety::StringProtectionMode::Mask) == std::string("mask"));
+
+    CHECK(aura::safety::parseStringProtectionMode("off") ==
+          aura::safety::StringProtectionMode::Off);
+    CHECK(aura::safety::parseStringProtectionMode("scan-only") ==
+          aura::safety::StringProtectionMode::ScanOnly);
+    CHECK(aura::safety::parseStringProtectionMode("mask") ==
+          aura::safety::StringProtectionMode::Mask);
+    CHECK(aura::safety::parseStringProtectionMode("unexpected") ==
+          aura::safety::StringProtectionMode::Off);
+}
+
+TEST_CASE("explicit none rule pack selection returns no rule findings") {
+    aura::safety::SafetyProfile profile;
+    profile.rule_pack_selection_mode =
+        aura::safety::RulePackSelectionMode::None;
+
+    const auto findings = aura::safety::scanStringWithRulePacks(
+        "email alice.smith@example.com api_key=abc1234567890XYZSECRET",
+        profile);
+
+    CHECK(findings.empty());
+}
+
+TEST_CASE("safety profile rule pack selection parses legacy and explicit modes") {
+    namespace fs = std::filesystem;
+    const fs::path root =
+        tempRoot("aura_safety_unit_rule_pack_selection_parse");
+    fs::remove_all(root);
+    fs::create_directories(root / "safety-profiles");
+
+    {
+        std::ofstream out(root / "safety-profiles" / "legacy-all.json",
+                          std::ios::binary);
+        out << R"({
+          "schema_version": 1,
+          "profile_id": "legacy-all",
+          "rule_pack_ids": []
+        })";
+    }
+    {
+        std::ofstream out(root / "safety-profiles" / "legacy-selected.json",
+                          std::ios::binary);
+        out << R"({
+          "schema_version": 1,
+          "profile_id": "legacy-selected",
+          "rule_pack_ids": ["secret-api-key"]
+        })";
+    }
+    {
+        std::ofstream out(root / "safety-profiles" / "explicit-none.json",
+                          std::ios::binary);
+        out << R"({
+          "schema_version": 1,
+          "profile_id": "explicit-none",
+          "rule_pack_selection_mode": "none",
+          "rule_pack_ids": []
+        })";
+    }
+
+    setEnvVar("AURA_HOME", root.string());
+    const auto legacyAll = aura::safety::loadSafetyProfileById("legacy-all");
+    const auto legacySelected =
+        aura::safety::loadSafetyProfileById("legacy-selected");
+    const auto explicitNone =
+        aura::safety::loadSafetyProfileById("explicit-none");
+    clearEnvVar("AURA_HOME");
+
+    REQUIRE(legacyAll.found);
+    CHECK(legacyAll.profile.rule_pack_selection_mode ==
+          aura::safety::RulePackSelectionMode::All);
+    REQUIRE(legacySelected.found);
+    CHECK(legacySelected.profile.rule_pack_selection_mode ==
+          aura::safety::RulePackSelectionMode::Selected);
+    REQUIRE(explicitNone.found);
+    CHECK(explicitNone.profile.rule_pack_selection_mode ==
+          aura::safety::RulePackSelectionMode::None);
+}
+
 TEST_CASE("runtime rule pack from AURA_HOME overrides built-in fallback") {
     namespace fs = std::filesystem;
     const fs::path root = tempRoot("aura_safety_unit_home");
@@ -503,6 +589,33 @@ TEST_CASE("safety profile edits can be persisted and reloaded") {
     REQUIRE(reloaded.found);
     CHECK(reloaded.profile.model_policy.model_id == "new-model");
     CHECK(reloaded.profile.token_classification_model_id == "new-model");
+}
+
+TEST_CASE("safety profile save and reload persists none rule pack selection") {
+    namespace fs = std::filesystem;
+    const fs::path root =
+        tempRoot("aura_safety_unit_profile_save_none_home");
+    fs::remove_all(root);
+    fs::create_directories(root / "safety-profiles");
+
+    aura::safety::SafetyProfile profile;
+    profile.rule_pack_selection_mode =
+        aura::safety::RulePackSelectionMode::None;
+    profile.rule_pack_ids.clear();
+
+    setEnvVar("AURA_HOME", root.string());
+    std::string diagnostic;
+    REQUIRE(aura::safety::saveSafetyProfile("none-rules", profile,
+                                            &diagnostic));
+    CHECK(diagnostic.empty());
+
+    const auto reloaded = aura::safety::loadSafetyProfileById("none-rules");
+    clearEnvVar("AURA_HOME");
+
+    REQUIRE(reloaded.found);
+    CHECK(reloaded.profile.rule_pack_selection_mode ==
+          aura::safety::RulePackSelectionMode::None);
+    CHECK(reloaded.profile.rule_pack_ids.empty());
 }
 
 TEST_CASE("selected safety profile falls back to default when missing") {

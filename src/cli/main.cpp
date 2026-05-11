@@ -30,6 +30,7 @@
 #include <string>
 #include <vector>
 
+#include "aura/safety/string_safety.h"
 #include "CLI11.hpp"
 #include "cJSON.h"
 
@@ -361,7 +362,25 @@ AuraOrchestrator *build_orchestrator(const GlobalOpts &g, std::string &err) {
 
 // ── analyze ────────────────────────────────────────────────────────────────
 
-cJSON *analyze_body_to_json(const AuraRizinAnalyzeBody *body) {
+cJSON *finding_to_json(const aura::safety::Finding &finding) {
+    cJSON *out = cJSON_CreateObject();
+    cJSON_AddStringToObject(out, "detector_id", finding.detector_id.c_str());
+    cJSON_AddStringToObject(out, "kind", finding.kind.c_str());
+    cJSON_AddNumberToObject(out, "start",
+                            static_cast<double>(finding.start));
+    cJSON_AddNumberToObject(out, "end", static_cast<double>(finding.end));
+    cJSON_AddNumberToObject(out, "confidence", finding.confidence);
+    cJSON_AddStringToObject(out, "mask_token", finding.mask_token.c_str());
+    return out;
+}
+
+cJSON *analyze_body_to_json(
+    const AuraRizinAnalyzeBody *body,
+    aura::safety::StringProtectionMode string_protection_mode) {
+    const bool enable_string_protection =
+        string_protection_mode != aura::safety::StringProtectionMode::Off;
+    const bool mask_string_protection =
+        string_protection_mode == aura::safety::StringProtectionMode::Mask;
     cJSON *out = cJSON_CreateObject();
     cJSON_AddNumberToObject(out, "magic", static_cast<double>(body->magic));
     cJSON_AddNumberToObject(out, "version",
@@ -385,6 +404,12 @@ cJSON *analyze_body_to_json(const AuraRizinAnalyzeBody *body) {
     /* Phase 11.3.6: strings_count is v3+; older bodies report 0. */
     cJSON_AddNumberToObject(out, "strings_count",
                             static_cast<double>(body->strings_count));
+    cJSON_AddBoolToObject(out, "string_protection_enabled",
+                          enable_string_protection);
+    cJSON_AddStringToObject(
+        out, "string_protection_mode",
+        aura::safety::stringProtectionModeToText(
+            string_protection_mode).c_str());
 
     cJSON *fns = cJSON_AddArrayToObject(out, "functions");
     const AuraFunctionRecord *funcs = aura_rizin_analyze_body_functions(body);
@@ -467,6 +492,9 @@ cJSON *analyze_body_to_json(const AuraRizinAnalyzeBody *body) {
     // this array directly. Body schema v3+; v2 bodies report 0 entries.
     cJSON *strings_arr = cJSON_AddArrayToObject(out, "strings");
     const AuraStringRecord *strings = aura_rizin_analyze_body_strings(body);
+    const auto safety_profile = enable_string_protection
+                                    ? aura::safety::loadDefaultSafetyProfile()
+                                    : aura::safety::SafetyProfile{};
     for (size_t i = 0; strings && i < body->strings_count; ++i) {
         cJSON *s = cJSON_CreateObject();
         cJSON_AddNumberToObject(s, "string_id",
@@ -489,6 +517,30 @@ cJSON *analyze_body_to_json(const AuraRizinAnalyzeBody *body) {
                                 strings[i].section[0] ? strings[i].section : "");
         cJSON_AddStringToObject(s, "content",
                                 strings[i].content[0] ? strings[i].content : "");
+        if (enable_string_protection) {
+            const std::string content =
+                strings[i].content[0] ? strings[i].content : "";
+            auto findings = aura::safety::scanStringWithRulePacks(
+                content, safety_profile);
+            auto protected_view = aura::safety::buildProtectedStringView(
+                content, std::string(), std::move(findings));
+            cJSON_AddStringToObject(
+                s, "protected_value",
+                mask_string_protection
+                    ? protected_view.protected_value.c_str()
+                    : content.c_str());
+            cJSON_AddStringToObject(
+                s, "masked_content",
+                mask_string_protection ? protected_view.masked.c_str() : "");
+            cJSON_AddNumberToObject(
+                s, "findings_count",
+                static_cast<double>(protected_view.findings.size()));
+            cJSON *findings_arr = cJSON_AddArrayToObject(s, "findings");
+            for (const auto &finding : protected_view.findings) {
+                cJSON_AddItemToArray(findings_arr,
+                                     finding_to_json(finding));
+            }
+        }
         cJSON *prov = cJSON_AddObjectToObject(s, "provenance");
         cJSON_AddStringToObject(prov, "source", strings[i].provenance.source);
         cJSON_AddNumberToObject(prov, "confidence",
@@ -500,7 +552,9 @@ cJSON *analyze_body_to_json(const AuraRizinAnalyzeBody *body) {
     return out;
 }
 
-int run_analyze(const std::string &binary, const GlobalOpts &g) {
+int run_analyze(const std::string &binary,
+                aura::safety::StringProtectionMode string_protection_mode,
+                const GlobalOpts &g) {
     std::string err;
     AuraOrchestrator *orch = build_orchestrator(g, err);
     if (!orch) {
@@ -532,7 +586,9 @@ int run_analyze(const std::string &binary, const GlobalOpts &g) {
     cJSON *root = make_root();
     cJSON_AddStringToObject(root, "command", "analyze");
     cJSON_AddStringToObject(root, "binary", binary.c_str());
-    cJSON_AddItemToObject(root, "body", analyze_body_to_json(body));
+    cJSON_AddItemToObject(root, "body",
+                          analyze_body_to_json(
+                              body, string_protection_mode));
 
     emit_json(root, g.compact);
 
@@ -2376,9 +2432,19 @@ int main(int argc, char **argv) {
     auto *cmd_analyze = app.add_subcommand(
         "analyze", "ANALYZE dispatch → unified model JSON");
     std::string analyze_bin;
+    std::string analyze_string_protection_mode = "off";
+    bool analyze_string_protection_legacy = false;
     cmd_analyze->add_option("binary", analyze_bin, "path to binary")
         ->required()
         ->check(CLI::ExistingFile);
+    cmd_analyze
+        ->add_option("--string-protection-mode",
+                     analyze_string_protection_mode,
+                     "string protection mode: off, scan-only, mask")
+        ->check(CLI::IsMember({"off", "scan-only", "mask"}));
+    cmd_analyze->add_flag(
+        "--string-protection", analyze_string_protection_legacy,
+        "compatibility alias for --string-protection-mode mask");
 
     // field-candidates (Phase 11.4.4 / P4.PP2 — struct field misidentification)
     auto *cmd_fldc = app.add_subcommand(
@@ -2618,7 +2684,14 @@ int main(int argc, char **argv) {
     CLI11_PARSE(app, argc, argv);
 
     if (cmd_engines->parsed()) return run_engines(g);
-    if (cmd_analyze->parsed()) return run_analyze(analyze_bin, g);
+    if (cmd_analyze->parsed()) {
+        const auto protection_mode =
+            analyze_string_protection_legacy
+                ? aura::safety::StringProtectionMode::Mask
+                : aura::safety::parseStringProtectionMode(
+                      analyze_string_protection_mode);
+        return run_analyze(analyze_bin, protection_mode, g);
+    }
     if (cmd_disasm->parsed()) {
         uint64_t addr = 0;
         try { addr = std::stoull(disasm_func_str, nullptr, 0); }

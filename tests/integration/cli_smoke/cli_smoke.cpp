@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 #include "cJSON.h"
@@ -42,6 +43,70 @@ static std::string fixture_path() {
 #else
     return (root / "tests/fixtures/bin/elf_smoke.x86_64").string();
 #endif
+}
+
+class EnvVarGuard {
+public:
+    EnvVarGuard(std::string name, std::string value)
+        : name_(std::move(name)) {
+        if (const char *old = std::getenv(name_.c_str())) {
+            had_old_ = true;
+            old_value_ = old;
+        }
+        set(value);
+    }
+
+    ~EnvVarGuard() {
+        if (had_old_) set(old_value_);
+        else unset();
+    }
+
+    EnvVarGuard(const EnvVarGuard&) = delete;
+    EnvVarGuard& operator=(const EnvVarGuard&) = delete;
+
+private:
+    void set(const std::string &value) const {
+#ifdef _WIN32
+        _putenv_s(name_.c_str(), value.c_str());
+#else
+        setenv(name_.c_str(), value.c_str(), 1);
+#endif
+    }
+
+    void unset() const {
+#ifdef _WIN32
+        _putenv_s(name_.c_str(), "");
+#else
+        unsetenv(name_.c_str());
+#endif
+    }
+
+    std::string name_;
+    std::string old_value_;
+    bool had_old_ = false;
+};
+
+static void write_text_file(const fs::path &path, const std::string &text) {
+    std::ofstream out(path, std::ios::binary);
+    REQUIRE(out.good());
+    out << text;
+}
+
+static void write_fixture_rule_pack(const fs::path &home) {
+    const fs::path pack = home / "rule-packs" / "fixture-rule";
+    fs::create_directories(pack);
+    write_text_file(
+        pack / "manifest.json",
+        R"({"schema_version":1,"pack_id":"fixture-rule","display_name":"fixture rule","rules_file":"rules.json"})");
+    write_text_file(
+        pack / "rules.json",
+        R"({"schema_version":1,"rules":[{"id":"fixture-rule/ascii-run","kind":"fixture_ascii_run","pattern":"[A-Za-z]{12,}","confidence":0.90}]})");
+
+    const fs::path profiles = home / "safety-profiles";
+    fs::create_directories(profiles);
+    write_text_file(
+        profiles / "default.json",
+        R"({"schema_version":1,"profile_id":"default","rule_pack_selection_mode":"selected","rule_pack_ids":["fixture-rule"]})");
 }
 
 // Path to the `aura` binary, injected via env by CMake (AURA_BIN).
@@ -358,6 +423,114 @@ TEST_CASE("cli_smoke: analyze body exposes strings[] array") {
         CHECK(get_string(prov, "source") == std::string("rizin"));
     }
     cJSON_Delete(root);
+}
+
+TEST_CASE("cli_smoke: analyze --string-protection emits protected string fields") {
+    const std::string rizin = discover_rizin_bin();
+    if (rizin.empty()) {
+        MESSAGE("SKIP: no rizin binary");
+        return;
+    }
+    const std::string fixture = fixture_path();
+    REQUIRE(fs::exists(fixture));
+
+    const fs::path home =
+        fs::temp_directory_path() / fs::path("aura_cli_smoke_safety_home");
+    fs::remove_all(home);
+    fs::create_directories(home);
+    write_fixture_rule_pack(home);
+    EnvVarGuard aura_home("AURA_HOME", home.string());
+
+    CmdResult r = run(aura_invocation(rizin) +
+                      " analyze --string-protection \"" + fixture + "\"");
+    REQUIRE_MESSAGE(r.exit_code == 0,
+                    "exit=", r.exit_code, " out=",
+                    r.stdout_.substr(0, 200));
+
+    cJSON *root = parse_or_fail(r.stdout_);
+    cJSON *body = cJSON_GetObjectItem(root, "body");
+    REQUIRE(body != nullptr);
+    CHECK(cJSON_IsTrue(cJSON_GetObjectItem(
+        body, "string_protection_enabled")));
+    CHECK(get_string(body, "string_protection_mode") == "mask");
+    cJSON *strings = cJSON_GetObjectItem(body, "strings");
+    REQUIRE(cJSON_IsArray(strings));
+    REQUIRE(cJSON_GetArraySize(strings) > 0);
+
+    bool saw_finding = false;
+    cJSON *row = nullptr;
+    cJSON_ArrayForEach(row, strings) {
+        CHECK(cJSON_IsString(cJSON_GetObjectItem(row, "content")));
+        CHECK(cJSON_IsString(cJSON_GetObjectItem(row, "protected_value")));
+        CHECK(cJSON_IsString(cJSON_GetObjectItem(row, "masked_content")));
+        CHECK(cJSON_IsNumber(cJSON_GetObjectItem(row, "findings_count")));
+        cJSON *findings = cJSON_GetObjectItem(row, "findings");
+        REQUIRE(cJSON_IsArray(findings));
+        saw_finding = saw_finding || cJSON_GetArraySize(findings) > 0;
+    }
+    CHECK(saw_finding);
+    cJSON_Delete(root);
+}
+
+TEST_CASE("cli_smoke: analyze string protection modes are explicit") {
+    const std::string rizin = discover_rizin_bin();
+    if (rizin.empty()) {
+        MESSAGE("SKIP: no rizin binary");
+        return;
+    }
+    const std::string fixture = fixture_path();
+    REQUIRE(fs::exists(fixture));
+
+    const fs::path home =
+        fs::temp_directory_path() / fs::path("aura_cli_smoke_safety_modes_home");
+    fs::remove_all(home);
+    fs::create_directories(home);
+    write_fixture_rule_pack(home);
+    EnvVarGuard aura_home("AURA_HOME", home.string());
+
+    auto run_mode = [&](const std::string &mode) {
+        CmdResult r = run(aura_invocation(rizin) +
+                          " analyze --string-protection-mode " + mode +
+                          " \"" + fixture + "\"");
+        REQUIRE_MESSAGE(r.exit_code == 0,
+                        "mode=", mode, " exit=", r.exit_code,
+                        " out=", r.stdout_.substr(0, 200));
+        cJSON *root = parse_or_fail(r.stdout_);
+        cJSON *body = cJSON_GetObjectItem(root, "body");
+        REQUIRE(body != nullptr);
+        CHECK(get_string(body, "string_protection_mode") == mode);
+        CHECK(cJSON_IsBool(cJSON_GetObjectItem(
+            body, "string_protection_enabled")));
+        cJSON *strings = cJSON_GetObjectItem(body, "strings");
+        REQUIRE(cJSON_IsArray(strings));
+        bool saw_finding = false;
+        cJSON *row = nullptr;
+        cJSON_ArrayForEach(row, strings) {
+            if (mode == "off") continue;
+            cJSON *findings = cJSON_GetObjectItem(row, "findings");
+            REQUIRE(cJSON_IsArray(findings));
+            if (cJSON_GetArraySize(findings) == 0) continue;
+            saw_finding = true;
+            const std::string content = get_string(row, "content");
+            const std::string protected_value =
+                get_string(row, "protected_value");
+            const std::string masked_content =
+                get_string(row, "masked_content");
+            if (mode == "scan-only") {
+                CHECK(masked_content.empty());
+                CHECK(protected_value == content);
+            } else if (mode == "mask") {
+                CHECK_FALSE(masked_content.empty());
+                CHECK(protected_value != content);
+            }
+        }
+        if (mode != "off") CHECK(saw_finding);
+        cJSON_Delete(root);
+    };
+
+    run_mode("off");
+    run_mode("scan-only");
+    run_mode("mask");
 }
 
 TEST_CASE("cli_smoke: field-candidates --func emits offset clusters (Phase 11.4.4)") {
