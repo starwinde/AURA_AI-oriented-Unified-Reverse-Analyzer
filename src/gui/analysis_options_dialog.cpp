@@ -8,6 +8,7 @@
 #include <QGroupBox>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QRadioButton>
 #include <QSettings>
 #include <QVBoxLayout>
@@ -47,12 +48,26 @@ AnalysisOptionsDialog::AnalysisOptionsDialog(const QString& binaryPath,
         ko ? QStringLiteral("문자열 마스킹/보호 스캔 사용")
            : QStringLiteral("Enable string masking/protection scan"),
         this);
+    m_enableStringProtection->setObjectName(
+        QStringLiteral("analysisStringProtectionCheckBox"));
     m_enableStringProtection->setChecked(false);
     outer->addWidget(m_enableStringProtection);
 
+    auto* safetyAssetsButton = new QPushButton(
+        ko ? QStringLiteral("안전 자산 세부 설정...")
+           : QStringLiteral("Safety Assets settings..."),
+        this);
+    safetyAssetsButton->setObjectName(
+        QStringLiteral("analysisSafetyAssetsButton"));
+    form->addRow(ko ? QStringLiteral("보호 세부 설정:")
+                    : QStringLiteral("Protection settings:"),
+                 safetyAssetsButton);
+    connect(safetyAssetsButton, &QPushButton::clicked,
+            this, &AnalysisOptionsDialog::safetyAssetsRequested);
+
     auto* protectionHint = new QLabel(
-        ko ? QStringLiteral("켜면 이번 분석에서 문자열 안전 스캔과 마스킹 후보를 생성합니다.")
-           : QStringLiteral("When enabled, this analysis generates string safety findings and masked values."),
+        ko ? QStringLiteral("켜면 현재 안전 자산 프로필의 모델/규칙 팩으로 문자열을 보호합니다.")
+           : QStringLiteral("When enabled, this analysis uses the active Safety Assets profile."),
         this);
     protectionHint->setStyleSheet(QStringLiteral("color: gray;"));
     protectionHint->setWordWrap(true);

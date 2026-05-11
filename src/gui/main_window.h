@@ -4,6 +4,7 @@
 #pragma once
 
 #include "decompile_pane.h"
+#include "aura/safety/string_safety.h"
 
 #include <QMainWindow>
 #include <QStack>
@@ -264,6 +265,12 @@ public:
     // Programmatic helpers (also exercised by gui_smoke ctest).
     bool openProject(const QString& path);
     bool addBinary(const QString& binaryPath);
+    bool addBinaryAndAnalyze(const QString& binaryPath,
+                             AuraAnalysisLevel level,
+                             aura::safety::StringProtectionMode protectionMode);
+    bool addBinaryAndAnalyze(const QString& binaryPath,
+                             AuraAnalysisLevel level,
+                             bool enableStringProtection);
 
     // Phase 11.5 (P5 polish) — recent projects MRU list.
     // Persisted via QSettings under "recentProjects" key. Newest first,
@@ -330,6 +337,9 @@ public:
     bool setStringDisplayModeAt(int stringRow, int displayMode);
     QString stringProtectedValueAt(int stringRow) const;
     bool analyzeBinaryAt(int row, AuraAnalysisLevel level);
+    bool analyzeBinaryAt(int row,
+                         AuraAnalysisLevel level,
+                         aura::safety::StringProtectionMode protectionMode);
     bool analyzeBinaryAt(int row,
                          AuraAnalysisLevel level,
                          bool enableStringProtection);
@@ -511,15 +521,17 @@ private:
     void setActiveSafetyProfileId(const QString& profileId);
     void updateSafetyStatusText();
     void onSafetySettings();
+    bool openSafetySettingsDialog(QWidget* parentForDialog = nullptr);
     void closeProject();
     void updateWindowTitle();
     void restoreUiState();
     void saveUiState();
 
     int  selectedProjectRow() const;
+    int  projectRowForFingerprint(const QString& fingerprint) const;
     bool runAnalyze(int row,
                     AuraAnalysisLevel level,
-                    bool enableStringProtection);
+                    aura::safety::StringProtectionMode protectionMode);
     bool runDecompile(quint64 funcAddr);
     AuraArtifactCacheKey decompileArtifactKey(quint64 funcAddr,
                                               const QString& backend) const;

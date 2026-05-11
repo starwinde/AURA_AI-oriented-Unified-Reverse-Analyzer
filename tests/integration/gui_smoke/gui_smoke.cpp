@@ -18,6 +18,7 @@
 #include <QAbstractItemModel>
 #include <QApplication>
 #include <QByteArray>
+#include <QCheckBox>
 #include <QDir>
 #include <QDockWidget>
 #include <QFile>
@@ -141,6 +142,18 @@ void writeTextFile(const QString& path, const QString& text) {
     REQUIRE(file.open(QIODevice::WriteOnly | QIODevice::Text));
     const auto bytes = text.toUtf8();
     CHECK(file.write(bytes) == bytes.size());
+}
+
+void writeFixtureRulePack(const QString& homePath) {
+    const QString rulePackDir =
+        QDir(homePath).filePath(QStringLiteral("rule-packs/fixture-rule"));
+    REQUIRE(QDir().mkpath(rulePackDir));
+    writeTextFile(
+        QDir(rulePackDir).filePath(QStringLiteral("manifest.json")),
+        QStringLiteral(R"({"schema_version":1,"pack_id":"fixture-rule","display_name":"fixture rule","rules_file":"rules.json"})"));
+    writeTextFile(
+        QDir(rulePackDir).filePath(QStringLiteral("rules.json")),
+        QStringLiteral(R"({"schema_version":1,"rules":[{"id":"fixture-rule/ascii-run","kind":"fixture_ascii_run","pattern":"[A-Za-z]{12,}","confidence":0.90}]})"));
 }
 
 QStringList checkedModelIds(const QListWidget* modelList) {
@@ -409,9 +422,31 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
     SUBCASE("analysis options dialog defaults string protection off") {
         aura::gui::AnalysisOptionsDialog dlg(
             QStringLiteral("C:/tmp/aura-test-binary.exe"));
+        auto* checkbox = dlg.findChild<QCheckBox*>(
+            QStringLiteral("analysisStringProtectionCheckBox"));
+        auto* modeCombo = dlg.findChild<QComboBox*>(
+            QStringLiteral("analysisStringProtectionModeCombo"));
+        auto* safetyAssetsButton = dlg.findChild<QPushButton*>(
+            QStringLiteral("analysisSafetyAssetsButton"));
 
+        REQUIRE(checkbox != nullptr);
+        CHECK(modeCombo == nullptr);
+        REQUIRE(safetyAssetsButton != nullptr);
         CHECK_FALSE(dlg.stringProtectionEnabled());
         CHECK(dlg.selectedLevel() == AURA_ANALYSIS_LEVEL_FULL);
+        int requested = 0;
+        QObject::connect(
+            &dlg, &aura::gui::AnalysisOptionsDialog::safetyAssetsRequested,
+            [&requested]() { ++requested; });
+        safetyAssetsButton->click();
+        CHECK(requested == 1);
+        CHECK(safetyAssetsButton->isEnabled());
+        checkbox->setChecked(true);
+        CHECK(dlg.stringProtectionEnabled());
+        CHECK(safetyAssetsButton->isEnabled());
+        checkbox->setChecked(false);
+        CHECK_FALSE(dlg.stringProtectionEnabled());
+        CHECK(safetyAssetsButton->isEnabled());
     }
 
     SUBCASE("safety model selection resets when switching profiles") {
@@ -456,7 +491,9 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         defaultProfile.model_policy.mode =
             aura::safety::ModelPolicyMode::Conditional;
         defaultProfile.model_policy.model_id = "model-alpha";
-        defaultProfile.rule_pack_ids = {"rule-alpha"};
+        defaultProfile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::All;
+        defaultProfile.rule_pack_ids = {};
         defaultProfile.eval_dataset_ids = {};
         defaultProfile.token_classification_model_id = "model-alpha";
         defaultProfile.token_classification_enabled = true;
@@ -466,6 +503,8 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         highSecurityProfile.model_policy.mode =
             aura::safety::ModelPolicyMode::Required;
         highSecurityProfile.model_policy.model_id = "model-beta";
+        highSecurityProfile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::Selected;
         highSecurityProfile.rule_pack_ids = {"rule-beta"};
         highSecurityProfile.eval_dataset_ids = {};
         highSecurityProfile.token_classification_model_id = "model-beta";
@@ -488,12 +527,16 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
             dlg.findChild<QComboBox*>(QStringLiteral("safetyProfileCombo"));
         auto* modelList =
             dlg.findChild<QListWidget*>(QStringLiteral("safetyModelList"));
+        auto* modelDirButton = dlg.findChild<QPushButton*>(
+            QStringLiteral("safetyModelDirectoryButton"));
         auto* addBtn =
             dlg.findChild<QPushButton*>(QStringLiteral("safetyModelAddButton"));
         auto* rmBtn = dlg.findChild<QPushButton*>(
             QStringLiteral("safetyModelRemoveButton"));
         auto* rulePackList =
             dlg.findChild<QListWidget*>(QStringLiteral("safetyRulePackList"));
+        auto* rulePackDirButton = dlg.findChild<QPushButton*>(
+            QStringLiteral("safetyRulePackDirectoryButton"));
         auto* rulePackAddBtn = dlg.findChild<QPushButton*>(
             QStringLiteral("safetyRulePackAddButton"));
         auto* rulePackRmBtn = dlg.findChild<QPushButton*>(
@@ -501,11 +544,30 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
 
         REQUIRE(profileCombo != nullptr);
         REQUIRE(modelList != nullptr);
+        REQUIRE(modelDirButton != nullptr);
         REQUIRE(addBtn != nullptr);
         REQUIRE(rmBtn != nullptr);
         REQUIRE(rulePackList != nullptr);
+        REQUIRE(rulePackDirButton != nullptr);
         REQUIRE(rulePackAddBtn != nullptr);
         REQUIRE(rulePackRmBtn != nullptr);
+
+        const QString modelAssetPath =
+            modelDirButton->property("assetPath").toString();
+        const QString rulePackAssetPath =
+            rulePackDirButton->property("assetPath").toString();
+        CHECK(modelAssetPath.startsWith(QDir::cleanPath(homeSafetyRoot)));
+        CHECK(rulePackAssetPath.startsWith(QDir::cleanPath(homeSafetyRoot)));
+        const bool modelPathLooksRight =
+            modelAssetPath.endsWith(
+                QStringLiteral("/token-classification-models")) ||
+            modelAssetPath.endsWith(
+                QStringLiteral("\\token-classification-models"));
+        const bool rulePackPathLooksRight =
+            rulePackAssetPath.endsWith(QStringLiteral("/rule-packs")) ||
+            rulePackAssetPath.endsWith(QStringLiteral("\\rule-packs"));
+        CHECK(modelPathLooksRight);
+        CHECK(rulePackPathLooksRight);
 
         auto indexOfProfile = [&](const QString& id) {
             return profileCombo->findData(id);
@@ -515,6 +577,27 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
             REQUIRE(index >= 0);
             profileCombo->setCurrentIndex(index);
             QApplication::processEvents();
+        };
+        auto clickModelSelection = [&](const QString& modelId, bool checked) {
+            REQUIRE(modelList != nullptr);
+            REQUIRE(addBtn != nullptr);
+            REQUIRE(rmBtn != nullptr);
+            for (int i = 0; i < modelList->count(); ++i) {
+                auto* item = modelList->item(i);
+                REQUIRE(item != nullptr);
+                if (item->data(Qt::UserRole).toString() == modelId) {
+                    modelList->setCurrentRow(i);
+                    QApplication::processEvents();
+                    if (checked) {
+                        addBtn->click();
+                    } else {
+                        rmBtn->click();
+                    }
+                    QApplication::processEvents();
+                    return;
+                }
+            }
+            FAIL_CHECK("model id not found: " << modelId.toStdString());
         };
 
         CHECK(addBtn->text().contains(QStringLiteral("선택")));
@@ -592,6 +675,9 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
             std::sort(ids.begin(), ids.end());
             return ids;
         };
+        auto editedRulePackMode = [&]() {
+            return dlg.editedProfile().rule_pack_selection_mode;
+        };
 
         const int defaultIndex = indexOfProfile(QStringLiteral("default"));
         const int highIndex = indexOfProfile(QStringLiteral("high-security"));
@@ -606,12 +692,22 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         QApplication::processEvents();
         switchProfile(QStringLiteral("default"));
         requireCheckedModel(modelList, "model-alpha");
-        requireCheckedRulePacks({"rule-alpha"});
+        requireCheckedRulePacks({"rule-alpha", "rule-beta"});
+        CHECK(editedRulePackMode() == aura::safety::RulePackSelectionMode::All);
 
-        clickRulePackSelection(QStringLiteral("rule-beta"), true);
+        clickRulePackSelection(QStringLiteral("rule-alpha"), false);
+        requireCheckedRulePacks({"rule-beta"});
+        CHECK(sortedEditedRulePackIds()
+              == std::vector<std::string>{"rule-beta"});
+        CHECK(editedRulePackMode()
+              == aura::safety::RulePackSelectionMode::Selected);
+
+        clickRulePackSelection(QStringLiteral("rule-alpha"), true);
         requireCheckedRulePacks({"rule-alpha", "rule-beta"});
         CHECK(sortedEditedRulePackIds()
               == std::vector<std::string>{"rule-alpha", "rule-beta"});
+        CHECK(editedRulePackMode()
+              == aura::safety::RulePackSelectionMode::Selected);
 
         clickRulePackSelection(QStringLiteral("rule-alpha"), false);
         requireCheckedRulePacks({"rule-beta"});
@@ -620,8 +716,8 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
 
         clickRulePackSelection(QStringLiteral("rule-beta"), false);
         requireCheckedRulePacks({});
-        CHECK(sortedEditedRulePackIds()
-              == std::vector<std::string>{"rule-alpha", "rule-beta"});
+        CHECK(sortedEditedRulePackIds().empty());
+        CHECK(editedRulePackMode() == aura::safety::RulePackSelectionMode::None);
 
         setCheckedModelId(modelList, QStringLiteral("model-alpha"));
 
@@ -636,7 +732,32 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         requireCheckedRulePacks({"rule-alpha", "rule-beta"});
         switchProfile(QStringLiteral("default"));
         requireCheckedModel(modelList, "model-alpha");
-        requireCheckedRulePacks({"rule-alpha"});
+        requireCheckedRulePacks({"rule-alpha", "rule-beta"});
+        CHECK(editedRulePackMode() == aura::safety::RulePackSelectionMode::All);
+
+        clickModelSelection(QStringLiteral("model-beta"), true);
+        clickRulePackSelection(QStringLiteral("rule-alpha"), false);
+        auto edited = dlg.editedProfile();
+        CHECK(edited.model_policy.model_id == "model-beta");
+        CHECK(edited.token_classification_model_id == "model-beta");
+        CHECK(edited.model_policy.enabled);
+        CHECK(edited.token_classification_enabled);
+        CHECK(edited.rule_pack_selection_mode ==
+              aura::safety::RulePackSelectionMode::Selected);
+        CHECK(edited.rule_pack_ids == std::vector<std::string>{"rule-beta"});
+        REQUIRE(aura::safety::saveSafetyProfile(
+            dlg.selectedProfileId().toStdString(), edited, &profileDiagnostic));
+
+        aura::gui::SafetySettingsDialog reopened(QStringLiteral("default"));
+        auto* reopenedModels = reopened.findChild<QListWidget*>(
+            QStringLiteral("safetyModelList"));
+        auto* reopenedRulePacks = reopened.findChild<QListWidget*>(
+            QStringLiteral("safetyRulePackList"));
+        REQUIRE(reopenedModels != nullptr);
+        REQUIRE(reopenedRulePacks != nullptr);
+        requireCheckedModel(reopenedModels, "model-beta");
+        CHECK(checkedRulePackIds(reopenedRulePacks) ==
+              QStringList{QStringLiteral("rule-beta")});
     }
 
     SUBCASE("analyze auto-discovers vendored Rizin without bin override") {
@@ -2383,6 +2504,156 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
             CHECK(s.exportValue == s.content);
             CHECK(s.findings.isEmpty());
             CHECK(s.protectionSummary.isEmpty());
+        }
+    }
+
+    SUBCASE("string protection scan-only records findings without masking") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureRulePack(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::Selected;
+        profile.rule_pack_ids = {"fixture-rule"};
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        const QString scanDb =
+            QDir(tmp.path()).filePath(QStringLiteral("scan-only.aura.db"));
+        REQUIRE(window.openProject(scanDb));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(
+            0, AURA_ANALYSIS_LEVEL_FULL,
+            aura::safety::StringProtectionMode::ScanOnly));
+
+        REQUIRE_FALSE(window.stringList().isEmpty());
+        bool sawFinding = false;
+        for (const auto& s : window.stringList()) {
+            if (s.hasProtection || !s.findings.isEmpty()) {
+                sawFinding = true;
+                CHECK(s.maskedContent.isEmpty());
+                CHECK(s.protectedValue == s.content);
+                CHECK(s.exportValue == s.content);
+            }
+        }
+        CHECK(sawFinding);
+    }
+
+    SUBCASE("string protection mask mode records masked values") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureRulePack(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::Selected;
+        profile.rule_pack_ids = {"fixture-rule"};
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        const QString maskDb =
+            QDir(tmp.path()).filePath(QStringLiteral("mask-mode.aura.db"));
+        aura::gui::MainWindow maskWindow;
+        REQUIRE(maskWindow.openProject(maskDb));
+        REQUIRE(maskWindow.addBinary(stringFixture));
+        REQUIRE(maskWindow.analyzeBinaryAt(
+            0, AURA_ANALYSIS_LEVEL_FULL,
+            aura::safety::StringProtectionMode::Mask));
+
+        REQUIRE_FALSE(maskWindow.stringList().isEmpty());
+        bool sawMasked = false;
+        for (const auto& s : maskWindow.stringList()) {
+            if (s.hasProtection || !s.findings.isEmpty()) {
+                sawMasked = true;
+                CHECK_FALSE(s.maskedContent.isEmpty());
+                CHECK(s.exportValue != s.content);
+            }
+        }
+        CHECK(sawMasked);
+    }
+
+    SUBCASE("first add-binary analysis honors string protection toggle") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureRulePack(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::Selected;
+        profile.rule_pack_ids = {"fixture-rule"};
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        aura::gui::MainWindow offWindow;
+        const QString offDb =
+            QDir(tmp.path()).filePath(QStringLiteral("first-off.aura.db"));
+        REQUIRE(offWindow.openProject(offDb));
+        REQUIRE(offWindow.addBinaryAndAnalyze(
+            stringFixture, AURA_ANALYSIS_LEVEL_FULL, false));
+        REQUIRE_FALSE(offWindow.stringList().isEmpty());
+        for (const auto& s : offWindow.stringList()) {
+            CHECK_FALSE(s.hasProtection);
+            CHECK(s.maskedContent.isEmpty());
+            CHECK(s.protectedValue == s.content);
+            CHECK(s.exportValue == s.content);
+            CHECK(s.findings.isEmpty());
+        }
+
+        aura::gui::MainWindow onWindow;
+        const QString onDb =
+            QDir(tmp.path()).filePath(QStringLiteral("first-on.aura.db"));
+        REQUIRE(onWindow.openProject(onDb));
+        REQUIRE(onWindow.addBinaryAndAnalyze(
+            stringFixture, AURA_ANALYSIS_LEVEL_FULL, true));
+        REQUIRE_FALSE(onWindow.stringList().isEmpty());
+        bool sawFinding = false;
+        for (const auto& s : onWindow.stringList()) {
+            sawFinding = sawFinding || s.hasProtection || !s.findings.isEmpty();
+        }
+        CHECK(sawFinding);
+    }
+
+    SUBCASE("disabled rule packs suppress findings with protection enabled") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureRulePack(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::None;
+        profile.rule_pack_ids = {};
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        const QString noneDb =
+            QDir(tmp.path()).filePath(QStringLiteral("rule-packs-none.aura.db"));
+        REQUIRE(window.openProject(noneDb));
+        REQUIRE(window.addBinaryAndAnalyze(
+            stringFixture, AURA_ANALYSIS_LEVEL_FULL, true));
+        REQUIRE_FALSE(window.stringList().isEmpty());
+        for (const auto& s : window.stringList()) {
+            CHECK_FALSE(s.hasProtection);
+            CHECK(s.maskedContent.isEmpty());
+            CHECK(s.protectedValue == s.content);
+            CHECK(s.exportValue == s.content);
+            CHECK(s.findings.isEmpty());
         }
     }
 

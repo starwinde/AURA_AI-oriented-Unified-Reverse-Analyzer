@@ -116,6 +116,13 @@ bool useKoreanUi() {
                    QStringLiteral("ko")).toString() != QStringLiteral("en");
 }
 
+aura::safety::StringProtectionMode protectionModeFromDialog(
+    const AnalysisOptionsDialog& dlg) {
+    return dlg.stringProtectionEnabled()
+               ? aura::safety::StringProtectionMode::Mask
+               : aura::safety::StringProtectionMode::Off;
+}
+
 QString rizinStringFlagNeedle(QString content) {
     content = content.trimmed();
     QString out = QStringLiteral("str.");
@@ -1364,8 +1371,13 @@ bool MainWindow::openSafetySettingsForTest(const QString& profileId) {
 }
 
 void MainWindow::onSafetySettings() {
-    SafetySettingsDialog dlg(activeSafetyProfileId(), this);
-    if (dlg.exec() != QDialog::Accepted) return;
+    openSafetySettingsDialog(this);
+}
+
+bool MainWindow::openSafetySettingsDialog(QWidget* parentForDialog) {
+    SafetySettingsDialog dlg(activeSafetyProfileId(),
+                             parentForDialog ? parentForDialog : this);
+    if (dlg.exec() != QDialog::Accepted) return false;
     const auto editedProfile = dlg.editedProfile();
     std::string diagnostic;
     if (!aura::safety::saveSafetyProfile(
@@ -1374,9 +1386,10 @@ void MainWindow::onSafetySettings() {
             this, tr("Safety profile save failed"),
             tr("Could not save safety profile: %1").arg(
                 QString::fromStdString(diagnostic)));
-        return;
+        return false;
     }
     setActiveSafetyProfileId(dlg.selectedProfileId());
+    return true;
 }
 
 void MainWindow::pushRecentProject(const QString& path) {
@@ -2089,15 +2102,59 @@ bool MainWindow::addBinary(const QString& binaryPath) {
     return true;
 }
 
+bool MainWindow::addBinaryAndAnalyze(
+    const QString& binaryPath,
+    AuraAnalysisLevel level,
+    aura::safety::StringProtectionMode protectionMode) {
+    if (!addBinary(binaryPath)) return false;
+
+    uint8_t digest[AURA_SHA256_DIGEST_LEN];
+    if (aura_sha256_file(binaryPath.toUtf8().constData(), digest) != 0)
+        return false;
+    char hex[AURA_SHA256_DIGEST_LEN * 2 + 1] = {0};
+    aura_sha256_hex(digest, hex);
+
+    const int row = projectRowForFingerprint(QString::fromLatin1(hex));
+    if (row < 0) return false;
+    return runAnalyze(row, level, protectionMode);
+}
+
+bool MainWindow::addBinaryAndAnalyze(const QString& binaryPath,
+                                     AuraAnalysisLevel level,
+                                     bool enableStringProtection) {
+    return addBinaryAndAnalyze(
+        binaryPath, level,
+        enableStringProtection ? aura::safety::StringProtectionMode::Mask
+                               : aura::safety::StringProtectionMode::Off);
+}
+
 int MainWindow::selectedProjectRow() const {
     if (!m_projectTable) return -1;
     const auto idx = m_projectTable->currentIndex();
     return idx.isValid() ? idx.row() : -1;
 }
 
-bool MainWindow::runAnalyze(int row,
-                            AuraAnalysisLevel level,
-                            bool enableStringProtection) {
+int MainWindow::projectRowForFingerprint(const QString& fingerprint) const {
+    if (!m_projectModel) return -1;
+
+    const QByteArray wanted = fingerprint.toUtf8();
+    for (int row = 0; row < m_projectModel->rowCount(); ++row) {
+        const auto* rec = m_projectModel->recordAt(row);
+        if (rec && QByteArray(rec->fingerprint) == wanted) {
+            return row;
+        }
+    }
+    return -1;
+}
+
+bool MainWindow::runAnalyze(
+    int row,
+    AuraAnalysisLevel level,
+    aura::safety::StringProtectionMode protectionMode) {
+    const bool enableStringProtection =
+        protectionMode != aura::safety::StringProtectionMode::Off;
+    const bool maskStringProtection =
+        protectionMode == aura::safety::StringProtectionMode::Mask;
     const auto* rec = m_projectModel ? m_projectModel->recordAt(row) : nullptr;
     if (!rec) return false;
 
@@ -2270,9 +2327,18 @@ bool MainWindow::runAnalyze(int row,
                     aura::safety::buildProtectedStringView(s.content.toStdString(),
                                                            std::string(),
                                                            std::move(findings));
-                s.maskedContent = QString::fromStdString(protectedView.masked);
+                s.maskedContent =
+                    maskStringProtection
+                        ? QString::fromStdString(protectedView.masked)
+                        : QString();
                 s.protectedValue =
-                    QString::fromStdString(protectedView.protected_value);
+                    maskStringProtection
+                        ? QString::fromStdString(protectedView.protected_value)
+                        : s.content;
+                s.exportValue =
+                    maskStringProtection
+                        ? QString::fromStdString(protectedView.protected_value)
+                        : s.content;
                 s.hasProtection = !protectedView.findings.empty();
                 for (const auto& f : protectedView.findings) {
                     GuiStringRecord::ProtectionFinding gf;
@@ -2295,7 +2361,9 @@ bool MainWindow::runAnalyze(int row,
                             : QStringLiteral("Maskable: %1")
                                   .arg(tokens.join(QStringLiteral(", ")));
                 }
-                refreshProtectedValue(s);
+                if (maskStringProtection) {
+                    refreshProtectedValue(s);
+                }
             } else {
                 s.maskedContent.clear();
                 s.protectedValue = s.content;
@@ -2306,13 +2374,13 @@ bool MainWindow::runAnalyze(int row,
             }
             m_strings.push_back(std::move(s));
         }
-        if (enableStringProtection) {
+        if (maskStringProtection) {
             applyStoredStringOverrides(m_projectPath,
                                        currentFingerprintHex(m_currentSha256),
                                        &m_strings);
         }
         if (m_stringsModel) m_stringsModel->setStrings(m_strings);
-        if (enableStringProtection) {
+        if (maskStringProtection) {
             persistStringProtectionRows(m_projectPath,
                                         currentFingerprintHex(m_currentSha256),
                                         m_strings);
@@ -2563,13 +2631,22 @@ bool MainWindow::runAnalyze(int row,
 }
 
 bool MainWindow::analyzeBinaryAt(int row, AuraAnalysisLevel level) {
-    return analyzeBinaryAt(row, level, true);
+    return analyzeBinaryAt(row, level, aura::safety::StringProtectionMode::Mask);
+}
+
+bool MainWindow::analyzeBinaryAt(int row,
+                                 AuraAnalysisLevel level,
+                                 aura::safety::StringProtectionMode protectionMode) {
+    return runAnalyze(row, level, protectionMode);
 }
 
 bool MainWindow::analyzeBinaryAt(int row,
                                  AuraAnalysisLevel level,
                                  bool enableStringProtection) {
-    return runAnalyze(row, level, enableStringProtection);
+    return analyzeBinaryAt(
+        row, level,
+        enableStringProtection ? aura::safety::StringProtectionMode::Mask
+                               : aura::safety::StringProtectionMode::Off);
 }
 
 bool MainWindow::runDecompile(quint64 funcAddr) {
@@ -3563,8 +3640,10 @@ void MainWindow::onAnalyzeClicked() {
     if (!rec) return;
 
     AnalysisOptionsDialog dlg(QString::fromUtf8(rec->path), this);
+    connect(&dlg, &AnalysisOptionsDialog::safetyAssetsRequested, this,
+            [this, &dlg]() { openSafetySettingsDialog(&dlg); });
     if (dlg.exec() != QDialog::Accepted) return;
-    runAnalyze(row, dlg.selectedLevel(), dlg.stringProtectionEnabled());
+    runAnalyze(row, dlg.selectedLevel(), protectionModeFromDialog(dlg));
 }
 
 void MainWindow::onTableDoubleClicked(const QModelIndex& idx) {
@@ -3572,8 +3651,10 @@ void MainWindow::onTableDoubleClicked(const QModelIndex& idx) {
     const auto* rec = m_projectModel ? m_projectModel->recordAt(idx.row()) : nullptr;
     if (!rec) return;
     AnalysisOptionsDialog dlg(QString::fromUtf8(rec->path), this);
+    connect(&dlg, &AnalysisOptionsDialog::safetyAssetsRequested, this,
+            [this, &dlg]() { openSafetySettingsDialog(&dlg); });
     if (dlg.exec() != QDialog::Accepted) return;
-    runAnalyze(idx.row(), dlg.selectedLevel(), dlg.stringProtectionEnabled());
+    runAnalyze(idx.row(), dlg.selectedLevel(), protectionModeFromDialog(dlg));
 }
 
 void MainWindow::onNewProject() {
@@ -3607,7 +3688,12 @@ void MainWindow::onAddBinary() {
         QStringLiteral("Binaries (*.elf *.exe *.dll *.so *.dylib);;"
                        "All files (*)"));
     if (path.isEmpty()) return;
-    addBinary(path);
+    AnalysisOptionsDialog dlg(path, this);
+    connect(&dlg, &AnalysisOptionsDialog::safetyAssetsRequested, this,
+            [this, &dlg]() { openSafetySettingsDialog(&dlg); });
+    if (dlg.exec() != QDialog::Accepted) return;
+    addBinaryAndAnalyze(path, dlg.selectedLevel(),
+                        protectionModeFromDialog(dlg));
 }
 
 // ── Override editor (Phase 11.3.2 / ADR-0037) ─────────────────────────

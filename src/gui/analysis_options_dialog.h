@@ -26,6 +26,9 @@ public:
     AuraAnalysisLevel selectedLevel() const;
     bool stringProtectionEnabled() const;
 
+signals:
+    void safetyAssetsRequested();
+
 private:
     QCheckBox*    m_enableStringProtection = nullptr;
     QRadioButton* m_radioFull  = nullptr;

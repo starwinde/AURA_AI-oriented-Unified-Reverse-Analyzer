@@ -8,7 +8,9 @@
 #include <vector>
 
 #include <QComboBox>
+#include <QDesktopServices>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QLabel>
@@ -18,6 +20,7 @@
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QHBoxLayout>
+#include <QUrl>
 #include <QVBoxLayout>
 
 namespace aura::gui {
@@ -79,18 +82,6 @@ std::vector<std::string> checkedIdsFromList(const QListWidget* list) {
     for (int i = 0; i < list->count(); ++i) {
         const auto* item = list->item(i);
         if (!item || item->checkState() != Qt::Checked) continue;
-        const QString id = item->data(Qt::UserRole).toString();
-        if (!id.isEmpty()) ids.push_back(id.toStdString());
-    }
-    return ids;
-}
-
-std::vector<std::string> validIdsFromList(const QListWidget* list) {
-    std::vector<std::string> ids;
-    if (!list) return ids;
-    for (int i = 0; i < list->count(); ++i) {
-        const auto* item = list->item(i);
-        if (!item || !item->data(Qt::UserRole + 1).toBool()) continue;
         const QString id = item->data(Qt::UserRole).toString();
         if (!id.isEmpty()) ids.push_back(id.toStdString());
     }
@@ -178,6 +169,13 @@ SafetySettingsDialog::SafetySettingsDialog(const QString& selectedProfileId,
     m_modelList->setObjectName(QStringLiteral("safetyModelList"));
     detectionLayout->addWidget(m_modelList);
 
+    auto* modelDirBtn = new QPushButton(
+        textKoEn("모델 폴더 열기", "Open model folder"), detectionGroup);
+    modelDirBtn->setObjectName(
+        QStringLiteral("safetyModelDirectoryButton"));
+    modelDirBtn->setProperty("assetPath", tokenClassificationModelsDir());
+    detectionLayout->addWidget(modelDirBtn);
+
     const QString applyText = textKoEn("선택 적용", "Apply selected");
     const QString removeText = textKoEn("선택 해제", "Clear selected");
 
@@ -195,12 +193,19 @@ SafetySettingsDialog::SafetySettingsDialog(const QString& selectedProfileId,
                                           detectionGroup));
     detectionLayout->addWidget(
         new QLabel(
-            textKoEn("모두 해제하면 런타임의 모든 규칙 팩을 사용합니다.",
-                     "Clearing all rule packs uses all runtime rule packs."),
+            textKoEn("체크된 규칙 팩만 문자열 보호 탐지에 사용됩니다.",
+                     "Only checked rule packs are used for string safety detection."),
             detectionGroup));
     m_rulePackList = new QListWidget(detectionGroup);
     m_rulePackList->setObjectName(QStringLiteral("safetyRulePackList"));
     detectionLayout->addWidget(m_rulePackList);
+
+    auto* rulePackDirBtn = new QPushButton(
+        textKoEn("규칙 팩 폴더 열기", "Open rule pack folder"), detectionGroup);
+    rulePackDirBtn->setObjectName(
+        QStringLiteral("safetyRulePackDirectoryButton"));
+    rulePackDirBtn->setProperty("assetPath", rulePacksDir());
+    detectionLayout->addWidget(rulePackDirBtn);
 
     auto* ruleButtons = new QHBoxLayout();
     auto* addRuleBtn = new QPushButton(applyText, detectionGroup);
@@ -245,11 +250,16 @@ SafetySettingsDialog::SafetySettingsDialog(const QString& selectedProfileId,
         if (item && item->checkState() == Qt::Checked) {
             m_modelList->setCurrentItem(item);
         }
+        m_modelSelectionEdited = true;
         updateModelSelectionFromChecked();
         updateSummary();
     });
     connect(m_rulePackList, &QListWidget::itemChanged, this, [this]() {
+        m_rulePackSelectionEdited = true;
         updateSummary();
+    });
+    connect(modelDirBtn, &QPushButton::clicked, this, [this]() {
+        openDirectory(tokenClassificationModelsDir());
     });
     connect(addModelBtn, &QPushButton::clicked, this, [this]() {
         if (!m_modelList) return;
@@ -257,6 +267,7 @@ SafetySettingsDialog::SafetySettingsDialog(const QString& selectedProfileId,
         if (!item) return;
         QSignalBlocker blocker(m_modelList);
         item->setCheckState(Qt::Checked);
+        m_modelSelectionEdited = true;
         updateModelSelectionFromChecked();
         updateSummary();
     });
@@ -266,8 +277,12 @@ SafetySettingsDialog::SafetySettingsDialog(const QString& selectedProfileId,
         if (!item) return;
         QSignalBlocker blocker(m_modelList);
         item->setCheckState(Qt::Unchecked);
+        m_modelSelectionEdited = true;
         updateModelSelectionFromChecked();
         updateSummary();
+    });
+    connect(rulePackDirBtn, &QPushButton::clicked, this, [this]() {
+        openDirectory(rulePacksDir());
     });
     connect(addRuleBtn, &QPushButton::clicked, this, [this]() {
         if (!m_rulePackList) return;
@@ -275,6 +290,7 @@ SafetySettingsDialog::SafetySettingsDialog(const QString& selectedProfileId,
         if (!item) return;
         QSignalBlocker blocker(m_rulePackList);
         item->setCheckState(Qt::Checked);
+        m_rulePackSelectionEdited = true;
         updateSummary();
     });
     connect(removeRuleBtn, &QPushButton::clicked, this, [this]() {
@@ -283,6 +299,7 @@ SafetySettingsDialog::SafetySettingsDialog(const QString& selectedProfileId,
         if (!item) return;
         QSignalBlocker blocker(m_rulePackList);
         item->setCheckState(Qt::Unchecked);
+        m_rulePackSelectionEdited = true;
         updateSummary();
     });
     updateSummary(/*resetSelection=*/true);
@@ -302,18 +319,23 @@ std::vector<std::string> SafetySettingsDialog::selectedModelIds() const {
 
 void SafetySettingsDialog::applyModelSelectionToProfile(
     aura::safety::SafetyProfile& profile) const {
+    if (!m_modelSelectionEdited) return;
     applyModelIdsToProfile(profile, selectedModelIds());
 }
 
 std::vector<std::string> SafetySettingsDialog::selectedRulePackIds() const {
-    auto ids = checkedIdsFromList(m_rulePackList);
-    if (!ids.empty()) return ids;
-    return validIdsFromList(m_rulePackList);
+    return checkedIdsFromList(m_rulePackList);
 }
 
 void SafetySettingsDialog::applyRulePackSelectionToProfile(
     aura::safety::SafetyProfile& profile) const {
+    if (!m_rulePackSelectionEdited) return;
+
     profile.rule_pack_ids = selectedRulePackIds();
+    profile.rule_pack_selection_mode =
+        profile.rule_pack_ids.empty()
+            ? aura::safety::RulePackSelectionMode::None
+            : aura::safety::RulePackSelectionMode::Selected;
 }
 
 aura::safety::SafetyProfile SafetySettingsDialog::editedProfile() const {
@@ -383,6 +405,27 @@ void SafetySettingsDialog::updateModelSelectionFromChecked() {
     }
 }
 
+QString SafetySettingsDialog::runtimeSafetyAssetRoot() const {
+    const QByteArray env = qgetenv("AURA_HOME");
+    if (!env.isEmpty()) return QDir::cleanPath(QString::fromLocal8Bit(env));
+    return QDir::cleanPath(QDir::homePath() + QStringLiteral("/.aura"));
+}
+
+QString SafetySettingsDialog::tokenClassificationModelsDir() const {
+    return QDir(runtimeSafetyAssetRoot()).filePath(
+        QStringLiteral("token-classification-models"));
+}
+
+QString SafetySettingsDialog::rulePacksDir() const {
+    return QDir(runtimeSafetyAssetRoot()).filePath(QStringLiteral("rule-packs"));
+}
+
+bool SafetySettingsDialog::openDirectory(const QString& path) {
+    if (path.isEmpty()) return false;
+    QDir().mkpath(path);
+    return QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+}
+
 void SafetySettingsDialog::populate() {
     if (!m_profileCombo) return;
 
@@ -439,6 +482,10 @@ void SafetySettingsDialog::addAssetRows(
 
 void SafetySettingsDialog::updateSummary(bool resetSelection) {
     if (!m_summaryLabel || !m_statusLabel) return;
+    if (resetSelection) {
+        m_modelSelectionEdited = false;
+        m_rulePackSelectionEdited = false;
+    }
 
     const std::string id = currentComboProfileId(m_profileCombo).toStdString();
     const auto loaded = aura::safety::resolveSelectedSafetyProfile(id);
@@ -452,22 +499,29 @@ void SafetySettingsDialog::updateSummary(bool resetSelection) {
     }
 
     std::vector<std::string> selectedModels;
-    if (!resetSelection) {
+    if (!resetSelection && m_modelSelectionEdited) {
         selectedModels = selectedModelIds();
-    }
-    if (selectedModels.empty()) {
+    } else {
         selectedModels = activeModelIdsFromProfile(workingProfile);
     }
 
-    std::vector<std::string> checkedRulePacks = workingProfile.rule_pack_ids;
-    if (!resetSelection) {
+    std::vector<std::string> checkedRulePacks;
+    if (!resetSelection && m_rulePackSelectionEdited) {
         checkedRulePacks = checkedIdsFromList(m_rulePackList);
+    } else if (workingProfile.rule_pack_selection_mode ==
+               aura::safety::RulePackSelectionMode::All) {
+        checkedRulePacks = validIdsFromRefs(m_registry.rule_packs);
+    } else if (workingProfile.rule_pack_selection_mode ==
+               aura::safety::RulePackSelectionMode::Selected) {
+        checkedRulePacks = workingProfile.rule_pack_ids;
     }
 
     addAssetRows(m_modelList, m_registry.models, selectedModels, true);
-    workingProfile.rule_pack_ids = checkedRulePacks.empty()
-                                       ? validIdsFromRefs(m_registry.rule_packs)
-                                       : checkedRulePacks;
+    workingProfile.rule_pack_ids = checkedRulePacks;
+    workingProfile.rule_pack_selection_mode =
+        checkedRulePacks.empty()
+            ? aura::safety::RulePackSelectionMode::None
+            : aura::safety::RulePackSelectionMode::Selected;
     addAssetRows(m_rulePackList, m_registry.rule_packs,
                  checkedRulePacks, true);
     addAssetRows(m_evalDatasetList, m_registry.eval_datasets,
