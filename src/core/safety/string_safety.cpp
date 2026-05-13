@@ -863,6 +863,10 @@ std::vector<Finding> scanStringWithRulePacks(const std::string& text,
     return mergeFindings(std::move(out));
 }
 
+std::size_t effectiveRuleCount(const SafetyProfile& profile) {
+    return effectiveRules(profile).size();
+}
+
 std::vector<Finding> mergeFindings(std::vector<Finding> findings) {
     findings.erase(
         std::remove_if(findings.begin(), findings.end(),
@@ -932,6 +936,27 @@ void allocateMaskTokensForOriginal(const std::string& original,
     }
 }
 
+std::string partiallyMaskText(const std::string& value) {
+    if (value.empty()) return value;
+    const std::size_t len = value.size();
+    std::size_t mask_count = (len * 65 + 50) / 100;
+    if (mask_count == 0) mask_count = 1;
+    if (mask_count > len) mask_count = len;
+
+    const std::size_t visible = len - mask_count;
+    const std::size_t prefix = visible / 2 + visible % 2;
+    const std::size_t suffix = visible / 2;
+
+    std::string out;
+    out.reserve(len);
+    out.append(value.substr(0, prefix));
+    out.append(mask_count, '*');
+    if (suffix > 0) {
+        out.append(value.substr(len - suffix));
+    }
+    return out;
+}
+
 ProtectedStringView buildProtectedStringView(
     const std::string& original,
     const std::string& alias,
@@ -946,7 +971,7 @@ ProtectedStringView buildProtectedStringView(
         const std::size_t end = std::min(f.end, original.size());
         if (end < pos) continue;
         masked.append(original.substr(pos, f.start - pos));
-        masked.append(f.mask_token);
+        masked.append(partiallyMaskText(original.substr(f.start, end - f.start)));
         pos = end;
     }
     masked.append(original.substr(pos));
@@ -954,6 +979,7 @@ ProtectedStringView buildProtectedStringView(
     ProtectedStringView out;
     out.original = original;
     out.alias = alias;
+    out.detected_encoding = detectStringEncoding(original);
     out.findings = std::move(findings);
     out.masked = out.findings.empty() ? original : masked;
     out.protected_value = !alias.empty() ? alias : out.masked;

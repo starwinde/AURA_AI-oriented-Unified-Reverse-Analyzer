@@ -2,6 +2,8 @@
 
 #include "analysis_options_dialog.h"
 
+#include "aura/safety/string_safety.h"
+
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -21,6 +23,16 @@ bool useKoreanUi() {
     QSettings s(QStringLiteral("AURA"), QStringLiteral("aura-gui"));
     return s.value(QStringLiteral("ui/language"),
                    QStringLiteral("ko")).toString() != QStringLiteral("en");
+}
+
+bool activeSafetyProfileEnablesProtection() {
+    QSettings settings(QStringLiteral("AURA"), QStringLiteral("aura-gui"));
+    const QString id = settings.value(QStringLiteral("safety/activeProfileId"),
+                                      QStringLiteral("default")).toString();
+    const auto selected =
+        aura::safety::resolveSelectedSafetyProfile(id.toStdString());
+    const auto& profile = selected.profile;
+    return aura::safety::effectiveRuleCount(profile) > 0u;
 }
 
 }  // namespace
@@ -50,7 +62,7 @@ AnalysisOptionsDialog::AnalysisOptionsDialog(const QString& binaryPath,
         this);
     m_enableStringProtection->setObjectName(
         QStringLiteral("analysisStringProtectionCheckBox"));
-    m_enableStringProtection->setChecked(false);
+    m_enableStringProtection->setChecked(activeSafetyProfileEnablesProtection());
     outer->addWidget(m_enableStringProtection);
 
     auto* safetyAssetsButton = new QPushButton(
@@ -123,6 +135,10 @@ AuraAnalysisLevel AnalysisOptionsDialog::selectedLevel() const {
 
 bool AnalysisOptionsDialog::stringProtectionEnabled() const {
     return m_enableStringProtection && m_enableStringProtection->isChecked();
+}
+
+void AnalysisOptionsDialog::setStringProtectionEnabled(bool enabled) {
+    if (m_enableStringProtection) m_enableStringProtection->setChecked(enabled);
 }
 
 }  // namespace aura::gui

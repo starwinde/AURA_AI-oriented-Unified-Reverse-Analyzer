@@ -1,17 +1,30 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
+#include "aura/gateway/gateway_snapshot.h"
+#include "string_protection_store.h"
+#include "aura/safety/safe_export_view.h"
 #include "aura/safety/string_safety.h"
 
 #include <algorithm>
+#include <cstring>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
 #include <fstream>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace {
+
+template <typename T, typename = void>
+struct HasCStr : std::false_type {};
+
+template <typename T>
+struct HasCStr<T, std::void_t<decltype(std::declval<const T&>().c_str())>>
+    : std::true_type {};
 
 void setEnvVar(const char* key, const std::string& value) {
 #ifdef _WIN32
@@ -36,9 +49,54 @@ std::filesystem::path tempRoot(const char* name) {
            (std::string(name) + "_" + std::to_string(buildId));
 }
 
+void markGatewaySafetyReady(aura::gateway::GatewayBuildInput& input,
+                            int protectedFindingCount) {
+    input.safety_state.protection_enabled = true;
+    input.safety_state.safety_scan_executed = true;
+    input.safety_state.safety_profile_applied = true;
+    input.safety_state.rule_packs_loaded = true;
+    input.safety_state.masking_cache_current = true;
+    input.safety_state.scanned_string_count = 1;
+    input.safety_state.protected_finding_count = protectedFindingCount;
+    input.safety_state.active_rule_count = 1;
+}
+
+void addWouldBeProtectedGatewayItem(aura::gateway::GatewayBuildInput& input) {
+    input.items.push_back({"string", "0x401000", "korean_rrn",
+                           "900101-1234567", "900101-1******",
+                           "900101-1******", "KR_RRN_1"});
+}
+
+void checkNoProtectedGatewayPayload(
+    const aura::gateway::GatewaySnapshot& snapshot) {
+    CHECK(snapshot.protected_items.empty());
+    CHECK(snapshot.audit_events.empty());
+    CHECK(snapshot.prompt.included_items == 0);
+    CHECK(snapshot.prompt.omitted_items == 0);
+    CHECK(snapshot.prompt.blocked_items == 0);
+    CHECK(snapshot.prompt.body.find("900101-1******") == std::string::npos);
+    CHECK(snapshot.prompt.body.find("korean_rrn:") == std::string::npos);
+}
+
 }  // namespace
 
+static_assert(!HasCStr<aura::gateway::GatewayVerificationCheck>::value,
+              "GatewayVerificationCheck callers must use .name explicitly");
+static_assert(
+    !std::is_convertible<aura::gateway::GatewayVerificationCheck,
+                         std::string>::value,
+    "GatewayVerificationCheck must not implicitly convert to std::string");
+static_assert(
+    !std::is_convertible<aura::gateway::GatewayVerificationCheck,
+                         const std::string&>::value,
+    "GatewayVerificationCheck must not implicitly convert to std::string");
+
 TEST_CASE("rule pack scan detects common sensitive strings") {
+    const auto home = tempRoot("aura_safety_unit_default_rules_home");
+    std::filesystem::remove_all(home);
+    std::filesystem::create_directories(home);
+    setEnvVar("AURA_HOME", home.string());
+
     const aura::safety::SafetyProfile profile =
         aura::safety::loadDefaultSafetyProfile();
 
@@ -62,6 +120,8 @@ TEST_CASE("rule pack scan detects common sensitive strings") {
         "call me at 010-1234-5678", profile);
     REQUIRE(phone.size() == 1);
     CHECK(phone[0].kind == "phone_number");
+
+    clearEnvVar("AURA_HOME");
 }
 
 TEST_CASE("string protection mode text round-trips") {
@@ -81,6 +141,534 @@ TEST_CASE("string protection mode text round-trips") {
           aura::safety::StringProtectionMode::Mask);
     CHECK(aura::safety::parseStringProtectionMode("unexpected") ==
           aura::safety::StringProtectionMode::Off);
+}
+
+TEST_CASE("gateway snapshot enum text helpers are stable") {
+    using namespace aura::gateway;
+
+    CHECK(std::strcmp("rizin",
+                      gatewaySourceKindToText(GatewaySourceKind::Rizin)) == 0);
+    CHECK(std::strcmp("ghidra",
+                      gatewaySourceKindToText(GatewaySourceKind::Ghidra)) ==
+          0);
+
+    CHECK(std::strcmp("ready",
+                      gatewaySourceStatusToText(GatewaySourceStatus::Ready)) ==
+          0);
+    CHECK(std::strcmp(
+              "missing",
+              gatewaySourceStatusToText(GatewaySourceStatus::Missing)) == 0);
+    CHECK(std::strcmp("failed",
+                      gatewaySourceStatusToText(GatewaySourceStatus::Failed)) ==
+          0);
+    CHECK(std::strcmp(
+        "not_configured",
+        gatewaySourceStatusToText(GatewaySourceStatus::NotConfigured)) == 0);
+
+    CHECK(std::strcmp("allow",
+                      gatewayPolicyActionToText(GatewayPolicyAction::Allow)) ==
+          0);
+    CHECK(std::strcmp("mask",
+                      gatewayPolicyActionToText(GatewayPolicyAction::Mask)) ==
+          0);
+    CHECK(std::strcmp("omit",
+                      gatewayPolicyActionToText(GatewayPolicyAction::Omit)) ==
+          0);
+    CHECK(std::strcmp("block",
+                      gatewayPolicyActionToText(GatewayPolicyAction::Block)) ==
+          0);
+
+    CHECK(std::strcmp("pass",
+                      gatewayReadinessStatusToText(
+                          GatewayReadinessStatus::Pass)) == 0);
+    CHECK(std::strcmp("fail",
+                      gatewayReadinessStatusToText(
+                          GatewayReadinessStatus::Fail)) == 0);
+}
+
+TEST_CASE("GatewaySnapshot: readiness and check status text is stable") {
+    using namespace aura::gateway;
+
+    CHECK(std::strcmp("pass",
+                      gatewayReadinessStatusToText(
+                          GatewayReadinessStatus::Pass)) == 0);
+    CHECK(std::strcmp("warning",
+                      gatewayReadinessStatusToText(
+                          GatewayReadinessStatus::Warning)) == 0);
+    CHECK(std::strcmp("not_ready",
+                      gatewayReadinessStatusToText(
+                          GatewayReadinessStatus::NotReady)) == 0);
+    CHECK(std::strcmp("disabled",
+                      gatewayReadinessStatusToText(
+                          GatewayReadinessStatus::Disabled)) == 0);
+    CHECK(std::strcmp("fail",
+                      gatewayReadinessStatusToText(
+                          GatewayReadinessStatus::Fail)) == 0);
+
+    CHECK(std::strcmp("pass",
+                      gatewayCheckStatusToText(GatewayCheckStatus::Pass)) == 0);
+    CHECK(std::strcmp("warning",
+                      gatewayCheckStatusToText(
+                          GatewayCheckStatus::Warning)) == 0);
+    CHECK(std::strcmp("not_ready",
+                      gatewayCheckStatusToText(
+                          GatewayCheckStatus::NotReady)) == 0);
+    CHECK(std::strcmp("disabled",
+                      gatewayCheckStatusToText(
+                          GatewayCheckStatus::Disabled)) == 0);
+    CHECK(std::strcmp("fail",
+                      gatewayCheckStatusToText(GatewayCheckStatus::Fail)) == 0);
+}
+
+TEST_CASE("gateway snapshot builds protected prompt and verification from safe items") {
+    using namespace aura::gateway;
+
+    GatewayBuildInput input;
+    markGatewaySafetyReady(input, 1);
+    input.sources.push_back(
+        {GatewaySourceKind::Rizin, GatewaySourceStatus::Ready, "analysis loaded"});
+    input.sources.push_back(
+        {GatewaySourceKind::Ghidra, GatewaySourceStatus::NotConfigured,
+         "Ghidra runtime is not configured"});
+    input.items.push_back({"string", "0x401000", "korean_rrn",
+                           "900101-1234567", "900101-1******",
+                           "900101-1******", "KR_RRN_1"});
+
+    const GatewaySnapshot snapshot = buildGatewaySnapshot(input);
+
+    REQUIRE(snapshot.protected_items.size() == 1u);
+    CHECK(snapshot.protected_items[0].action == GatewayPolicyAction::Mask);
+    CHECK(snapshot.protected_items[0].original_included == false);
+    CHECK(snapshot.verification.status == GatewayReadinessStatus::Pass);
+    CHECK(snapshot.prompt.body.find("900101-1******") != std::string::npos);
+    CHECK(snapshot.prompt.body.find("900101-1234567") == std::string::npos);
+    CHECK_FALSE(snapshot.audit_events.empty());
+}
+
+TEST_CASE("gateway snapshot verification fails when raw original leaks into prompt") {
+    using namespace aura::gateway;
+
+    GatewayBuildInput input;
+    markGatewaySafetyReady(input, 1);
+    input.items.push_back({"string", "0x401000", "korean_rrn",
+                           "900101-1234567", "900101-1******",
+                           "900101-1234567", "KR_RRN_1"});
+
+    const GatewaySnapshot snapshot = buildGatewaySnapshot(input);
+
+    CHECK(snapshot.verification.status == GatewayReadinessStatus::Fail);
+    const auto check = std::find_if(
+        snapshot.verification.checks.begin(),
+        snapshot.verification.checks.end(),
+        [](const GatewayVerificationCheck& entry) {
+            return entry.name == "original_values_not_included";
+        });
+    REQUIRE(check != snapshot.verification.checks.end());
+    CHECK(check->status == GatewayCheckStatus::Fail);
+    CHECK(check->detail.find(
+              "raw original value appeared in protected output at 0x401000") !=
+          std::string::npos);
+    REQUIRE(snapshot.protected_items.size() == 1u);
+    CHECK(snapshot.protected_items[0].action == GatewayPolicyAction::Block);
+    CHECK(snapshot.protected_items[0].original_included == true);
+    CHECK(snapshot.protected_items[0].display_value.find("900101-1234567") ==
+          std::string::npos);
+    CHECK(snapshot.protected_items[0].transmission_value.find(
+              "900101-1234567") == std::string::npos);
+    CHECK(snapshot.prompt.body.find("900101-1234567") == std::string::npos);
+    REQUIRE_FALSE(snapshot.audit_events.empty());
+    CHECK(snapshot.audit_events[0].safe_preview.find("900101-1234567") ==
+          std::string::npos);
+}
+
+TEST_CASE("gateway snapshot verification blocks raw original display values") {
+    using namespace aura::gateway;
+
+    GatewayBuildInput input;
+    markGatewaySafetyReady(input, 1);
+    input.items.push_back({"string", "0x401000", "korean_rrn",
+                           "900101-1234567", "900101-1234567",
+                           "900101-1******", "KR_RRN_1"});
+
+    const GatewaySnapshot snapshot = buildGatewaySnapshot(input);
+
+    CHECK(snapshot.verification.status == GatewayReadinessStatus::Fail);
+    REQUIRE(snapshot.protected_items.size() == 1u);
+    CHECK(snapshot.protected_items[0].action == GatewayPolicyAction::Block);
+    CHECK(snapshot.protected_items[0].original_included == true);
+    CHECK(snapshot.protected_items[0].display_value == "[blocked]");
+    CHECK(snapshot.protected_items[0].transmission_value == "[blocked]");
+    CHECK(snapshot.prompt.body.find("900101-1234567") == std::string::npos);
+    REQUIRE_FALSE(snapshot.audit_events.empty());
+    CHECK(snapshot.audit_events[0].safe_preview == "[blocked]");
+}
+
+TEST_CASE("gateway snapshot treats kr rrn and api key as sensitive aliases") {
+    using namespace aura::gateway;
+
+    GatewayBuildInput input;
+    markGatewaySafetyReady(input, 2);
+    input.items.push_back({"string", "0x401000", "kr_rrn",
+                           "900101-1234567", "900101-1******",
+                           "900101-1******", "KR_RRN_1"});
+    input.items.push_back({"string", "0x401020", "api_key",
+                           "api_key=abc1234567890XYZSECRET",
+                           "api_key=abc********SECRET",
+                           "api_key=abc********SECRET", "API_KEY_1"});
+
+    const GatewaySnapshot snapshot = buildGatewaySnapshot(input);
+
+    REQUIRE(snapshot.protected_items.size() == 2u);
+    CHECK(snapshot.protected_items[0].action == GatewayPolicyAction::Mask);
+    CHECK(snapshot.protected_items[1].action == GatewayPolicyAction::Mask);
+    CHECK(snapshot.prompt.included_items == 2);
+}
+
+TEST_CASE("SafetyProfile: selected missing rule pack has zero effective rules") {
+    aura::safety::SafetyProfile profile;
+    profile.rule_pack_selection_mode =
+        aura::safety::RulePackSelectionMode::Selected;
+    profile.rule_pack_ids = {"missing-rule-pack-for-test"};
+
+    CHECK(aura::safety::effectiveRuleCount(profile) == 0);
+}
+
+TEST_CASE("GatewaySnapshot: disabled protection is not pass") {
+    using namespace aura::gateway;
+    GatewayBuildInput input;
+    input.safety_state.protection_enabled = false;
+    addWouldBeProtectedGatewayItem(input);
+
+    const GatewaySnapshot snapshot = buildGatewaySnapshot(input);
+
+    CHECK(snapshot.verification.status == GatewayReadinessStatus::Disabled);
+    REQUIRE(snapshot.verification.checks.size() >= 1);
+    CHECK(snapshot.verification.checks[0].status ==
+          GatewayCheckStatus::Disabled);
+    checkNoProtectedGatewayPayload(snapshot);
+}
+
+TEST_CASE("GatewaySnapshot: missing safety scan is not ready") {
+    using namespace aura::gateway;
+    GatewayBuildInput input;
+    input.safety_state.protection_enabled = true;
+    input.safety_state.safety_scan_executed = false;
+    addWouldBeProtectedGatewayItem(input);
+
+    const GatewaySnapshot snapshot = buildGatewaySnapshot(input);
+
+    CHECK(snapshot.verification.status == GatewayReadinessStatus::NotReady);
+    checkNoProtectedGatewayPayload(snapshot);
+}
+
+TEST_CASE("GatewaySnapshot: missing safety profile is not ready") {
+    using namespace aura::gateway;
+    GatewayBuildInput input;
+    input.safety_state.protection_enabled = true;
+    input.safety_state.safety_scan_executed = true;
+    input.safety_state.safety_profile_applied = false;
+    addWouldBeProtectedGatewayItem(input);
+
+    const GatewaySnapshot snapshot = buildGatewaySnapshot(input);
+
+    CHECK(snapshot.verification.status == GatewayReadinessStatus::NotReady);
+    checkNoProtectedGatewayPayload(snapshot);
+}
+
+TEST_CASE("GatewaySnapshot: stale masking cache is not ready") {
+    using namespace aura::gateway;
+    GatewayBuildInput input;
+    markGatewaySafetyReady(input, 1);
+    input.safety_state.masking_cache_current = false;
+    addWouldBeProtectedGatewayItem(input);
+
+    const GatewaySnapshot snapshot = buildGatewaySnapshot(input);
+
+    CHECK(snapshot.verification.status == GatewayReadinessStatus::NotReady);
+    checkNoProtectedGatewayPayload(snapshot);
+}
+
+TEST_CASE("GatewaySnapshot: scan with no findings is warning not pass") {
+    using namespace aura::gateway;
+    GatewayBuildInput input;
+    input.safety_state.protection_enabled = true;
+    input.safety_state.safety_scan_executed = true;
+    input.safety_state.safety_profile_applied = true;
+    input.safety_state.rule_packs_loaded = true;
+    input.safety_state.masking_cache_current = true;
+    input.safety_state.scanned_string_count = 1;
+    input.safety_state.protected_finding_count = 0;
+    input.safety_state.active_rule_count = 1;
+
+    const GatewaySnapshot snapshot = buildGatewaySnapshot(input);
+
+    CHECK(snapshot.verification.status == GatewayReadinessStatus::Warning);
+    CHECK(snapshot.prompt.included_items == 0);
+    CHECK(snapshot.protected_items.empty());
+}
+
+TEST_CASE("GatewaySnapshot: stale items with zero findings do not emit payload") {
+    using namespace aura::gateway;
+    GatewayBuildInput input;
+    markGatewaySafetyReady(input, 0);
+    addWouldBeProtectedGatewayItem(input);
+
+    const GatewaySnapshot snapshot = buildGatewaySnapshot(input);
+
+    CHECK(snapshot.verification.status == GatewayReadinessStatus::Warning);
+    checkNoProtectedGatewayPayload(snapshot);
+}
+
+TEST_CASE("GatewaySnapshot: stale findings without loaded rule packs do not emit payload") {
+    using namespace aura::gateway;
+    GatewayBuildInput input;
+    markGatewaySafetyReady(input, 1);
+    input.safety_state.rule_packs_loaded = false;
+    addWouldBeProtectedGatewayItem(input);
+
+    const GatewaySnapshot snapshot = buildGatewaySnapshot(input);
+
+    CHECK(snapshot.verification.status == GatewayReadinessStatus::Warning);
+    const auto check = std::find_if(
+        snapshot.verification.checks.begin(),
+        snapshot.verification.checks.end(),
+        [](const GatewayVerificationCheck& entry) {
+            return entry.name == "rule_packs_loaded";
+        });
+    REQUIRE(check != snapshot.verification.checks.end());
+    CHECK(check->status == GatewayCheckStatus::Warning);
+    CHECK(check->detail.find("no active rule pack was loaded") !=
+          std::string::npos);
+    checkNoProtectedGatewayPayload(snapshot);
+}
+
+TEST_CASE("GatewaySnapshot: stale findings with zero active rules do not emit payload") {
+    using namespace aura::gateway;
+    GatewayBuildInput input;
+    markGatewaySafetyReady(input, 1);
+    input.safety_state.active_rule_count = 0;
+    addWouldBeProtectedGatewayItem(input);
+
+    const GatewaySnapshot snapshot = buildGatewaySnapshot(input);
+
+    CHECK(snapshot.verification.status == GatewayReadinessStatus::Warning);
+    const auto check = std::find_if(
+        snapshot.verification.checks.begin(),
+        snapshot.verification.checks.end(),
+        [](const GatewayVerificationCheck& entry) {
+            return entry.name == "active_rule_count";
+        });
+    REQUIRE(check != snapshot.verification.checks.end());
+    CHECK(check->status == GatewayCheckStatus::Warning);
+    CHECK(check->detail.find("no effective safety rules are active") !=
+          std::string::npos);
+    checkNoProtectedGatewayPayload(snapshot);
+}
+
+TEST_CASE("GatewaySnapshot: scanned benign item is not treated as protected") {
+    using namespace aura::gateway;
+    GatewayBuildInput input;
+    input.safety_state.protection_enabled = true;
+    input.safety_state.safety_scan_executed = true;
+    input.safety_state.safety_profile_applied = true;
+    input.safety_state.rule_packs_loaded = true;
+    input.safety_state.masking_cache_current = true;
+    input.safety_state.scanned_string_count = 1;
+    input.safety_state.protected_finding_count = 0;
+    input.safety_state.active_rule_count = 1;
+
+    const GatewaySnapshot snapshot = buildGatewaySnapshot(input);
+
+    CHECK(snapshot.verification.status == GatewayReadinessStatus::Warning);
+    CHECK(snapshot.protected_items.empty());
+    CHECK(snapshot.prompt.included_items == 0);
+}
+
+TEST_CASE("GatewaySnapshot: protected findings without input items are warning") {
+    using namespace aura::gateway;
+    GatewayBuildInput input;
+    markGatewaySafetyReady(input, 1);
+
+    const GatewaySnapshot snapshot = buildGatewaySnapshot(input);
+
+    CHECK(snapshot.verification.status == GatewayReadinessStatus::Warning);
+    CHECK(snapshot.prompt.included_items == 0);
+    CHECK(snapshot.protected_items.empty());
+    CHECK(snapshot.audit_events.empty());
+    CHECK(snapshot.prompt.body.find("korean_rrn:") == std::string::npos);
+
+    const auto check = std::find_if(
+        snapshot.verification.checks.begin(),
+        snapshot.verification.checks.end(),
+        [](const GatewayVerificationCheck& entry) {
+            return entry.name == "protected_prompt_generated";
+        });
+    REQUIRE(check != snapshot.verification.checks.end());
+    CHECK(check->status == GatewayCheckStatus::Warning);
+    CHECK(check->detail.find("no protected prompt items were included") !=
+          std::string::npos);
+}
+
+TEST_CASE("GatewaySnapshot: empty protected transmission value cannot pass") {
+    using namespace aura::gateway;
+    GatewayBuildInput input;
+    markGatewaySafetyReady(input, 1);
+    input.items.push_back({"string",
+                           "0x401000",
+                           "korean_rrn",
+                           "900101-1234567",
+                           "",
+                           "",
+                           "KR_RRN_1"});
+
+    const GatewaySnapshot snapshot = buildGatewaySnapshot(input);
+
+    CHECK(snapshot.verification.status != GatewayReadinessStatus::Pass);
+    CHECK(snapshot.prompt.omitted_items == 1);
+    CHECK(snapshot.prompt.included_items == 0);
+    CHECK(snapshot.prompt.body.find("korean_rrn:") == std::string::npos);
+    REQUIRE(snapshot.protected_items.size() == 1u);
+    CHECK(snapshot.protected_items[0].action == GatewayPolicyAction::Omit);
+}
+
+TEST_CASE("GatewaySnapshot: protected finding produces pass") {
+    using namespace aura::gateway;
+    GatewayBuildInput input;
+    markGatewaySafetyReady(input, 1);
+    input.items.push_back({"string",
+                           "0x401000",
+                           "korean_rrn",
+                           "900101-1234567",
+                           "900101-1******",
+                           "900101-1******",
+                           "KR_RRN_1"});
+
+    const GatewaySnapshot snapshot = buildGatewaySnapshot(input);
+
+    CHECK(snapshot.verification.status == GatewayReadinessStatus::Pass);
+    CHECK(snapshot.prompt.included_items == 1);
+}
+
+TEST_CASE("GatewaySnapshot: raw original leak produces fail") {
+    using namespace aura::gateway;
+    GatewayBuildInput input;
+    markGatewaySafetyReady(input, 1);
+    input.items.push_back({"string",
+                           "0x401000",
+                           "korean_rrn",
+                           "900101-1234567",
+                           "900101-1234567",
+                           "900101-1234567",
+                           "KR_RRN_1"});
+
+    const GatewaySnapshot snapshot = buildGatewaySnapshot(input);
+
+    CHECK(snapshot.verification.status == GatewayReadinessStatus::Fail);
+    CHECK(snapshot.prompt.blocked_items == 1);
+}
+
+TEST_CASE("safe export item excludes original value by construction") {
+    aura::safety::SafeExportInput input;
+    input.kind = "string";
+    input.location = "0x401000";
+    input.category = "kr_rrn";
+    input.original_value = "900101-1234567";
+    input.display_value = "900101-1******";
+    input.transmission_value = "900101-1******";
+    input.mask_token = "kr_rrn_1";
+
+    const auto item = aura::safety::makeSafeExportItem(input);
+    CHECK(item.kind == "string");
+    CHECK(item.location == "0x401000");
+    CHECK(item.category == "kr_rrn");
+    CHECK(item.display_value == "900101-1******");
+    CHECK(item.transmission_value == "900101-1******");
+    CHECK(item.mask_token == "kr_rrn_1");
+    CHECK(item.original_included == false);
+    CHECK(item.transmission_value.find("900101-1234567") ==
+          std::string::npos);
+}
+
+TEST_CASE("safe export item guards accidental original passthrough") {
+    aura::safety::SafeExportInput input;
+    input.kind = "string";
+    input.location = "0x401000";
+    input.category = "kr_rrn";
+    input.original_value = "900101-1234567";
+    input.display_value = "900101-1******";
+    input.transmission_value = "900101-1234567";
+    input.mask_token = "kr_rrn_1";
+
+    const auto item = aura::safety::makeSafeExportItem(input);
+    CHECK(item.original_included == false);
+    CHECK(item.display_value == "900101-1******");
+    CHECK(item.transmission_value == "900101-1******");
+    CHECK(item.transmission_value != input.original_value);
+}
+
+TEST_CASE("safe export item blanks display and transmission when no safe value exists") {
+    aura::safety::SafeExportInput input;
+    input.kind = "string";
+    input.location = "0x401000";
+    input.category = "kr_rrn";
+    input.original_value = "900101-1234567";
+    input.display_value = "900101-1234567";
+    input.transmission_value = "900101-1234567";
+    input.mask_token = "kr_rrn_1";
+
+    const auto item = aura::safety::makeSafeExportItem(input);
+    CHECK(item.original_included == false);
+    CHECK(item.display_value.empty());
+    CHECK(item.transmission_value.empty());
+}
+
+TEST_CASE("string protection store deletes rows for a fingerprint") {
+    namespace fs = std::filesystem;
+    const fs::path dbPath =
+        tempRoot("aura_safety_unit_protection_delete") / "store.db";
+    fs::remove_all(dbPath.parent_path());
+    fs::create_directories(dbPath.parent_path());
+
+    AuraStringProtectionStore* store =
+        aura_string_protection_store_open(dbPath.string().c_str());
+    REQUIRE(store != nullptr);
+
+    AuraStringOverrideRecord overrideRec{};
+    std::strncpy(overrideRec.binary_fingerprint, "abc",
+                 sizeof(overrideRec.binary_fingerprint) - 1);
+    overrideRec.string_addr = 0x1000;
+    std::strncpy(overrideRec.original_hash, "hash",
+                 sizeof(overrideRec.original_hash) - 1);
+    std::strncpy(overrideRec.mask_token, "01********78",
+                 sizeof(overrideRec.mask_token) - 1);
+    overrideRec.display_mode = 2;
+    REQUIRE(aura_string_protection_store_put_override(store, &overrideRec) == 0);
+
+    AuraStringProtectionFinding finding{};
+    std::strncpy(finding.binary_fingerprint, "abc",
+                 sizeof(finding.binary_fingerprint) - 1);
+    finding.string_addr = 0x1000;
+    std::strncpy(finding.detector_id, "fixture/email",
+                 sizeof(finding.detector_id) - 1);
+    std::strncpy(finding.finding_kind, "email",
+                 sizeof(finding.finding_kind) - 1);
+    finding.start_offset = 0;
+    finding.end_offset = 4;
+    finding.confidence = 1.0;
+    std::strncpy(finding.mask_token, "01********78",
+                 sizeof(finding.mask_token) - 1);
+    REQUIRE(aura_string_protection_store_put_finding(store, &finding) == 0);
+
+    REQUIRE(aura_string_protection_store_delete_for_fingerprint(store,
+                                                               "abc") == 2);
+
+    AuraStringOverrideRecord got{};
+    CHECK(aura_string_protection_store_get_override(
+              store, "abc", 0x1000, "hash", &got) != 0);
+    CHECK(aura_string_protection_store_count_overrides(store) == 0);
+    CHECK(aura_string_protection_store_count_findings(store) == 0);
+
+    aura_string_protection_store_close(store);
 }
 
 TEST_CASE("explicit none rule pack selection returns no rule findings") {
@@ -917,8 +1505,37 @@ TEST_CASE("protected string view masks findings and preserves alias priority") {
         "alice.smith@example.com", "customer_email", {f});
     REQUIRE(view.findings.size() == 1);
     CHECK(view.findings[0].mask_token == "[EMAIL_1]");
-    CHECK(view.masked == "[EMAIL_1]");
+    CHECK(view.masked == "alic***************.com");
     CHECK(view.protected_value == "customer_email");
+    CHECK(view.detected_encoding.label == "ascii");
+}
+
+TEST_CASE("protected string view demo examples use visible star masking") {
+    aura::safety::Finding rrn;
+    rrn.detector_id = "builtin/kr_rrn";
+    rrn.kind = "kr_rrn";
+    rrn.start = 0;
+    rrn.end = 14;
+    rrn.confidence = 0.99;
+
+    const auto rrnView = aura::safety::buildProtectedStringView(
+        "900101-1234567", "", {rrn});
+    CHECK(rrnView.masked == "900*********67");
+    CHECK(rrnView.masked.find('*') != std::string::npos);
+    CHECK(rrnView.masked.find("900101-1234567") == std::string::npos);
+
+    aura::safety::Finding phone;
+    phone.detector_id = "builtin/phone";
+    phone.kind = "phone_number";
+    phone.start = 0;
+    phone.end = 13;
+    phone.confidence = 0.99;
+
+    const auto phoneView = aura::safety::buildProtectedStringView(
+        "010-1234-5678", "", {phone});
+    CHECK(phoneView.masked == "010********78");
+    CHECK(phoneView.masked.find('*') != std::string::npos);
+    CHECK(phoneView.masked.find("010-1234-5678") == std::string::npos);
 }
 
 TEST_CASE("protected string view reuses mask token for the same source value") {
@@ -939,5 +1556,40 @@ TEST_CASE("protected string view reuses mask token for the same source value") {
     REQUIRE(view.findings.size() == 2);
     CHECK(view.findings[0].mask_token == "[EMAIL_1]");
     CHECK(view.findings[1].mask_token == "[EMAIL_1]");
-    CHECK(view.masked == "first [EMAIL_1] second [EMAIL_1]");
+    CHECK(view.masked ==
+          "first alic***************.com second alic***************.com");
+}
+
+TEST_CASE("string encoding detection classifies ascii utf and unknown bytes") {
+    {
+        const auto enc = aura::safety::detectStringEncoding("hello world");
+        CHECK(enc.label == "ascii");
+        CHECK(enc.display == "hello world");
+        CHECK_FALSE(enc.lossy);
+    }
+    {
+        const auto enc = aura::safety::detectStringEncoding(
+            std::string("\xEC\x95\x88\xEB\x85\x95", 6));
+        CHECK(enc.label == "utf8");
+        CHECK(enc.display == std::string("\xEC\x95\x88\xEB\x85\x95", 6));
+        CHECK_FALSE(enc.lossy);
+    }
+    {
+        const auto enc = aura::safety::detectStringEncoding(
+            std::string("h\0i\0", 4));
+        CHECK(enc.label == "utf16le");
+        CHECK(enc.display == "hi");
+    }
+    {
+        const auto enc = aura::safety::detectStringEncoding(
+            std::string("\0h\0i", 4));
+        CHECK(enc.label == "utf16be");
+        CHECK(enc.display == "hi");
+    }
+    {
+        const auto enc = aura::safety::detectStringEncoding(
+            std::string("\xFF\xFE\xFD", 3));
+        CHECK(enc.label == "unknown");
+        CHECK(enc.lossy);
+    }
 }

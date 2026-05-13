@@ -99,9 +99,41 @@ void unsetEnvVar(const char* name) {
 #endif
 }
 
+void writeTextFile(const fs::path& path, const std::string& text) {
+    std::ofstream out(path, std::ios::binary);
+    REQUIRE(out.good());
+    out << text;
+}
+
+void writeFixtureRulePack(const fs::path& home) {
+    const fs::path pack = home / "rule-packs" / "fixture-rule";
+    fs::create_directories(pack);
+    writeTextFile(
+        pack / "manifest.json",
+        R"({"schema_version":1,"pack_id":"fixture-rule","display_name":"fixture rule","rules_file":"rules.json"})");
+    writeTextFile(
+        pack / "rules.json",
+        R"({"schema_version":1,"rules":[{"id":"fixture-rule/rrn","kind":"KR_RRN","pattern":"[0-9]{6}-[0-9]{7}","confidence":0.99}]})");
+
+    const fs::path profiles = home / "safety-profiles";
+    fs::create_directories(profiles);
+    writeTextFile(
+        profiles / "default.json",
+        R"({"schema_version":1,"profile_id":"default","rule_pack_selection_mode":"selected","rule_pack_ids":["fixture-rule"]})");
+}
+
 std::string getEnvVar(const char* name) {
     const char* value = std::getenv(name);
     return value != nullptr ? value : "";
+}
+
+std::string allowedRootsFor(const fs::path& repo_root, const fs::path& extra) {
+#ifdef _WIN32
+    constexpr char sep = ';';
+#else
+    constexpr char sep = ':';
+#endif
+    return repo_root.string() + sep + extra.string();
 }
 
 class ScopedEnvVar {
@@ -158,6 +190,37 @@ bool cliLooksAvailable(const fs::path& repo_root) {
 
 bool cliBridgeBuilt() {
     return AURA_MCP_SMOKE_HAS_CLI != 0;
+}
+
+fs::path makeSensitiveFixture() {
+    fs::path out = tempInputPath("sensitive_bin");
+    fs::remove(out);
+    writeTextFile(out, "AURA_SENSITIVE_RRN=900101-1234567\n");
+    return out;
+}
+
+std::string auraCliBinary() {
+    const char* env = std::getenv("AURA_BIN");
+    if (env != nullptr && env[0] != '\0') {
+        return env;
+    }
+
+    const fs::path repo_root = findRepoRoot();
+    REQUIRE(!repo_root.empty());
+#ifdef _WIN32
+    const fs::path candidate = repo_root / "build-trim-gui" / "src" / "cli" /
+                               "Release" / "aura.exe";
+#else
+    const fs::path candidate =
+        repo_root / "build-trim-gui" / "src" / "cli" / "aura";
+#endif
+    REQUIRE(fs::exists(candidate));
+    return candidate.string();
+}
+
+std::string runAuraMcpJson(const std::string& args) {
+    return runCommand(quotePath(auraCliBinary()) + " --compact mcp-json " +
+                      args);
 }
 
 cJSON* parseLine(const std::string& text, int line_index) {
@@ -250,6 +313,87 @@ bool jsonTreeHasKey(const cJSON* item, const char* key) {
         }
     }
     return false;
+}
+
+std::string jsonEscapePath(const std::string& path) {
+    std::string escaped;
+    escaped.reserve(path.size() * 2);
+    for (const char ch : path) {
+        if (ch == '\\') {
+            escaped += "\\\\";
+        } else if (ch == '"') {
+            escaped += "\\\"";
+        } else {
+            escaped += ch;
+        }
+    }
+    return escaped;
+}
+
+bool containsPathLeak(const std::string& text, const fs::path& path) {
+    const std::string native = path.string();
+    const std::string generic = path.generic_string();
+    return (!native.empty() &&
+            (text.find(native) != std::string::npos ||
+             text.find(jsonEscapePath(native)) != std::string::npos)) ||
+           (!generic.empty() &&
+            (text.find(generic) != std::string::npos ||
+             text.find(jsonEscapePath(generic)) != std::string::npos));
+}
+
+bool toolsArrayHasName(const cJSON* tools, const char* name) {
+    if (!cJSON_IsArray(tools) || name == nullptr) {
+        return false;
+    }
+
+    const cJSON* tool = nullptr;
+    cJSON_ArrayForEach(tool, tools) {
+        if (!cJSON_IsObject(tool)) {
+            continue;
+        }
+        const cJSON* tool_name =
+            cJSON_GetObjectItemCaseSensitive(tool, "name");
+        if (cJSON_IsString(tool_name) && tool_name->valuestring != nullptr &&
+            std::string(tool_name->valuestring) == name) {
+            return true;
+        }
+    }
+    return false;
+}
+
+const cJSON* toolByName(const cJSON* tools, const char* name) {
+    if (!cJSON_IsArray(tools) || name == nullptr) {
+        return nullptr;
+    }
+
+    const cJSON* tool = nullptr;
+    cJSON_ArrayForEach(tool, tools) {
+        if (!cJSON_IsObject(tool)) {
+            continue;
+        }
+        const cJSON* tool_name =
+            cJSON_GetObjectItemCaseSensitive(tool, "name");
+        if (cJSON_IsString(tool_name) && tool_name->valuestring != nullptr &&
+            std::string(tool_name->valuestring) == name) {
+            return tool;
+        }
+    }
+    return nullptr;
+}
+
+bool toolPropertyHasType(const cJSON* tools,
+                         const char* tool_name,
+                         const char* property_name,
+                         const char* expected_type) {
+    const cJSON* tool = toolByName(tools, tool_name);
+    const cJSON* schema = cJSON_GetObjectItemCaseSensitive(tool, "inputSchema");
+    const cJSON* properties =
+        cJSON_GetObjectItemCaseSensitive(schema, "properties");
+    const cJSON* property =
+        cJSON_GetObjectItemCaseSensitive(properties, property_name);
+    const cJSON* type = cJSON_GetObjectItemCaseSensitive(property, "type");
+    return cJSON_IsString(type) && type->valuestring != nullptr &&
+           std::string(type->valuestring) == expected_type;
 }
 
 cJSON* envelopeFromCallResponse(const cJSON* response) {
@@ -360,6 +504,7 @@ TEST_CASE("aura-mcp initializes, lists tools, and denies raw calls") {
         cJSON_GetObjectItemCaseSensitive(tools_result, "tools");
     REQUIRE(cJSON_IsArray(tools));
     CHECK(out.find("aura_probe_engines") != std::string::npos);
+    CHECK(out.find("aura_get_gateway_snapshot") != std::string::npos);
     CHECK(out.find("aura_get_raw_disassembly") != std::string::npos);
 
     const cJSON* call_result = resultOf(raw_call);
@@ -375,6 +520,135 @@ TEST_CASE("aura-mcp initializes, lists tools, and denies raw calls") {
     cJSON_Delete(initialize);
     cJSON_Delete(tools_list);
     cJSON_Delete(raw_call);
+    std::remove(input_path.c_str());
+}
+
+TEST_CASE("aura-mcp exposes protected gateway snapshot tool") {
+    if (!cliBridgeBuilt()) {
+        return;
+    }
+    const char* exe_env = std::getenv("AURA_MCP_BIN");
+    REQUIRE(exe_env != nullptr);
+    ScopedEnvVar repo_root_env("AURA_REPO_ROOT");
+    ScopedEnvVar allowed_roots_env("AURA_MCP_ALLOWED_ROOTS");
+    ScopedEnvVar aura_home_env("AURA_HOME");
+
+    const fs::path repo_root = findRepoRoot();
+    REQUIRE(!repo_root.empty());
+    const fs::path fixture =
+#ifdef _WIN32
+        repo_root / "tests" / "fixtures" / "bin" /
+        "pe_smoke.x86_64.exe";
+#else
+        repo_root / "tests" / "fixtures" / "bin" / "elf_smoke.x86_64";
+#endif
+    REQUIRE(fs::exists(fixture));
+    setEnvVar("AURA_REPO_ROOT", repo_root.string());
+    setEnvVar("AURA_MCP_ALLOWED_ROOTS",
+              allowedRootsFor(repo_root, fs::temp_directory_path()));
+
+    const std::string input_path = tempInputPath("gateway_snapshot");
+    {
+        std::ofstream input(input_path, std::ios::binary);
+        REQUIRE(input.good());
+        input << "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/list\","
+                 "\"params\":{}}\n";
+        input << "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"tools/call\","
+                 "\"params\":{\"name\":\"aura_get_gateway_snapshot\","
+                 "\"arguments\":{}}}\n";
+        input << "{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"tools/call\","
+                 "\"params\":{\"name\":\"aura_get_gateway_snapshot\","
+                 "\"arguments\":{\"binary_path\":\""
+              << fixture.generic_string() << "\"}}}\n";
+    }
+
+    const std::string out = runMcpWithInput(exe_env, input_path);
+    CHECK(responseLineCount(out) == 3);
+    CHECK(out.find("900101-1234567") == std::string::npos);
+    CHECK_FALSE(containsPathLeak(out, repo_root));
+
+    cJSON* tools_response = parseLine(out, 0);
+    cJSON* gateway_response = parseLine(out, 1);
+    cJSON* gateway_binary_response = parseLine(out, 2);
+
+    const cJSON* tools_result = resultOf(tools_response);
+    const cJSON* tools =
+        cJSON_GetObjectItemCaseSensitive(tools_result, "tools");
+    REQUIRE(cJSON_IsArray(tools));
+    CHECK(toolsArrayHasName(tools, "aura_get_gateway_snapshot"));
+    CHECK(toolPropertyHasType(tools,
+                              "aura_get_gateway_snapshot",
+                              "binary_path",
+                              "string"));
+    const cJSON* gateway_tool = toolByName(tools, "aura_get_gateway_snapshot");
+    const cJSON* schema =
+        cJSON_GetObjectItemCaseSensitive(gateway_tool, "inputSchema");
+    const cJSON* required =
+        cJSON_GetObjectItemCaseSensitive(schema, "required");
+    REQUIRE(cJSON_IsArray(required));
+    CHECK(cJSON_GetArraySize(required) == 0);
+
+    cJSON* envelope = envelopeFromCallResponse(gateway_response);
+    checkProtectedOkEnvelope(envelope, "aura_get_gateway_snapshot");
+    const cJSON* aura_cli = auraCliOf(envelope);
+    const cJSON* gateway =
+        cJSON_GetObjectItemCaseSensitive(aura_cli, "gateway");
+    REQUIRE(cJSON_IsObject(gateway));
+    CHECK(cJSON_IsObject(
+        cJSON_GetObjectItemCaseSensitive(gateway, "protected_prompt")));
+    const cJSON* verification =
+        cJSON_GetObjectItemCaseSensitive(gateway, "verification");
+    REQUIRE(cJSON_IsObject(verification));
+    const cJSON* status =
+        cJSON_GetObjectItemCaseSensitive(verification, "status");
+    REQUIRE(cJSON_IsString(status));
+    const cJSON* checks =
+        cJSON_GetObjectItemCaseSensitive(verification, "checks");
+    REQUIRE(cJSON_IsArray(checks));
+    const cJSON* first_check = cJSON_GetArrayItem(checks, 0);
+    REQUIRE(cJSON_IsObject(first_check));
+    CHECK(cJSON_IsString(
+        cJSON_GetObjectItemCaseSensitive(first_check, "name")));
+    CHECK(cJSON_IsString(
+        cJSON_GetObjectItemCaseSensitive(first_check, "status")));
+    CHECK(cJSON_IsString(
+        cJSON_GetObjectItemCaseSensitive(first_check, "detail")));
+    CHECK(cJSON_IsArray(
+        cJSON_GetObjectItemCaseSensitive(gateway, "audit_events")));
+
+    cJSON* binary_envelope = envelopeFromCallResponse(gateway_binary_response);
+    checkProtectedOkEnvelope(binary_envelope, "aura_get_gateway_snapshot");
+    const cJSON* binary_gateway =
+        cJSON_GetObjectItemCaseSensitive(auraCliOf(binary_envelope),
+                                         "gateway");
+    CHECK(cJSON_GetObjectItemCaseSensitive(auraCliOf(binary_envelope),
+                                           "binary") == nullptr);
+    REQUIRE(cJSON_IsObject(binary_gateway));
+    CHECK(cJSON_IsObject(cJSON_GetObjectItemCaseSensitive(
+        binary_gateway, "protected_prompt")));
+    const cJSON* binary_verification =
+        cJSON_GetObjectItemCaseSensitive(binary_gateway, "verification");
+    REQUIRE(cJSON_IsObject(binary_verification));
+    const cJSON* binary_status =
+        cJSON_GetObjectItemCaseSensitive(binary_verification, "status");
+    REQUIRE(cJSON_IsString(binary_status));
+    const cJSON* binary_checks =
+        cJSON_GetObjectItemCaseSensitive(binary_verification, "checks");
+    REQUIRE(cJSON_IsArray(binary_checks));
+    const cJSON* binary_first_check = cJSON_GetArrayItem(binary_checks, 0);
+    REQUIRE(cJSON_IsObject(binary_first_check));
+    CHECK(cJSON_IsString(
+        cJSON_GetObjectItemCaseSensitive(binary_first_check, "name")));
+    CHECK(cJSON_IsString(
+        cJSON_GetObjectItemCaseSensitive(binary_first_check, "status")));
+    CHECK(cJSON_IsString(
+        cJSON_GetObjectItemCaseSensitive(binary_first_check, "detail")));
+
+    cJSON_Delete(binary_envelope);
+    cJSON_Delete(envelope);
+    cJSON_Delete(tools_response);
+    cJSON_Delete(gateway_response);
+    cJSON_Delete(gateway_binary_response);
     std::remove(input_path.c_str());
 }
 
@@ -436,6 +710,179 @@ TEST_CASE("aura-mcp validates request envelopes and suppresses notifications") {
     std::remove(input_path.c_str());
 }
 
+TEST_CASE("aura-mcp lists GUI MCP tools") {
+    const char* exe_env = std::getenv("AURA_MCP_BIN");
+    REQUIRE(exe_env != nullptr);
+
+    const std::string input_path = tempInputPath("gui_tools_list");
+    {
+        std::ofstream input(input_path, std::ios::binary);
+        REQUIRE(input.good());
+        input << "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\","
+                 "\"params\":{}}\n";
+    }
+
+    const std::string out = runMcpWithInput(exe_env, input_path);
+    CHECK(responseLineCount(out) == 1);
+
+    cJSON* response = parseLine(out, 0);
+    const cJSON* result = resultOf(response);
+    const cJSON* tools =
+        cJSON_GetObjectItemCaseSensitive(result, "tools");
+    REQUIRE(cJSON_IsArray(tools));
+    CHECK(toolsArrayHasName(tools, "aura_gui_status"));
+    CHECK(toolsArrayHasName(tools, "aura_gui_add_binary"));
+    CHECK(toolsArrayHasName(tools, "aura_gui_analyze"));
+    CHECK(toolsArrayHasName(tools, "aura_gui_functions"));
+    CHECK(toolsArrayHasName(tools, "aura_gui_demo_snapshot"));
+    CHECK(toolsArrayHasName(tools, "aura_gui_protected_strings"));
+    CHECK(toolsArrayHasName(tools, "aura_gui_symbols"));
+    CHECK(toolsArrayHasName(tools, "aura_gui_xrefs"));
+    CHECK(toolsArrayHasName(tools, "aura_gui_disasm_function"));
+    CHECK(toolsArrayHasName(tools, "aura_gui_cfg_function"));
+    CHECK(toolsArrayHasName(tools, "aura_gui_rename"));
+    CHECK(toolsArrayHasName(tools, "aura_gui_reset_name"));
+    CHECK(out.find("comments_sent") != std::string::npos);
+    CHECK(out.find("comments_total") != std::string::npos);
+    CHECK(out.find("comments_included") != std::string::npos);
+    CHECK(out.find("raw_comment_text_omitted") != std::string::npos);
+    CHECK(out.find("variable_overrides_total") != std::string::npos);
+    CHECK(out.find("variable_overrides_sent") != std::string::npos);
+    CHECK(out.find("raw_alias_omitted") != std::string::npos);
+    CHECK(out.find("raw_type_omitted") != std::string::npos);
+    CHECK(out.find("protected_only") != std::string::npos);
+    CHECK(toolPropertyHasType(tools, "aura_gui_rename",
+                              "confirm_mutation", "boolean"));
+    CHECK(toolPropertyHasType(tools, "aura_gui_rename",
+                              "function_row", "integer"));
+    CHECK(toolPropertyHasType(tools, "aura_gui_analyze", "row", "integer"));
+
+    cJSON_Delete(response);
+    std::remove(input_path.c_str());
+}
+
+TEST_CASE("aura GUI MCP tools fail closed without GUI auth arguments") {
+    const char* exe_env = std::getenv("AURA_MCP_BIN");
+    REQUIRE(exe_env != nullptr);
+    ScopedEnvVar gui_port_env("AURA_GUI_RPC_PORT");
+    ScopedEnvVar gui_token_env("AURA_GUI_RPC_TOKEN");
+    unsetEnvVar("AURA_GUI_RPC_PORT");
+    unsetEnvVar("AURA_GUI_RPC_TOKEN");
+
+    const std::string input_path = tempInputPath("gui_missing_auth");
+    {
+        std::ofstream input(input_path, std::ios::binary);
+        REQUIRE(input.good());
+        input << "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\","
+                 "\"params\":{\"name\":\"aura_gui_status\","
+                 "\"arguments\":{}}}\n";
+        input << "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\","
+                 "\"params\":{\"name\":\"aura_gui_add_binary\","
+                 "\"arguments\":{\"gui_port\":\"27654\","
+                 "\"binary_path\":\"tests/fixtures/bin/elf_smoke.x86_64\"}}}\n";
+    }
+
+    const std::string out = runMcpWithInput(exe_env, input_path);
+    CHECK(responseLineCount(out) == 2);
+    CHECK(out.find("invalid_arguments") != std::string::npos);
+    CHECK(out.find("gui_port") != std::string::npos);
+    CHECK(out.find("gui_token") != std::string::npos);
+    std::remove(input_path.c_str());
+}
+
+TEST_CASE("aura GUI MCP auth can come from environment") {
+    if (!cliBridgeBuilt()) {
+        return;
+    }
+    const char* exe_env = std::getenv("AURA_MCP_BIN");
+    REQUIRE(exe_env != nullptr);
+    ScopedEnvVar repo_root_env("AURA_REPO_ROOT");
+    ScopedEnvVar gui_port_env("AURA_GUI_RPC_PORT");
+    ScopedEnvVar gui_token_env("AURA_GUI_RPC_TOKEN");
+
+    const fs::path repo_root = findRepoRoot();
+    REQUIRE(!repo_root.empty());
+    REQUIRE(cliLooksAvailable(repo_root));
+    setEnvVar("AURA_REPO_ROOT", repo_root.string());
+    setEnvVar("AURA_GUI_RPC_PORT", "65534");
+    setEnvVar("AURA_GUI_RPC_TOKEN", "demo-token");
+
+    const std::string input_path = tempInputPath("gui_env_auth");
+    {
+        std::ofstream input(input_path, std::ios::binary);
+        REQUIRE(input.good());
+        input << "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\","
+                 "\"params\":{\"name\":\"aura_gui_status\","
+                 "\"arguments\":{}}}\n";
+    }
+
+    const std::string out = runMcpWithInput(exe_env, input_path);
+    CHECK(responseLineCount(out) == 1);
+    CHECK(out.find("aura_gui_status") != std::string::npos);
+    CHECK(out.find("invalid_arguments") == std::string::npos);
+    CHECK(out.find("gui_rpc_connect_failed") != std::string::npos);
+    std::remove(input_path.c_str());
+}
+
+TEST_CASE("aura GUI MCP mutation tools require explicit confirmation") {
+    const char* exe_env = std::getenv("AURA_MCP_BIN");
+    REQUIRE(exe_env != nullptr);
+
+    const std::string input_path = tempInputPath("gui_mutation_confirm");
+    {
+        std::ofstream input(input_path, std::ios::binary);
+        REQUIRE(input.good());
+        input << "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\","
+                 "\"params\":{\"name\":\"aura_gui_rename\","
+                 "\"arguments\":{\"gui_port\":\"27654\","
+                 "\"gui_token\":\"demo-token\","
+                 "\"function_row\":0,\"new_name\":\"renamed\","
+                 "\"confirm_mutation\":false}}}\n";
+    }
+
+    const std::string out = runMcpWithInput(exe_env, input_path);
+    CHECK(responseLineCount(out) == 1);
+    CHECK(out.find("mutation_not_confirmed") != std::string::npos);
+    CHECK(out.find("aura_gui_rename") != std::string::npos);
+    std::remove(input_path.c_str());
+}
+
+TEST_CASE("aura GUI MCP status reports unreachable GUI") {
+    if (!cliBridgeBuilt()) {
+        return;
+    }
+    const char* exe_env = std::getenv("AURA_MCP_BIN");
+    REQUIRE(exe_env != nullptr);
+    ScopedEnvVar repo_root_env("AURA_REPO_ROOT");
+
+    const fs::path repo_root = findRepoRoot();
+    REQUIRE(!repo_root.empty());
+    REQUIRE(cliLooksAvailable(repo_root));
+    setEnvVar("AURA_REPO_ROOT", repo_root.string());
+
+    const std::string input_path = tempInputPath("gui_unreachable");
+    {
+        std::ofstream input(input_path, std::ios::binary);
+        REQUIRE(input.good());
+        input << "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\","
+                 "\"params\":{\"name\":\"aura_gui_status\","
+                 "\"arguments\":{\"gui_port\":\"65534\","
+                 "\"gui_token\":\"demo-token\"}}}\n";
+        input << "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\","
+                 "\"params\":{\"name\":\"aura_gui_demo_snapshot\","
+                 "\"arguments\":{\"gui_port\":\"65534\","
+                 "\"gui_token\":\"demo-token\"}}}\n";
+    }
+
+    const std::string out = runMcpWithInput(exe_env, input_path);
+    CHECK(responseLineCount(out) == 2);
+    CHECK(out.find("aura_gui_status") != std::string::npos);
+    CHECK(out.find("aura_gui_demo_snapshot") != std::string::npos);
+    CHECK(out.find("\\\"status\\\":\\\"error\\\"") != std::string::npos);
+    CHECK(out.find("gui_rpc_connect_failed") != std::string::npos);
+    std::remove(input_path.c_str());
+}
+
 TEST_CASE("aura_info fails closed when allowed roots are missing") {
     const char* exe_env = std::getenv("AURA_MCP_BIN");
     REQUIRE(exe_env != nullptr);
@@ -469,7 +916,7 @@ TEST_CASE("aura_info fails closed when allowed roots are missing") {
     std::remove(input_path.c_str());
 }
 
-TEST_CASE("aura-mcp bridges probe, info, and analyze through aura CLI") {
+TEST_CASE("aura-mcp accepts JSON generated by aura mcp-json") {
     if (!cliBridgeBuilt()) {
         return;
     }
@@ -482,12 +929,123 @@ TEST_CASE("aura-mcp bridges probe, info, and analyze through aura CLI") {
     REQUIRE(!repo_root.empty());
     REQUIRE(cliLooksAvailable(repo_root));
 
-    const fs::path fixture =
-        repo_root / "tests" / "fixtures" / "bin" / "elf_smoke.x86_64";
-    REQUIRE(fs::exists(fixture));
+    const fs::path fixture = makeSensitiveFixture();
+    const fs::path home =
+        fs::temp_directory_path() / fs::path("aura_mcp_smoke_safety_home_json");
+    fs::remove_all(home);
+    fs::create_directories(home);
+    writeFixtureRulePack(home);
 
     setEnvVar("AURA_REPO_ROOT", repo_root.string());
-    setEnvVar("AURA_MCP_ALLOWED_ROOTS", repo_root.string());
+    setEnvVar("AURA_MCP_ALLOWED_ROOTS",
+              allowedRootsFor(repo_root, fs::temp_directory_path()));
+    setEnvVar("AURA_HOME", home.string());
+
+    const std::string initialize = runAuraMcpJson("initialize");
+    const std::string tools_list = runAuraMcpJson("tools-list");
+    const std::string analyze = runAuraMcpJson(
+        "call aura_analyze --binary " + quotePath(fixture.string()));
+
+    const std::string input_path = tempInputPath("cli_json");
+    {
+        std::ofstream input(input_path, std::ios::binary);
+        REQUIRE(input.good());
+        const auto writeLine = [&input](const std::string& line) {
+            input << line;
+            if (line.empty() || line.back() != '\n') {
+                input << '\n';
+            }
+        };
+        writeLine(initialize);
+        input << "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/"
+                 "initialized\",\"params\":{}}\n";
+        writeLine(tools_list);
+        writeLine(analyze);
+    }
+
+    const std::string out = runMcpWithInput(exe_env, input_path);
+    CHECK(responseLineCount(out) == 3);
+    CHECK(out.find("\"id\":1") != std::string::npos);
+    CHECK(out.find("\"id\":2") != std::string::npos);
+    CHECK(out.find("\"id\":3") != std::string::npos);
+    CHECK(out.find("aura_probe_engines") != std::string::npos);
+    CHECK(out.find("aura_analyze") != std::string::npos);
+
+    cJSON* initialize_response = parseLine(out, 0);
+    cJSON* tools_response = parseLine(out, 1);
+    cJSON* analyze_response = parseLine(out, 2);
+
+    const cJSON* responses[] = {initialize_response, tools_response,
+                                analyze_response};
+    for (int i = 0; i < 3; ++i) {
+        const cJSON* id =
+            cJSON_GetObjectItemCaseSensitive(responses[i], "id");
+        REQUIRE(cJSON_IsNumber(id));
+        CHECK(id->valueint == i + 1);
+        CHECK(cJSON_GetObjectItemCaseSensitive(responses[i], "method") ==
+              nullptr);
+    }
+
+    const cJSON* init_result = resultOf(initialize_response);
+    const cJSON* protocol_version =
+        cJSON_GetObjectItemCaseSensitive(init_result, "protocolVersion");
+    REQUIRE(cJSON_IsString(protocol_version));
+    CHECK(std::string(protocol_version->valuestring) == "2025-06-18");
+    const cJSON* server_info =
+        cJSON_GetObjectItemCaseSensitive(init_result, "serverInfo");
+    REQUIRE(cJSON_IsObject(server_info));
+    CHECK(optionalStringField(server_info, "name") == "aura-mcp");
+
+    const cJSON* tools_result = resultOf(tools_response);
+    const cJSON* tools =
+        cJSON_GetObjectItemCaseSensitive(tools_result, "tools");
+    REQUIRE(cJSON_IsArray(tools));
+    CHECK(toolsArrayHasName(tools, "aura_probe_engines"));
+    CHECK(toolsArrayHasName(tools, "aura_analyze"));
+
+    cJSON* analyze_envelope = envelopeFromCallResponse(analyze_response);
+    checkProtectedOkEnvelope(analyze_envelope, "aura_analyze");
+    CHECK(!jsonTreeHasKey(analyze_envelope, "content"));
+    CHECK(!jsonTreeHasKey(analyze_envelope, "raw_content"));
+    CHECK(!jsonTreeHasKey(analyze_envelope, "original"));
+    CHECK(!jsonTreeHasKey(analyze_envelope, "export_value"));
+    CHECK(!jsonTreeHasKey(analyze_envelope, "display_literal"));
+    CHECK(out.find("900101-1234567") == std::string::npos);
+
+    cJSON_Delete(analyze_envelope);
+    cJSON_Delete(initialize_response);
+    cJSON_Delete(tools_response);
+    cJSON_Delete(analyze_response);
+    std::remove(input_path.c_str());
+    fs::remove(fixture);
+    fs::remove_all(home);
+}
+
+TEST_CASE("aura-mcp bridges probe, info, and analyze through aura CLI") {
+    if (!cliBridgeBuilt()) {
+        return;
+    }
+    const char* exe_env = std::getenv("AURA_MCP_BIN");
+    REQUIRE(exe_env != nullptr);
+    ScopedEnvVar repo_root_env("AURA_REPO_ROOT");
+    ScopedEnvVar allowed_roots_env("AURA_MCP_ALLOWED_ROOTS");
+    ScopedEnvVar aura_home_env("AURA_HOME");
+
+    const fs::path repo_root = findRepoRoot();
+    REQUIRE(!repo_root.empty());
+    REQUIRE(cliLooksAvailable(repo_root));
+
+    const fs::path fixture = makeSensitiveFixture();
+    const fs::path home =
+        fs::temp_directory_path() / fs::path("aura_mcp_smoke_safety_home_bridge");
+    fs::remove_all(home);
+    fs::create_directories(home);
+    writeFixtureRulePack(home);
+
+    setEnvVar("AURA_REPO_ROOT", repo_root.string());
+    setEnvVar("AURA_MCP_ALLOWED_ROOTS",
+              allowedRootsFor(repo_root, fs::temp_directory_path()));
+    setEnvVar("AURA_HOME", home.string());
 
     const std::string input_path = tempInputPath("bridge");
     {
@@ -544,10 +1102,24 @@ TEST_CASE("aura-mcp bridges probe, info, and analyze through aura CLI") {
                       nullptr);
                 CHECK(cJSON_GetObjectItemCaseSensitive(row, "raw_content") ==
                       nullptr);
+                CHECK(cJSON_GetObjectItemCaseSensitive(row, "original") ==
+                      nullptr);
+                CHECK(cJSON_GetObjectItemCaseSensitive(row, "export_value") ==
+                      nullptr);
+                CHECK(cJSON_GetObjectItemCaseSensitive(row, "display_literal") ==
+                      nullptr);
                 CHECK(cJSON_IsString(cJSON_GetObjectItemCaseSensitive(
                     row, "protected_value")));
                 CHECK(cJSON_IsString(cJSON_GetObjectItemCaseSensitive(
                     row, "masked_content")));
+                CHECK(cJSON_IsString(cJSON_GetObjectItemCaseSensitive(
+                    row, "display_value")));
+                CHECK(cJSON_IsString(cJSON_GetObjectItemCaseSensitive(
+                    row, "transmission_value")));
+                CHECK(optionalStringField(row, "transmission_policy") ==
+                      "protected");
+                CHECK(cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(
+                    row, "original_included")));
                 CHECK(cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(
                     row, "protected_only")));
                 CHECK(cJSON_IsArray(cJSON_GetObjectItemCaseSensitive(
@@ -555,10 +1127,13 @@ TEST_CASE("aura-mcp bridges probe, info, and analyze through aura CLI") {
             }
         }
     }
+    CHECK(out.find("900101-1234567") == std::string::npos);
 
     cJSON_Delete(analyze_envelope);
     cJSON_Delete(analyze_response);
     std::remove(input_path.c_str());
+    fs::remove(fixture);
+    fs::remove_all(home);
 }
 
 TEST_CASE("aura-mcp bridges function detail tools through aura CLI") {

@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "aura/safety/string_encoding.h"
+
 namespace aura::safety {
 
 enum class FindingSource {
@@ -104,6 +106,7 @@ struct ProtectedStringView {
     std::string alias;
     std::string masked;
     std::string protected_value;
+    DetectedStringEncoding detected_encoding;
     std::vector<Finding> findings;
 };
 
@@ -128,6 +131,7 @@ StringProtectionMode parseStringProtectionMode(const std::string& text);
 
 std::vector<Finding> scanStringWithRulePacks(const std::string& text,
                                              const SafetyProfile& profile);
+std::size_t effectiveRuleCount(const SafetyProfile& profile);
 
 std::vector<Finding> mergeFindings(std::vector<Finding> findings);
 void allocateMaskTokens(std::vector<Finding>& findings);

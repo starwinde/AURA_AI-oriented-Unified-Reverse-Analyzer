@@ -816,7 +816,7 @@ handle_disasm(RizinAdapterCtx          *ctx,
     unsigned window_count = opts ? opts->instruction_count : 0u;
     if (window_mode) {
         if (window_count == 0u) window_count = 96u;
-        if (window_count > 512u) window_count = 512u;
+        if (window_count > 8192u) window_count = 8192u;
     }
     unsigned byte_count = opts ? opts->byte_count : 0u;
     if (text_range_mode) {

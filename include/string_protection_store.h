@@ -80,6 +80,10 @@ int aura_string_protection_store_put_finding(
     AuraStringProtectionStore        *store,
     const AuraStringProtectionFinding *rec);
 
+int aura_string_protection_store_delete_for_fingerprint(
+    AuraStringProtectionStore *store,
+    const char                *binary_fingerprint);
+
 int aura_string_protection_store_count_strings(AuraStringProtectionStore *store);
 int aura_string_protection_store_count_overrides(AuraStringProtectionStore *store);
 int aura_string_protection_store_count_findings(AuraStringProtectionStore *store);

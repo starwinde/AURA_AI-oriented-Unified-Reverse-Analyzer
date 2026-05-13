@@ -5,8 +5,10 @@
 
 #include "analysis_options_dialog.h"
 #include "decompile_pane.h"
+#include "demo_mode_pane.h"
 #include "disasm_pane.h"
 #include "full_disasm_pane.h"
+#include "gateway_pane.h"
 #include "cfg_pane.h"
 #include "hex_pane.h"
 #include "function_table_model.h"
@@ -15,7 +17,10 @@
 #include "string_table_model.h"
 #include "project_binary_model.h"
 #include "safety_settings_dialog.h"
+#include "aura/safety/safe_export_view.h"
 #include "aura/safety/string_safety.h"
+#include "aura/gateway/gateway_snapshot.h"
+#include "aura/security/malware_risk.h"
 
 #include <QAction>
 #include <QActionGroup>
@@ -23,6 +28,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QCloseEvent>
+#include <QComboBox>
 #include <QDateTime>
 #include <QDockWidget>
 #include <QDragEnterEvent>
@@ -35,6 +41,9 @@
 #include <QDir>
 #include <QHeaderView>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QDialog>
 #include <QInputDialog>
 #include <QLabel>
@@ -53,6 +62,7 @@
 #include <QPoint>
 #include <QPushButton>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -60,6 +70,7 @@
 #include <QTableView>
 #include <QTextCursor>
 #include <QTreeView>
+#include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -90,7 +101,7 @@ constexpr const char* kKeyOuterGeom    = "outer/geometry";
 constexpr const char* kKeyOuterState   = "outer/windowState";
 constexpr const char* kKeyWorkspace    = "workspace/state";
 constexpr const char* kKeyWorkspaceLayoutVersion = "workspace/layoutVersion";
-constexpr int         kWorkspaceLayoutVersion = 5;
+constexpr int         kWorkspaceLayoutVersion = 6;
 constexpr const char* kKeyLastProject  = "lastProjectPath";
 // Phase 11.5: recent-projects MRU list (QStringList persisted as
 // QSettings group). Capped at kRecentMax — newest first, deduped.
@@ -303,6 +314,14 @@ bool addJsonString(cJSON* object, const char* name, const QString& value) {
 
 bool addJsonUInt64(cJSON* object, const char* name, quint64 value) {
     return addJsonString(object, name, uint64JsonString(value));
+}
+
+int protectedFindingCount(const QVector<GuiStringRecord>& strings) {
+    int count = 0;
+    for (const auto& s : strings) {
+        count += s.findings.size();
+    }
+    return count;
 }
 
 QString printJson(cJSON* root) {
@@ -530,16 +549,49 @@ void copyUtf8(char* dst, size_t cap, const QString& src) {
     dst[cap - 1] = '\0';
 }
 
+QString cStringLiteralForDisplay(const QString& value) {
+    QString out;
+    out.reserve(value.size() + 2);
+    out.push_back(QLatin1Char('"'));
+    for (const QChar ch : value) {
+        if (ch == QLatin1Char('\\')) out += QStringLiteral("\\\\");
+        else if (ch == QLatin1Char('"')) out += QStringLiteral("\\\"");
+        else if (ch == QLatin1Char('\n')) out += QStringLiteral("\\n");
+        else if (ch == QLatin1Char('\r')) out += QStringLiteral("\\r");
+        else if (ch == QLatin1Char('\t')) out += QStringLiteral("\\t");
+        else out.push_back(ch);
+    }
+    out.push_back(QLatin1Char('"'));
+    return out;
+}
+
+QString riskSeverityText(aura::security::MalwareRiskSeverity severity) {
+    return QString::fromLatin1(aura::security::malwareRiskSeverityToText(severity));
+}
+
+QString starMaskForString(const QString& value) {
+    if (value.isEmpty()) return QStringLiteral("*");
+    const int len = value.size();
+    int maskCount = (len * 65 + 50) / 100;
+    maskCount = qBound(1, maskCount, len);
+    const int visible = len - maskCount;
+    const int prefix = visible / 2 + visible % 2;
+    const int suffix = visible / 2;
+    return value.left(prefix)
+        + QString(maskCount, QLatin1Char('*'))
+        + (suffix > 0 ? value.right(suffix) : QString());
+}
+
 void refreshProtectedValue(GuiStringRecord& s) {
     const bool hasMask =
         !s.maskedContent.isEmpty() && s.maskedContent != s.content;
     s.exportValue = hasMask ? s.maskedContent : s.content;
 
-    if (s.displayMode == 1 && !s.alias.isEmpty()) {
+    if (s.displayMode == 1 && !s.alias.trimmed().isEmpty()) {
         s.protectedValue = s.alias;
     } else if (s.displayMode == 2 && hasMask) {
         s.protectedValue = s.maskedContent;
-    } else if (!s.alias.isEmpty()) {
+    } else if (!s.alias.trimmed().isEmpty()) {
         s.protectedValue = s.alias;
     } else if (hasMask) {
         s.protectedValue = s.maskedContent;
@@ -554,6 +606,31 @@ void refreshProtectedValue(GuiStringRecord& s) {
                 ? QStringLiteral("마스킹 가능: %1").arg(s.maskedContent)
                 : QStringLiteral("Maskable: %1").arg(s.maskedContent);
     }
+}
+
+QString protectedTransmissionValue(const GuiStringRecord& s) {
+    if (!s.exportValue.isEmpty() && s.exportValue != s.content)
+        return s.exportValue;
+    if (!s.maskedContent.isEmpty() && s.maskedContent != s.content)
+        return s.maskedContent;
+    if (!s.alias.trimmed().isEmpty()) return s.alias;
+    if (s.hasProtection) return starMaskForString(s.content);
+    return s.content;
+}
+
+QString protectedDisplayValue(const GuiStringRecord& s) {
+    if (!s.protectedValue.isEmpty() && s.protectedValue != s.content)
+        return s.protectedValue;
+    return protectedTransmissionValue(s);
+}
+
+QString redactProtectedEvidence(QString evidence,
+                                const QVector<GuiStringRecord>& strings) {
+    for (const auto& s : strings) {
+        if (!s.hasProtection || s.content.isEmpty()) continue;
+        evidence.replace(s.content, protectedTransmissionValue(s));
+    }
+    return evidence;
 }
 
 void persistStringProtectionRows(const QString& projectPath,
@@ -620,7 +697,7 @@ void applyStoredStringOverrides(const QString& projectPath,
         }
         s.alias = QString::fromUtf8(got.alias);
         if (got.mask_token[0])
-            s.maskedContent = QString::fromUtf8(got.mask_token);
+            s.maskedContent = starMaskForString(s.content);
         s.displayMode = got.display_mode;
         refreshProtectedValue(s);
     }
@@ -754,7 +831,8 @@ void MainWindow::buildCentralStack() {
     // page only wastes the main workspace.
     auto* workspaceCenter = new QWidget(m_workspace);
     workspaceCenter->setObjectName(QStringLiteral("workspaceCenter"));
-    workspaceCenter->setFixedSize(0, 0);
+    workspaceCenter->setMinimumSize(1, 1);
+    workspaceCenter->setMaximumWidth(1);
     m_workspace->setCentralWidget(workspaceCenter);
 
     // Left dock — Cutter-style function browser.
@@ -791,8 +869,24 @@ void MainWindow::buildCentralStack() {
     m_decompilePane = new DecompilePane(m_decompileDock);
     m_decompileDock->setWidget(m_decompilePane);
     m_workspace->addDockWidget(Qt::RightDockWidgetArea, m_decompileDock);
-    m_workspace->resizeDocks({m_functionDock, m_decompileDock},
-                             {280, 900}, Qt::Horizontal);
+
+    auto* demoDock = new QDockWidget(
+        useKoreanUi() ? QStringLiteral("데모") : QStringLiteral("Demo"),
+        m_workspace);
+    demoDock->setObjectName(QStringLiteral("demoDock"));
+    demoDock->setAllowedAreas(Qt::AllDockWidgetAreas);
+    m_demoModePane = new DemoModePane(demoDock);
+    demoDock->setWidget(m_demoModePane);
+    m_workspace->tabifyDockWidget(m_decompileDock, demoDock);
+    refreshDemoModePane();
+
+    m_gatewayDock = new QDockWidget(QStringLiteral("LLM Gateway"), m_workspace);
+    m_gatewayDock->setObjectName(QStringLiteral("gatewayDock"));
+    m_gatewayDock->setAllowedAreas(Qt::AllDockWidgetAreas);
+    m_gatewayPane = new GatewayPane(m_gatewayDock);
+    m_gatewayDock->setWidget(m_gatewayPane);
+    m_workspace->tabifyDockWidget(m_decompileDock, m_gatewayDock);
+    refreshGatewayPane();
 
     // Phase 11.3.7 (P2.F2 C3): Disassembly dock — tabified onto Decompile
     // dock per ADR-0040 D5 (Cutter pattern; user toggles between
@@ -807,8 +901,8 @@ void MainWindow::buildCentralStack() {
     m_disasmDock->setWidget(m_disasmPane);
     m_workspace->tabifyDockWidget(m_decompileDock, m_disasmDock);
 
-    // Full-disassembly dock — Cutter-style continuous VA listing. It reuses
-    // DISASM with a bounded pD text stream and function selection scrolls here.
+    // Full-disassembly dock — Cutter-style continuous VA listing. It loads a
+    // bounded window around the active address and seeks new ranges on demand.
     m_fullDisasmDock = new QDockWidget(
         useKoreanUi() ? QStringLiteral("전체 디스어셈블리")
                       : QStringLiteral("Full Disassembly"),
@@ -872,6 +966,16 @@ void MainWindow::buildCentralStack() {
             m_fullDisasmPane, &FullDisasmPane::setStartAddress);
     connect(m_cfgPane,    &CfgPane::blockActivated,
             m_fullDisasmPane, &FullDisasmPane::setStartAddress);
+    connect(m_fullDisasmPane, &FullDisasmPane::addressOutsideLoadedRange,
+            this, [this](quint64 addr) {
+        if (addr == 0 || m_fullDisasmLoadInProgress) return;
+        m_fullDisasmLoadInProgress = true;
+        const bool ok = runFullDisasmWindow(addr, 2048);
+        m_fullDisasmLoadInProgress = false;
+        if (ok && m_fullDisasmPane) {
+            m_fullDisasmPane->setStartAddress(addr);
+        }
+    });
 
     // Phase 11.3.9 (P2.F4 C2): DecompilePane context-menu actions.
     connect(m_decompilePane, &DecompilePane::contextJumpToDisasm,
@@ -884,6 +988,8 @@ void MainWindow::buildCentralStack() {
             this, &MainWindow::onDecompContextFindXrefs);
     connect(m_decompilePane, &DecompilePane::contextAddComment,
             this, &MainWindow::onDecompContextAddComment);
+    connect(m_decompilePane, &DecompilePane::contextToggleStringSubstitution,
+            this, &MainWindow::onDecompContextToggleStringSubstitution);
 
     // Phase 11.3.5: Xrefs dock — tabbed with the upper-left function group.
     m_xrefsDock = new QDockWidget(
@@ -947,7 +1053,71 @@ void MainWindow::buildCentralStack() {
         m_workspace);
     m_stringsDock->setObjectName(QStringLiteral("stringsDock"));
     m_stringsDock->setAllowedAreas(Qt::AllDockWidgetAreas);
-    m_stringsTable = new QTreeView(m_stringsDock);
+    auto* stringsRoot = new QWidget(m_stringsDock);
+    auto* stringsLayout = new QVBoxLayout(stringsRoot);
+    stringsLayout->setContentsMargins(0, 0, 0, 0);
+    auto* stringsFilterRow = new QHBoxLayout();
+    m_stringsCategoryFilterCombo = new QComboBox(stringsRoot);
+    m_stringsCategoryFilterCombo->setObjectName(
+        QStringLiteral("stringsCategoryFilterCombo"));
+    m_stringsCategoryFilterCombo->setMinimumContentsLength(4);
+    m_stringsCategoryFilterCombo->setMinimumWidth(72);
+    m_stringsCategoryFilterCombo->setSizeAdjustPolicy(
+        QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    const auto addStringFilter = [this](const QString& ko, const QString& en,
+                                        StringTableModel::Filter filter) {
+        m_stringsCategoryFilterCombo->addItem(
+            useKoreanUi() ? ko : en, static_cast<int>(filter));
+    };
+    addStringFilter(QStringLiteral("전체"), QStringLiteral("All"),
+                    StringTableModel::Filter::All);
+    addStringFilter(QStringLiteral("보호됨"), QStringLiteral("Protected"),
+                    StringTableModel::Filter::Protected);
+    addStringFilter(QStringLiteral("보호 없음"), QStringLiteral("Unprotected"),
+                    StringTableModel::Filter::Unprotected);
+    addStringFilter(QStringLiteral("별칭"), QStringLiteral("Alias"),
+                    StringTableModel::Filter::Alias);
+    addStringFilter(QStringLiteral("마스킹"), QStringLiteral("Masked"),
+                    StringTableModel::Filter::Masked);
+    addStringFilter(QStringLiteral("Email"), QStringLiteral("Email"),
+                    StringTableModel::Filter::Email);
+    addStringFilter(QStringLiteral("주민번호"), QStringLiteral("Korean RRN"),
+                    StringTableModel::Filter::KoreanRrn);
+    addStringFilter(QStringLiteral("전화"), QStringLiteral("Phone"),
+                    StringTableModel::Filter::Phone);
+    addStringFilter(QStringLiteral("URL"), QStringLiteral("URL"),
+                    StringTableModel::Filter::Url);
+    addStringFilter(QStringLiteral("Secret/Token"), QStringLiteral("Secret/Token"),
+                    StringTableModel::Filter::SecretToken);
+    addStringFilter(QStringLiteral("기타 탐지"), QStringLiteral("Other Finding"),
+                    StringTableModel::Filter::OtherFinding);
+    stringsFilterRow->addWidget(m_stringsCategoryFilterCombo);
+    m_stringsDisplayModeCombo = new QComboBox(stringsRoot);
+    m_stringsDisplayModeCombo->setObjectName(
+        QStringLiteral("stringsDisplayModeCombo"));
+    m_stringsDisplayModeCombo->setMinimumContentsLength(4);
+    m_stringsDisplayModeCombo->setMinimumWidth(72);
+    m_stringsDisplayModeCombo->setSizeAdjustPolicy(
+        QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    m_stringsDisplayModeCombo->addItem(
+        useKoreanUi() ? QStringLiteral("마스킹") : QStringLiteral("Masked"),
+        2);
+    m_stringsDisplayModeCombo->addItem(
+        useKoreanUi() ? QStringLiteral("별칭") : QStringLiteral("Alias"),
+        1);
+    m_stringsDisplayModeCombo->addItem(
+        useKoreanUi() ? QStringLiteral("원본") : QStringLiteral("Original"),
+        0);
+    stringsFilterRow->addWidget(m_stringsDisplayModeCombo);
+    m_stringsCategoryCountLabel = new QLabel(stringsRoot);
+    m_stringsCategoryCountLabel->setObjectName(
+        QStringLiteral("stringsCategoryCountLabel"));
+    m_stringsCategoryCountLabel->setMinimumWidth(24);
+    stringsFilterRow->addWidget(m_stringsCategoryCountLabel);
+    stringsFilterRow->addStretch();
+    stringsLayout->addLayout(stringsFilterRow);
+    m_stringsTable = new QTreeView(stringsRoot);
+    m_stringsTable->setMinimumWidth(0);
     m_stringsModel = new StringTableModel(m_stringsTable);
     m_stringsTable->setModel(m_stringsModel);
     m_stringsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -962,8 +1132,70 @@ void MainWindow::buildCentralStack() {
             this, &MainWindow::onStringRowActivated);
     connect(m_stringsTable, &QWidget::customContextMenuRequested, this,
             &MainWindow::onStringContextMenu);
-    m_stringsDock->setWidget(m_stringsTable);
+    connect(m_stringsCategoryFilterCombo, &QComboBox::currentIndexChanged,
+            this, [this]() {
+        if (!m_stringsModel || !m_stringsCategoryFilterCombo) return;
+        const auto filter = static_cast<StringTableModel::Filter>(
+            m_stringsCategoryFilterCombo->currentData().toInt());
+        m_stringsModel->setFilter(filter);
+        if (m_stringsCategoryCountLabel) {
+            m_stringsCategoryCountLabel->setText(
+                QStringLiteral("%1").arg(m_stringsModel->rowCount()));
+        }
+    });
+    connect(m_stringsDisplayModeCombo, &QComboBox::currentIndexChanged,
+            this, [this]() {
+        if (!m_stringsDisplayModeCombo) return;
+        const int mode = m_stringsDisplayModeCombo->currentData().toInt();
+        if (mode < 0 || mode > 2) return;
+        for (auto& s : m_strings) {
+            s.displayMode = mode;
+            refreshProtectedValue(s);
+        }
+        if (mode == 1 && m_stringsCategoryFilterCombo) {
+            const int aliasIndex = m_stringsCategoryFilterCombo->findData(
+                static_cast<int>(StringTableModel::Filter::Alias));
+            if (aliasIndex >= 0 &&
+                m_stringsCategoryFilterCombo->currentIndex() != aliasIndex) {
+                m_stringsCategoryFilterCombo->setCurrentIndex(aliasIndex);
+            } else if (m_stringsModel) {
+                m_stringsModel->setFilter(StringTableModel::Filter::Alias);
+            }
+        }
+        if (m_stringsModel) m_stringsModel->setStrings(m_strings);
+        if (m_stringsCategoryCountLabel && m_stringsModel) {
+            m_stringsCategoryCountLabel->setText(
+                QStringLiteral("%1").arg(m_stringsModel->rowCount()));
+        }
+        refreshDemoModePane();
+        refreshGatewayPane();
+        recordSafetyAuditEvent(QStringLiteral("string_display_mode_changed"),
+                               QStringLiteral("mode=%1").arg(mode));
+    });
+    stringsLayout->addWidget(m_stringsTable);
+    stringsRoot->setMinimumWidth(0);
+    m_stringsDock->setWidget(stringsRoot);
     m_workspace->tabifyDockWidget(m_symbolsDock, m_stringsDock);
+
+    m_malwareRiskDock = new QDockWidget(
+        useKoreanUi() ? QStringLiteral("위험 신호")
+                      : QStringLiteral("Risk Signals"),
+        m_workspace);
+    m_malwareRiskDock->setObjectName(QStringLiteral("malwareRiskDock"));
+    m_malwareRiskDock->setAllowedAreas(Qt::AllDockWidgetAreas);
+    m_malwareRiskTable = new QTreeWidget(m_malwareRiskDock);
+    m_malwareRiskTable->setObjectName(QStringLiteral("malwareRiskTable"));
+    m_malwareRiskTable->setColumnCount(4);
+    m_malwareRiskTable->setHeaderLabels(
+        useKoreanUi()
+            ? QStringList{QStringLiteral("심각도"), QStringLiteral("분류"),
+                          QStringLiteral("제목"), QStringLiteral("근거")}
+            : QStringList{QStringLiteral("Severity"), QStringLiteral("Category"),
+                          QStringLiteral("Title"), QStringLiteral("Evidence")});
+    m_malwareRiskTable->setRootIsDecorated(false);
+    m_malwareRiskTable->setUniformRowHeights(true);
+    m_malwareRiskDock->setWidget(m_malwareRiskTable);
+    m_workspace->tabifyDockWidget(m_symbolsDock, m_malwareRiskDock);
 
     // Cutter-like default: upper-left function/reference browser, lower-left
     // string/symbol/import metadata, and a large right code-view tab group.
@@ -972,8 +1204,8 @@ void MainWindow::buildCentralStack() {
     m_functionDock->raise();
     m_stringsDock->raise();
     m_decompileDock->raise();
-    m_workspace->resizeDocks({m_functionDock, m_decompileDock},
-                             {320, 1280}, Qt::Horizontal);
+    m_workspace->resizeDocks({m_functionDock, m_stringsDock},
+                             {320, 320}, Qt::Horizontal);
     m_workspace->resizeDocks({m_functionDock, m_symbolsDock},
                              {540, 360}, Qt::Vertical);
 
@@ -1245,9 +1477,24 @@ void MainWindow::closeProject() {
     m_projectPath.clear();
     m_currentBinaryPath.clear();
     m_currentSha256.clear();
+    m_gatewayProtectionEnabled = true;
+    m_gatewaySafetyScanExecuted = false;
+    m_gatewaySafetyProfileApplied = false;
+    m_gatewayRulePacksLoaded = false;
+    m_gatewayMaskingCacheCurrent = false;
+    m_gatewayScannedStringCount = 0;
+    m_gatewayProtectedFindingCount = 0;
+    m_gatewayActiveRuleCount = 0;
     m_functions.clear();
     m_xrefs.clear();
     m_symbols.clear();
+    m_strings.clear();
+    m_malwareRisks.clear();
+    m_variableOverrides.clear();
+    if (m_stringsModel) m_stringsModel->setStrings(m_strings);
+    if (m_malwareRiskTable) m_malwareRiskTable->clear();
+    refreshDemoModePane();
+    refreshGatewayPane();
     std::memset(&m_currentFingerprint, 0, sizeof(m_currentFingerprint));
     if (m_decompilePane) m_decompilePane->clearCache();
     if (m_disasmPane)    m_disasmPane->clearCache();
@@ -1377,7 +1624,19 @@ void MainWindow::onSafetySettings() {
 bool MainWindow::openSafetySettingsDialog(QWidget* parentForDialog) {
     SafetySettingsDialog dlg(activeSafetyProfileId(),
                              parentForDialog ? parentForDialog : this);
+    connect(&dlg, &SafetySettingsDialog::applyProfileRequested,
+            this, [&dlg, this]() {
+        saveSafetySettingsDialog(dlg);
+    });
+    connect(&dlg, &SafetySettingsDialog::deleteProtectionRequested,
+            this, &MainWindow::confirmAndClearStringProtection);
+    connect(&dlg, &SafetySettingsDialog::recomputeProtectionRequested,
+            this, &MainWindow::recomputeStringProtectionFromSafetySettings);
     if (dlg.exec() != QDialog::Accepted) return false;
+    return saveSafetySettingsDialog(dlg);
+}
+
+bool MainWindow::saveSafetySettingsDialog(SafetySettingsDialog& dlg) {
     const auto editedProfile = dlg.editedProfile();
     std::string diagnostic;
     if (!aura::safety::saveSafetyProfile(
@@ -1389,7 +1648,45 @@ bool MainWindow::openSafetySettingsDialog(QWidget* parentForDialog) {
         return false;
     }
     setActiveSafetyProfileId(dlg.selectedProfileId());
+    recordSafetyAuditEvent(QStringLiteral("safety_profile_applied"),
+                           dlg.selectedProfileId());
     return true;
+}
+
+QString MainWindow::protectionDeletionWarningText() {
+    return QStringLiteral(
+        "저장된 보호 결과를 삭제하면 이 바이너리의 문자열이 원본 문자열 기준으로 다시 표시될 수 있습니다.\n\n"
+        "Rule Pack 설정은 유지되지만, 기존 마스킹/finding/전송 보호 캐시는 제거됩니다.\n"
+        "이 작업은 되돌릴 수 없습니다.");
+}
+
+void MainWindow::recordSafetyAuditEvent(const QString& event,
+                                        const QString& detail) {
+    m_latestSafetyAuditEventForTest =
+        QStringLiteral("%1 fingerprint=%2 detail=%3")
+            .arg(event, currentFingerprintHex(m_currentSha256), detail);
+}
+
+void MainWindow::confirmAndClearStringProtection() {
+    const auto answer = QMessageBox::warning(
+        this,
+        QStringLiteral("보호 결과 삭제"),
+        protectionDeletionWarningText(),
+        QMessageBox::Cancel | QMessageBox::Yes,
+        QMessageBox::Cancel);
+    if (answer != QMessageBox::Yes) return;
+    if (clearStringProtectionForCurrentBinary() && statusBar()) {
+        statusBar()->showMessage(QStringLiteral("보호 결과를 삭제했습니다."),
+                                 5000);
+    }
+}
+
+void MainWindow::recomputeStringProtectionFromSafetySettings() {
+    if (recomputeStringProtectionForCurrentBinary() && statusBar()) {
+        statusBar()->showMessage(
+            QStringLiteral("현재 안전 자산 기준으로 보호 결과를 재계산했습니다."),
+            5000);
+    }
 }
 
 void MainWindow::pushRecentProject(const QString& path) {
@@ -1579,6 +1876,268 @@ QString MainWindow::stringProtectedValueAt(int stringRow) const {
     return m_strings[stringRow].protectedValue;
 }
 
+QString MainWindow::stringTransmissionValueAt(
+    int stringRow,
+    TransmissionTarget target) const {
+    if (stringRow < 0 || stringRow >= m_strings.size()) return {};
+    const auto& s = m_strings[stringRow];
+    if (target == TransmissionTarget::LocalLlm) {
+        QSettings settings(QStringLiteral("AURA"), QStringLiteral("aura-gui"));
+        if (settings.value(QStringLiteral("privacy/localLlmAllowOriginal"),
+                           false).toBool()) {
+            return s.content;
+        }
+    }
+    return protectedTransmissionValue(s);
+}
+
+void MainWindow::refreshDemoModePane() {
+    if (!m_demoModePane) return;
+
+    std::vector<aura::safety::SafeExportInput> inputs;
+    QVector<QString> originals;
+    inputs.reserve(static_cast<size_t>(m_strings.size()));
+    originals.reserve(m_strings.size());
+
+    QStringList engineNames;
+    for (int i = 0; i < m_strings.size(); ++i) {
+        const GuiStringRecord& s = m_strings[i];
+        if (!s.source.isEmpty() && !engineNames.contains(s.source))
+            engineNames.push_back(s.source);
+        if (!s.hasProtection) continue;
+
+        const auto firstFinding =
+            s.findings.isEmpty() ? GuiStringRecord::ProtectionFinding{}
+                                  : s.findings.front();
+        const QString category = !firstFinding.kind.isEmpty()
+            ? firstFinding.kind
+            : QStringLiteral("protected_string");
+        const QString maskToken = !firstFinding.maskToken.isEmpty()
+            ? firstFinding.maskToken
+            : QStringLiteral("protected_string");
+        const QString displayValue = protectedDisplayValue(s);
+        const QString transmissionValue =
+            stringTransmissionValueAt(i, TransmissionTarget::ExternalLlm);
+        const QString location =
+            QStringLiteral("0x%1").arg(s.addr, 0, 16);
+
+        aura::safety::SafeExportInput input;
+        input.kind = "string";
+        input.location = location.toStdString();
+        input.category = category.toStdString();
+        input.original_value = s.content.toStdString();
+        input.display_value = displayValue.toStdString();
+        input.transmission_value = transmissionValue.toStdString();
+        input.mask_token = maskToken.toStdString();
+        inputs.push_back(std::move(input));
+        originals.push_back(s.content);
+    }
+
+    const auto items = aura::safety::makeSafeExportItems(inputs);
+
+    QVector<DemoSensitiveItemRow> rows;
+    rows.reserve(static_cast<int>(items.size()));
+    QJsonArray jsonItems;
+    for (int i = 0; i < static_cast<int>(items.size()); ++i) {
+        const auto& item = items[static_cast<size_t>(i)];
+        const QString category = QString::fromStdString(item.category);
+        const QString transmission =
+            QString::fromStdString(item.transmission_value);
+
+        rows.push_back(DemoSensitiveItemRow{
+            category,
+            originals.value(i),
+            transmission,
+            QStringLiteral("LLM/MCP"),
+        });
+
+        QJsonObject jsonItem;
+        jsonItem.insert(QStringLiteral("kind"),
+                        QString::fromStdString(item.kind));
+        jsonItem.insert(QStringLiteral("location"),
+                        QString::fromStdString(item.location));
+        jsonItem.insert(QStringLiteral("category"), category);
+        jsonItem.insert(QStringLiteral("display_value"),
+                        QString::fromStdString(item.display_value));
+        jsonItem.insert(QStringLiteral("transmission_value"), transmission);
+        jsonItem.insert(QStringLiteral("transmission_policy"),
+                        QStringLiteral("protected"));
+        jsonItem.insert(QStringLiteral("original_included"),
+                        item.original_included);
+        jsonItem.insert(QStringLiteral("mask_token"),
+                        QString::fromStdString(item.mask_token));
+        jsonItems.push_back(jsonItem);
+    }
+
+    QJsonObject root;
+    root.insert(QStringLiteral("transmission_policy"),
+                QStringLiteral("protected"));
+    root.insert(QStringLiteral("original_included"), false);
+    root.insert(QStringLiteral("items"), jsonItems);
+
+    m_demoModePane->setBinaryName(QFileInfo(m_currentBinaryPath).fileName());
+    m_demoModePane->setEngineName(engineNames.isEmpty()
+                                      ? QString()
+                                      : engineNames.join(QStringLiteral(", ")));
+    m_demoModePane->setSummary(m_strings.size(),
+                               static_cast<int>(items.size()),
+                               static_cast<int>(items.size()));
+    m_demoModePane->setSensitiveItems(rows);
+    m_demoModePane->setExportPreviewText(QString::fromUtf8(
+        QJsonDocument(root).toJson(QJsonDocument::Compact)));
+}
+
+void MainWindow::refreshGatewayPane() {
+    if (!m_gatewayPane) return;
+
+      aura::gateway::GatewayBuildInput input;
+      input.safety_state.protection_enabled = m_gatewayProtectionEnabled;
+      input.safety_state.safety_scan_executed = m_gatewaySafetyScanExecuted;
+      input.safety_state.safety_profile_applied =
+          m_gatewaySafetyProfileApplied;
+      input.safety_state.rule_packs_loaded = m_gatewayRulePacksLoaded;
+      input.safety_state.masking_cache_current = m_gatewayMaskingCacheCurrent;
+      input.safety_state.scanned_string_count = m_gatewayScannedStringCount;
+      input.safety_state.protected_finding_count =
+          m_gatewayProtectedFindingCount;
+      input.safety_state.active_rule_count = m_gatewayActiveRuleCount;
+      input.sources.push_back({aura::gateway::GatewaySourceKind::Rizin,
+                               aura::gateway::GatewaySourceStatus::Ready,
+                             "GUI analysis state loaded"});
+    input.sources.push_back(
+        {aura::gateway::GatewaySourceKind::Ghidra,
+         aura::gateway::GatewaySourceStatus::NotConfigured,
+         "Ghidra status is shown only when configured"});
+
+    for (int i = 0; i < m_strings.size(); ++i) {
+        const GuiStringRecord& s = m_strings[i];
+        const bool hasProtectedExport =
+            s.hasProtection ||
+            (!s.protectedValue.isEmpty() && s.protectedValue != s.content) ||
+            (!s.exportValue.isEmpty() && s.exportValue != s.content);
+        if (!hasProtectedExport) continue;
+
+        const auto firstFinding =
+            s.findings.isEmpty() ? GuiStringRecord::ProtectionFinding{}
+                                  : s.findings.front();
+        const QString category = !firstFinding.kind.isEmpty()
+            ? firstFinding.kind
+            : QStringLiteral("secret");
+        const QString maskToken = !firstFinding.maskToken.isEmpty()
+            ? firstFinding.maskToken
+            : QStringLiteral("protected_string");
+        const QString displayValue = protectedDisplayValue(s);
+        const QString transmissionValue =
+            stringTransmissionValueAt(i, TransmissionTarget::ExternalLlm);
+
+        input.items.push_back(
+            {"string",
+             QStringLiteral("0x%1").arg(s.addr, 0, 16).toStdString(),
+             category.toStdString(),
+             s.content.toStdString(),
+             displayValue.toStdString(),
+             transmissionValue.toStdString(),
+             maskToken.toStdString()});
+    }
+
+    if (!m_malwareRisks.isEmpty()) {
+        input.malware_risk_severity =
+            m_malwareRisks.front().severity.toStdString();
+        QStringList categories;
+        for (const auto& risk : m_malwareRisks) {
+            if (!risk.category.isEmpty() &&
+                !categories.contains(risk.category)) {
+                categories.push_back(risk.category);
+                input.malware_risk_categories.push_back(
+                    risk.category.toStdString());
+            }
+        }
+    }
+
+    m_gatewayPane->setSnapshot(aura::gateway::buildGatewaySnapshot(input));
+}
+
+bool MainWindow::clearStringProtectionForCurrentBinary() {
+    const QString fp = currentFingerprintHex(m_currentSha256);
+    if (m_projectPath.isEmpty() || fp.isEmpty() || fp == QStringLiteral("unknown"))
+        return false;
+
+    AuraStringProtectionStore* store =
+        aura_string_protection_store_open(m_projectPath.toUtf8().constData());
+    if (!store) return false;
+    const int deleted = aura_string_protection_store_delete_for_fingerprint(
+        store, fp.toUtf8().constData());
+    aura_string_protection_store_close(store);
+    if (deleted < 0) return false;
+
+    for (auto& s : m_strings) {
+        s.maskedContent.clear();
+        s.protectedValue = s.content;
+        s.exportValue = s.content;
+        s.protectionSummary.clear();
+        s.displayMode = 0;
+        s.hasProtection = false;
+        s.findings.clear();
+    }
+    if (m_stringsModel) m_stringsModel->setStrings(m_strings);
+    m_gatewayMaskingCacheCurrent = false;
+    m_gatewayProtectedFindingCount = 0;
+    refreshDemoModePane();
+    refreshGatewayPane();
+    recordSafetyAuditEvent(QStringLiteral("protection_results_deleted"),
+                           QStringLiteral("rows=%1").arg(deleted));
+    return true;
+}
+
+bool MainWindow::recomputeStringProtectionForCurrentBinary() {
+    if (m_strings.isEmpty()) return false;
+    const auto profile = activeSafetyProfile();
+    for (auto& s : m_strings) {
+        auto findings = aura::safety::scanStringWithRulePacks(
+            s.content.toStdString(), profile);
+        const auto protectedView = aura::safety::buildProtectedStringView(
+            s.content.toStdString(), std::string(), std::move(findings));
+
+        s.findings.clear();
+        for (const auto& f : protectedView.findings) {
+            GuiStringRecord::ProtectionFinding gf;
+            gf.detectorId = QString::fromStdString(f.detector_id);
+            gf.kind = QString::fromStdString(f.kind);
+            gf.startOffset = static_cast<int>(f.start);
+            gf.endOffset = static_cast<int>(f.end);
+            gf.confidence = f.confidence;
+            gf.maskToken = QString::fromStdString(f.mask_token);
+            s.findings.push_back(gf);
+        }
+        s.hasProtection = !protectedView.findings.empty();
+        s.maskedContent = s.hasProtection
+            ? QString::fromStdString(protectedView.masked)
+            : QString();
+        s.displayMode = s.hasProtection ? 2 : 0;
+        refreshProtectedValue(s);
+    }
+
+    persistStringProtectionRows(m_projectPath,
+                                currentFingerprintHex(m_currentSha256),
+                                m_strings);
+    if (m_stringsModel) m_stringsModel->setStrings(m_strings);
+    const std::size_t activeRuleCount =
+        aura::safety::effectiveRuleCount(profile);
+    m_gatewayProtectionEnabled = true;
+    m_gatewaySafetyScanExecuted = true;
+    m_gatewaySafetyProfileApplied = true;
+    m_gatewayRulePacksLoaded = activeRuleCount > 0u;
+    m_gatewayMaskingCacheCurrent = true;
+    m_gatewayScannedStringCount = static_cast<int>(m_strings.size());
+    m_gatewayProtectedFindingCount = protectedFindingCount(m_strings);
+    m_gatewayActiveRuleCount = static_cast<int>(activeRuleCount);
+    refreshDemoModePane();
+    refreshGatewayPane();
+    recordSafetyAuditEvent(QStringLiteral("protection_results_recomputed"),
+                           QStringLiteral("strings=%1").arg(m_strings.size()));
+    return true;
+}
+
 bool MainWindow::persistStringOverride(int stringRow) const {
     if (stringRow < 0 || stringRow >= m_strings.size()) return false;
     if (m_projectPath.isEmpty()) return false;
@@ -1611,17 +2170,16 @@ bool MainWindow::setStringAliasAt(int stringRow, const QString& alias) {
     refreshProtectedValue(m_strings[stringRow]);
     if (m_stringsModel) m_stringsModel->setStrings(m_strings);
     persistStringOverride(stringRow);
+    refreshDemoModePane();
+    refreshGatewayPane();
     return true;
 }
 
 bool MainWindow::setStringMaskTokenAt(int stringRow, const QString& maskToken) {
     if (stringRow < 0 || stringRow >= m_strings.size()) return false;
     QString token = maskToken.trimmed();
-    if (!token.isEmpty()) {
-        if (!token.startsWith(QLatin1Char('['))) token.prepend(QLatin1Char('['));
-        if (!token.endsWith(QLatin1Char(']'))) token.append(QLatin1Char(']'));
-    }
-    m_strings[stringRow].maskedContent = token;
+    m_strings[stringRow].maskedContent =
+        token.isEmpty() ? QString() : starMaskForString(m_strings[stringRow].content);
     if (!token.isEmpty()) {
         m_strings[stringRow].displayMode = 2;
         m_strings[stringRow].hasProtection = true;
@@ -1629,6 +2187,8 @@ bool MainWindow::setStringMaskTokenAt(int stringRow, const QString& maskToken) {
     refreshProtectedValue(m_strings[stringRow]);
     if (m_stringsModel) m_stringsModel->setStrings(m_strings);
     persistStringOverride(stringRow);
+    refreshDemoModePane();
+    refreshGatewayPane();
     return true;
 }
 
@@ -1639,6 +2199,8 @@ bool MainWindow::setStringDisplayModeAt(int stringRow, int displayMode) {
     refreshProtectedValue(m_strings[stringRow]);
     if (m_stringsModel) m_stringsModel->setStrings(m_strings);
     persistStringOverride(stringRow);
+    refreshDemoModePane();
+    refreshGatewayPane();
     return true;
 }
 
@@ -2158,6 +2720,16 @@ bool MainWindow::runAnalyze(
     const auto* rec = m_projectModel ? m_projectModel->recordAt(row) : nullptr;
     if (!rec) return false;
 
+    m_gatewayProtectionEnabled = true;
+    m_gatewaySafetyScanExecuted = false;
+    m_gatewaySafetyProfileApplied = false;
+    m_gatewayRulePacksLoaded = false;
+    m_gatewayMaskingCacheCurrent = false;
+    m_gatewayScannedStringCount = 0;
+    m_gatewayProtectedFindingCount = 0;
+    m_gatewayActiveRuleCount = 0;
+    refreshGatewayPane();
+
     const QByteArray binaryPath = QByteArray(rec->path);
     m_currentBinaryPath = QString::fromUtf8(binaryPath);
 
@@ -2200,6 +2772,7 @@ bool MainWindow::runAnalyze(
         QMessageBox::critical(this, QStringLiteral("Analyze"),
                               QStringLiteral("orchestrator 생성 실패"));
         if (m_analyzeButton) m_analyzeButton->setEnabled(true);
+        refreshGatewayPane();
         return false;
     }
 
@@ -2213,6 +2786,7 @@ bool MainWindow::runAnalyze(
             this, QStringLiteral("Analyze"),
             QStringLiteral("Rizin adapter 등록 실패. AURA_RIZIN_BIN 확인."));
         if (m_analyzeButton) m_analyzeButton->setEnabled(true);
+        refreshGatewayPane();
         return false;
     }
 
@@ -2319,6 +2893,14 @@ bool MainWindow::runAnalyze(
             s.section = QString::fromUtf8(str[i].section[0] ? str[i].section : "");
             s.content = QString::fromUtf8(str[i].content[0] ? str[i].content : "");
             s.source  = QString::fromUtf8(str[i].provenance.source);
+            const auto detectedEncoding =
+                aura::safety::detectStringEncoding(s.content.toStdString());
+            if (!detectedEncoding.label.empty())
+                s.encoding = QString::fromStdString(detectedEncoding.label);
+            s.encodingConfidence = detectedEncoding.confidence;
+            s.displayLiteral = QString::fromStdString(
+                aura::safety::displayLiteralForEncoding(detectedEncoding));
+            s.encodingLossy = detectedEncoding.lossy;
 
             if (enableStringProtection) {
                 auto findings = aura::safety::scanStringWithRulePacks(
@@ -2340,6 +2922,9 @@ bool MainWindow::runAnalyze(
                         ? QString::fromStdString(protectedView.protected_value)
                         : s.content;
                 s.hasProtection = !protectedView.findings.empty();
+                if (maskStringProtection && s.hasProtection) {
+                    s.displayMode = 2;
+                }
                 for (const auto& f : protectedView.findings) {
                     GuiStringRecord::ProtectionFinding gf;
                     gf.detectorId = QString::fromStdString(f.detector_id);
@@ -2379,12 +2964,73 @@ bool MainWindow::runAnalyze(
                                        currentFingerprintHex(m_currentSha256),
                                        &m_strings);
         }
-        if (m_stringsModel) m_stringsModel->setStrings(m_strings);
+        if (m_stringsModel) {
+            m_stringsModel->setStrings(m_strings);
+            if (m_stringsCategoryCountLabel) {
+                m_stringsCategoryCountLabel->setText(
+                    QStringLiteral("%1").arg(m_stringsModel->rowCount()));
+            }
+        }
         if (maskStringProtection) {
             persistStringProtectionRows(m_projectPath,
                                         currentFingerprintHex(m_currentSha256),
                                         m_strings);
         }
+        const std::size_t activeRuleCount =
+            enableStringProtection
+                ? aura::safety::effectiveRuleCount(safetyProfile)
+                : 0u;
+        m_gatewayProtectionEnabled = enableStringProtection;
+        m_gatewaySafetyScanExecuted = enableStringProtection;
+        m_gatewaySafetyProfileApplied = enableStringProtection;
+        m_gatewayRulePacksLoaded =
+            enableStringProtection && activeRuleCount > 0u;
+        m_gatewayMaskingCacheCurrent =
+            enableStringProtection && maskStringProtection;
+        m_gatewayScannedStringCount =
+            enableStringProtection ? static_cast<int>(m_strings.size()) : 0;
+        m_gatewayProtectedFindingCount =
+            enableStringProtection ? protectedFindingCount(m_strings) : 0;
+        m_gatewayActiveRuleCount =
+            enableStringProtection ? static_cast<int>(activeRuleCount) : 0;
+        refreshDemoModePane();
+
+        aura::security::MalwareRiskInput riskInput;
+        for (const auto& s : m_strings) {
+            riskInput.strings.push_back(s.content.toStdString());
+        }
+        for (const auto& sym : m_symbols) {
+            if (sym.kind == QStringLiteral("import"))
+                riskInput.imports.push_back(sym.name.toStdString());
+            else
+                riskInput.symbols.push_back(sym.name.toStdString());
+        }
+        const auto riskReport = aura::security::analyzeMalwareRisk(riskInput);
+        m_malwareRisks.clear();
+        for (const auto& finding : riskReport.findings) {
+            GuiMalwareRiskFinding riskRow;
+            riskRow.id = QString::fromStdString(finding.id);
+            riskRow.severity = riskSeverityText(finding.severity);
+            riskRow.category = QString::fromStdString(finding.category);
+            riskRow.title = QString::fromStdString(finding.title);
+            riskRow.evidence = redactProtectedEvidence(
+                QString::fromStdString(finding.evidence), m_strings);
+            riskRow.source = QString::fromStdString(finding.source);
+            m_malwareRisks.push_back(std::move(riskRow));
+        }
+        if (m_malwareRiskTable) {
+            m_malwareRiskTable->clear();
+            for (const auto& risk : m_malwareRisks) {
+                auto* item = new QTreeWidgetItem(m_malwareRiskTable);
+                item->setText(0, risk.severity);
+                item->setText(1, risk.category);
+                item->setText(2, risk.title);
+                item->setText(3, risk.evidence);
+            }
+            for (int col = 0; col < m_malwareRiskTable->columnCount(); ++col)
+                m_malwareRiskTable->resizeColumnToContents(col);
+        }
+        refreshGatewayPane();
 
         // Phase 11.4.3 (P4.PP1 C4): mirror call_edges / variables /
         // type_facts so generateTypePropagationCandidates can walk
@@ -2485,6 +3131,7 @@ bool MainWindow::runAnalyze(
             this, QStringLiteral("Analyze"),
             QStringLiteral("분석 실패 (status=%1).").arg(static_cast<int>(st)));
         statusBar()->showMessage(QStringLiteral("분석 실패."));
+        refreshGatewayPane();
         return false;
     }
 
@@ -2586,8 +3233,10 @@ bool MainWindow::runAnalyze(
             QStringLiteral("// 좌측 함수 목록에서 함수를 선택하세요."));
     }
 
-    // Apply existing overrides (rename) before pushing to the model.
+    // Apply existing overrides before pushing to the model.
     applyOverridesToFunctions();
+    applyCommentOverridesToFunctions();
+    applyOverridesToVariables();
 
     if (m_functionModel) m_functionModel->setFunctions(m_functions);
 
@@ -2655,7 +3304,8 @@ bool MainWindow::runDecompile(quint64 funcAddr) {
     if (m_decompilePane->hasCached(funcAddr)) {
         m_decompilePane->showDecompile(funcAddr,
                                        m_decompilePane->cachedBackend(funcAddr),
-                                       m_decompilePane->cachedText(funcAddr));
+                                       renderDecompileTextForDisplay(
+                                           m_decompilePane->cachedText(funcAddr)));
         return true;
     }
 
@@ -2667,7 +3317,7 @@ bool MainWindow::runDecompile(quint64 funcAddr) {
         m_decompilePane->cache(funcAddr, cachedBackend, cachedText,
                                cachedLineMap);
         m_decompilePane->showDecompile(funcAddr, cachedBackend,
-                                       cachedText);
+                                       renderDecompileTextForDisplay(cachedText));
         statusBar()->showMessage(
             QStringLiteral("Decompile cache hit: 0x%1 [%2]")
                 .arg(funcAddr, 0, 16)
@@ -2748,7 +3398,8 @@ bool MainWindow::runDecompile(quint64 funcAddr) {
 
     m_decompilePane->cache(funcAddr, backend, text, lineMap);
     storeDecompileArtifact(funcAddr, backend, text, lineMap);
-    m_decompilePane->showDecompile(funcAddr, backend, text);
+    m_decompilePane->showDecompile(funcAddr, backend,
+                                   renderDecompileTextForDisplay(text));
     statusBar()->showMessage(
         QStringLiteral("Decompile 완료: 0x%1 [%2]")
             .arg(funcAddr, 0, 16)
@@ -3501,7 +4152,7 @@ bool MainWindow::runDisasm(quint64 funcAddr) {
 bool MainWindow::runFullDisasmWindow(quint64 addr, int count) {
     if (m_currentBinaryPath.isEmpty() || !m_fullDisasmPane) return false;
     if (count <= 0) count = 128;
-    if (count > 256) count = 256;
+    if (count > 8192) count = 8192;
 
     QVector<GuiInstructionRecord> cachedIns;
     QString cachedText;
@@ -3615,18 +4266,23 @@ bool MainWindow::runFullDisasmOverview() {
         return false;
     }
     quint64 base = m_functions.first().entry;
+    quint64 end = base;
     for (const auto& f : m_functions) {
         if (f.entry != 0 && f.entry < base) base = f.entry;
+        if (f.entry != 0) {
+            const quint64 span = f.size == 0 ? 16 : f.size;
+            const quint64 funcEnd =
+                f.entry > std::numeric_limits<quint64>::max() - span
+                    ? std::numeric_limits<quint64>::max()
+                    : f.entry + span;
+            if (funcEnd > end) end = funcEnd;
+        }
     }
-    const quint64 align = (base >= 0x100000ull) ? 0x100000ull : 0x1000ull;
-    base &= ~(align - 1ull);
-    /* Cutter-style full disassembly is a browsable text window, not a
-     * one-shot whole-binary dump. Rizin 0.8.0 `pD` gets expensive quickly on
-     * some PE images because it preserves labels/comments/invalid lines, so
-     * initial load stays close to the current viewport and later paging can
-     * extend it in small chunks.
-     */
-    return runFullDisasmWindow(base, 128);
+    const quint64 byteSpan = end > base ? end - base : 256;
+    quint64 estimatedInstructions = (byteSpan / 2u) + 128u;
+    if (estimatedInstructions < 512u) estimatedInstructions = 512u;
+    if (estimatedInstructions > 2048u) estimatedInstructions = 2048u;
+    return runFullDisasmWindow(base, static_cast<int>(estimatedInstructions));
 }
 
 void MainWindow::onAnalyzeClicked() {
@@ -3641,7 +4297,11 @@ void MainWindow::onAnalyzeClicked() {
 
     AnalysisOptionsDialog dlg(QString::fromUtf8(rec->path), this);
     connect(&dlg, &AnalysisOptionsDialog::safetyAssetsRequested, this,
-            [this, &dlg]() { openSafetySettingsDialog(&dlg); });
+            [this, &dlg]() {
+        if (openSafetySettingsDialog(&dlg)) {
+            dlg.setStringProtectionEnabled(true);
+        }
+    });
     if (dlg.exec() != QDialog::Accepted) return;
     runAnalyze(row, dlg.selectedLevel(), protectionModeFromDialog(dlg));
 }
@@ -3652,7 +4312,11 @@ void MainWindow::onTableDoubleClicked(const QModelIndex& idx) {
     if (!rec) return;
     AnalysisOptionsDialog dlg(QString::fromUtf8(rec->path), this);
     connect(&dlg, &AnalysisOptionsDialog::safetyAssetsRequested, this,
-            [this, &dlg]() { openSafetySettingsDialog(&dlg); });
+            [this, &dlg]() {
+        if (openSafetySettingsDialog(&dlg)) {
+            dlg.setStringProtectionEnabled(true);
+        }
+    });
     if (dlg.exec() != QDialog::Accepted) return;
     runAnalyze(idx.row(), dlg.selectedLevel(), protectionModeFromDialog(dlg));
 }
@@ -3690,7 +4354,11 @@ void MainWindow::onAddBinary() {
     if (path.isEmpty()) return;
     AnalysisOptionsDialog dlg(path, this);
     connect(&dlg, &AnalysisOptionsDialog::safetyAssetsRequested, this,
-            [this, &dlg]() { openSafetySettingsDialog(&dlg); });
+            [this, &dlg]() {
+        if (openSafetySettingsDialog(&dlg)) {
+            dlg.setStringProtectionEnabled(true);
+        }
+    });
     if (dlg.exec() != QDialog::Accepted) return;
     addBinaryAndAnalyze(path, dlg.selectedLevel(),
                         protectionModeFromDialog(dlg));
@@ -3721,6 +4389,30 @@ AuraOverrideKey MainWindow::buildKeyForFunction(int row) const {
                                                   &m_currentFingerprint);
 }
 
+AuraOverrideKey MainWindow::buildKeyForVariable(int row) const {
+    AuraOverrideKey missing{};
+    missing.confidence = AURA_OVERRIDE_CONFIDENCE_MISSING;
+    if (row < 0 || row >= m_variables.size()) return missing;
+
+    const auto& v = m_variables[row];
+    AuraVariableRecord rec{};
+    rec.var_id = static_cast<AuraVariableId>(v.varId);
+    rec.function_id = static_cast<AuraFunctionId>(v.functionId);
+    rec.stack_offset = static_cast<int32_t>(v.stackOffset);
+    const QByteArray name = v.name.toUtf8();
+    std::strncpy(rec.name, name.constData(), sizeof(rec.name) - 1);
+    const QByteArray kind = v.kind.toUtf8();
+    std::strncpy(rec.kind, kind.constData(), sizeof(rec.kind) - 1);
+    std::strncpy(rec.provenance.source, "rizin",
+                 sizeof(rec.provenance.source) - 1);
+    rec.provenance.confidence = 1.0f;
+    rec.provenance.completeness = 1.0f;
+
+    const AuraEngineManifest* manifest = aura_rizin_adapter_manifest();
+    return aura_override_key_from_variable_record(&rec, manifest,
+                                                  &m_currentFingerprint);
+}
+
 void MainWindow::applyOverridesToFunctions() {
     if (!m_overrideStore) return;
     for (int i = 0; i < m_functions.size(); ++i) {
@@ -3734,6 +4426,106 @@ void MainWindow::applyOverridesToFunctions() {
         } else {
             m_functions[i].name       = m_functions[i].originalName;
             m_functions[i].overridden = false;
+        }
+    }
+}
+
+void MainWindow::applyCommentOverridesToFunctions() {
+    if (!m_overrideStore) return;
+    for (int i = 0; i < m_functions.size(); ++i) {
+        AuraOverrideKey key = buildKeyForFunction(i);
+        key.target_kind = AURA_OVERRIDE_TARGET_ANNOTATION;
+
+        AuraOverrideRecord rec{};
+        const int rc = aura_override_store_get(m_overrideStore, &key, &rec);
+        if (rc == 0 &&
+            rec.payload.kind == AURA_OVERRIDE_PAYLOAD_ANNOTATION) {
+            m_functions[i].comment = QString::fromUtf8(rec.payload.text);
+            m_functions[i].hasComment = !m_functions[i].comment.isEmpty();
+        } else {
+            m_functions[i].comment.clear();
+            m_functions[i].hasComment = false;
+        }
+    }
+}
+
+static QString encodeVariableOverridePayload(const QString& alias,
+                                             const QString& typeName) {
+    cJSON* root = cJSON_CreateObject();
+    if (!root) return {};
+    const QByteArray aliasUtf8 = alias.left(80).toUtf8();
+    const QByteArray typeUtf8 = typeName.left(80).toUtf8();
+    cJSON_AddStringToObject(root, "alias", aliasUtf8.constData());
+    cJSON_AddStringToObject(root, "type", typeUtf8.constData());
+    char* printed = cJSON_PrintUnformatted(root);
+    QString out;
+    if (printed) {
+        out = QString::fromUtf8(printed);
+        cJSON_free(printed);
+    }
+    cJSON_Delete(root);
+    return out;
+}
+
+static GuiVariableOverride decodeVariableOverridePayload(const QString& text) {
+    GuiVariableOverride out;
+    cJSON* root = cJSON_Parse(text.toUtf8().constData());
+    if (root) {
+        const cJSON* alias = cJSON_GetObjectItemCaseSensitive(root, "alias");
+        if (cJSON_IsString(alias) && alias->valuestring != nullptr) {
+            out.alias = QString::fromUtf8(alias->valuestring);
+            out.hasAlias = !out.alias.isEmpty();
+        }
+        const cJSON* type = cJSON_GetObjectItemCaseSensitive(root, "type");
+        if (cJSON_IsString(type) && type->valuestring != nullptr) {
+            out.typeName = QString::fromUtf8(type->valuestring);
+            out.hasType = !out.typeName.isEmpty();
+        }
+        cJSON_Delete(root);
+        return out;
+    }
+
+    // Legacy payload support for overrides saved before JSON encoding.
+    const auto lines = text.split(QLatin1Char('\n'));
+    for (const auto& line : lines) {
+        if (line.startsWith(QStringLiteral("alias="))) {
+            out.alias = line.mid(6);
+            out.hasAlias = !out.alias.isEmpty();
+        } else if (line.startsWith(QStringLiteral("type="))) {
+            out.typeName = line.mid(5);
+            out.hasType = !out.typeName.isEmpty();
+        }
+    }
+    return out;
+}
+
+int MainWindow::variableRowById(quint32 varId) const {
+    for (int i = 0; i < m_variables.size(); ++i) {
+        if (m_variables[i].varId == varId) return i;
+    }
+    return -1;
+}
+
+void MainWindow::applyOverridesToVariables() {
+    m_variableOverrides.clear();
+    if (!m_overrideStore) return;
+
+    for (int i = 0; i < m_variables.size(); ++i) {
+        AuraOverrideKey key = buildKeyForVariable(i);
+        if (key.confidence == AURA_OVERRIDE_CONFIDENCE_MISSING) continue;
+
+        AuraOverrideRecord rec{};
+        const int rc = aura_override_store_get(m_overrideStore, &key, &rec);
+        if (rc != 0 || rec.payload.kind != AURA_OVERRIDE_PAYLOAD_TYPE) {
+            continue;
+        }
+
+        GuiVariableOverride ov =
+            decodeVariableOverridePayload(QString::fromUtf8(rec.payload.text));
+        ov.varId = m_variables[i].varId;
+        ov.functionId = m_variables[i].functionId;
+        if (ov.hasAlias || ov.hasType) {
+            m_variableOverrides.insert(ov.varId, ov);
         }
     }
 }
@@ -3788,6 +4580,98 @@ bool MainWindow::resetFunctionNameAt(int row) {
 QString MainWindow::functionDisplayNameAt(int row) const {
     if (row < 0 || row >= m_functions.size()) return {};
     return m_functions[row].name;
+}
+
+bool MainWindow::setFunctionCommentAt(int row, const QString& comment) {
+    if (!m_overrideStore) return false;
+    if (row < 0 || row >= m_functions.size()) return false;
+    const QString trimmed = comment.trimmed();
+    if (trimmed.isEmpty()) return false;
+
+    AuraOverrideKey key = buildKeyForFunction(row);
+    key.target_kind = AURA_OVERRIDE_TARGET_ANNOTATION;
+
+    AuraOverrideRecord rec{};
+    rec.key = key;
+    rec.payload.kind = AURA_OVERRIDE_PAYLOAD_ANNOTATION;
+    const QByteArray utf8 = trimmed.toUtf8();
+    std::strncpy(rec.payload.text, utf8.constData(),
+                 AURA_OVERRIDE_PAYLOAD_TEXT_CAP - 1);
+    rec.status = AURA_OVERRIDE_STATUS_ACTIVE;
+
+    if (aura_override_store_put(m_overrideStore, &rec) != 0) {
+        statusBar()->showMessage(QStringLiteral("Comment 저장 실패."));
+        return false;
+    }
+
+    applyCommentOverridesToFunctions();
+    if (m_functionModel) m_functionModel->setFunctions(m_functions);
+    if (m_decompilePane && m_activeFunctionAddr == m_functions[row].entry &&
+        m_decompilePane->hasCached(m_activeFunctionAddr)) {
+        m_decompilePane->showDecompile(
+            m_activeFunctionAddr,
+            m_decompilePane->cachedBackend(m_activeFunctionAddr),
+            renderDecompileTextForFunctionRow(
+                row, m_decompilePane->cachedText(m_activeFunctionAddr)));
+    }
+    return true;
+}
+
+QString MainWindow::functionCommentAt(int row) const {
+    if (row < 0 || row >= m_functions.size()) return {};
+    return m_functions[row].comment;
+}
+
+bool MainWindow::setVariableOverrideById(quint32 varId,
+                                         const QString& alias,
+                                         const QString& typeName) {
+    if (!m_overrideStore) return false;
+    const int row = variableRowById(varId);
+    if (row < 0) return false;
+
+    const GuiVariableOverride current = variableOverrideById(varId);
+    const QString nextAlias = alias.trimmed().isEmpty()
+        ? current.alias
+        : alias.trimmed();
+    const QString nextType = typeName.trimmed().isEmpty()
+        ? current.typeName
+        : typeName.trimmed();
+    if (nextAlias.isEmpty() && nextType.isEmpty()) return false;
+
+    AuraOverrideRecord rec{};
+    rec.key = buildKeyForVariable(row);
+    if (rec.key.confidence == AURA_OVERRIDE_CONFIDENCE_MISSING) return false;
+    rec.payload.kind = AURA_OVERRIDE_PAYLOAD_TYPE;
+    const QString payload = encodeVariableOverridePayload(nextAlias, nextType);
+    const QByteArray utf8 = payload.toUtf8();
+    std::strncpy(rec.payload.text, utf8.constData(),
+                 AURA_OVERRIDE_PAYLOAD_TEXT_CAP - 1);
+    rec.status = AURA_OVERRIDE_STATUS_ACTIVE;
+
+    if (aura_override_store_put(m_overrideStore, &rec) != 0) {
+        statusBar()->showMessage(
+            QStringLiteral("Variable override 저장 실패."));
+        return false;
+    }
+
+    applyOverridesToVariables();
+    statusBar()->showMessage(
+        QStringLiteral("Variable override applied: var_id=%1").arg(varId));
+    return true;
+}
+
+GuiVariableOverride MainWindow::variableOverrideById(quint32 varId) const {
+    return m_variableOverrides.value(varId);
+}
+
+QVector<GuiVariableOverride> MainWindow::variableOverrideList() const {
+    QVector<GuiVariableOverride> out;
+    out.reserve(m_variableOverrides.size());
+    for (auto it = m_variableOverrides.constBegin();
+         it != m_variableOverrides.constEnd(); ++it) {
+        out.push_back(it.value());
+    }
+    return out;
 }
 
 // ── Phase 11.3.9 (P2.F4 C2): DecompilePane context-menu actions ────────
@@ -4305,7 +5189,6 @@ void MainWindow::onDecompContextAddComment(quint64 addr) {
     // — keyed by `addr` — land in F4 v2 once the override store
     // grows an instruction-level key variant. v1 reuses the existing
     // function-keyed override path (R-5 honoured: store-only).
-    if (!m_overrideStore) return;
     const int row = findFunctionRowByEntry(m_functions, m_activeFunctionAddr);
     if (row < 0) {
         statusBar()->showMessage(QStringLiteral("Comment: 활성 함수 없음."));
@@ -4318,23 +5201,69 @@ void MainWindow::onDecompContextAddComment(quint64 addr) {
         QLineEdit::Normal, QString(), &ok);
     if (!ok || text.trimmed().isEmpty()) return;
 
-    AuraOverrideKey key = buildKeyForFunction(row);
-    AuraOverrideRecord rec{};
-    rec.key            = key;
-    rec.payload.kind   = AURA_OVERRIDE_PAYLOAD_ANNOTATION;
-    const QByteArray u8 = text.trimmed().toUtf8();
-    std::strncpy(rec.payload.text, u8.constData(),
-                 AURA_OVERRIDE_PAYLOAD_TEXT_CAP - 1);
-    rec.status = AURA_OVERRIDE_STATUS_ACTIVE;
-
-    if (aura_override_store_put(m_overrideStore, &rec) != 0) {
+    if (setFunctionCommentAt(row, text.trimmed())) {
+        statusBar()->showMessage(
+            QStringLiteral(
+                "Comment 추가 (function 0x%1, near addr 0x%2): \"%3\"")
+                .arg(m_activeFunctionAddr, 0, 16)
+                .arg(addr, 0, 16)
+                .arg(text.trimmed()));
+    } else {
         statusBar()->showMessage(QStringLiteral("Comment 저장 실패."));
+    }
+}
+
+QString MainWindow::renderDecompileTextForDisplay(const QString& rawText) const {
+    const int row = findFunctionRowByEntry(m_functions, m_activeFunctionAddr);
+    return renderDecompileTextForFunctionRow(row, rawText);
+}
+
+QString MainWindow::renderDecompileTextForFunctionRow(
+    int functionRow, const QString& rawText) const {
+    QString out = rawText;
+
+    QSettings settings(QStringLiteral("AURA"), QStringLiteral("aura-gui"));
+    if (settings.value(QStringLiteral("decompile/autoSubstituteStringAddresses"),
+                       true).toBool()) {
+        for (const auto& s : m_strings) {
+            if (s.addr == 0) continue;
+            const QString addr = QStringLiteral("0x%1").arg(s.addr, 0, 16);
+            const QString value =
+                !s.protectedValue.isEmpty() ? s.protectedValue : s.content;
+            const QString replacement =
+                QStringLiteral("%1 /* %2 */")
+                    .arg(cStringLiteralForDisplay(value), addr);
+            const QRegularExpression re(
+                QStringLiteral("\\b0x%1\\b")
+                    .arg(QString::number(s.addr, 16)),
+                QRegularExpression::CaseInsensitiveOption);
+            out.replace(re, replacement);
+        }
+    }
+
+    if (functionRow >= 0 && functionRow < m_functions.size() &&
+        m_functions[functionRow].hasComment) {
+        if (!out.endsWith(QLatin1Char('\n'))) out.push_back(QLatin1Char('\n'));
+        out.append(QStringLiteral("// AURA comment: %1\n")
+                       .arg(m_functions[functionRow].comment));
+    }
+    return out;
+}
+
+void MainWindow::onDecompContextToggleStringSubstitution() {
+    QSettings settings(QStringLiteral("AURA"), QStringLiteral("aura-gui"));
+    const QString key =
+        QStringLiteral("decompile/autoSubstituteStringAddresses");
+    settings.setValue(key, !settings.value(key, true).toBool());
+    if (!m_decompilePane || m_activeFunctionAddr == 0 ||
+        !m_decompilePane->hasCached(m_activeFunctionAddr)) {
         return;
     }
-    statusBar()->showMessage(
-        QStringLiteral("Comment 추가 (function 0x%1, near addr 0x%2): \"%3\"")
-            .arg(m_activeFunctionAddr, 0, 16).arg(addr, 0, 16)
-            .arg(text.trimmed()));
+    m_decompilePane->showDecompile(
+        m_activeFunctionAddr,
+        m_decompilePane->cachedBackend(m_activeFunctionAddr),
+        renderDecompileTextForDisplay(
+            m_decompilePane->cachedText(m_activeFunctionAddr)));
 }
 
 void MainWindow::onFunctionContextMenu(const QPoint& pos) {
@@ -4471,8 +5400,8 @@ void MainWindow::onFunctionContextMenu(const QPoint& pos) {
         }
     } else if (chosen == propAct) {
         // PP1 popover (ADR-0045 D5): target-type LineEdit + QListWidget
-        // (per-row checkbox) + Apply / Cancel. Apply path is wired in
-        // cycle-30 (C5); v1 surfaces the candidate set + selection only.
+        // (per-row checkbox) + Apply / Cancel. Checked rows persist as
+        // variable type overrides via the shared override_store path.
         QDialog dlg(this);
         dlg.setWindowTitle(
             QStringLiteral("Propagate type — function 0x%1")
@@ -4529,10 +5458,7 @@ void MainWindow::onFunctionContextMenu(const QPoint& pos) {
         auto* btnRow = new QHBoxLayout();
         auto* applyBtn  = new QPushButton(QStringLiteral("Apply"), &dlg);
         applyBtn->setToolTip(QStringLiteral(
-            "v1: counts selected candidates and reports via status bar. "
-            "Variable-target override_store integration ships as a "
-            "separate phase (PP1 v2 store wire) — needs "
-            "buildKeyForVariable() which doesn't exist yet."));
+            "Applies checked candidates as variable type overrides."));
         auto* cancelBtn = new QPushButton(QStringLiteral("Cancel"), &dlg);
         btnRow->addStretch();
         btnRow->addWidget(applyBtn);
@@ -4541,26 +5467,30 @@ void MainWindow::onFunctionContextMenu(const QPoint& pos) {
         connect(applyBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
         connect(cancelBtn, &QPushButton::clicked, &dlg, &QDialog::reject);
         if (dlg.exec() == QDialog::Accepted) {
-            // PP1 C5 v1: count selected candidates, surface via status
-            // bar. Variable-target override_store_put deferred to a
-            // dedicated PP1 v2 phase that introduces
-            // buildKeyForVariable(). R-5 still honoured — store touch 0.
-            int selected = 0;
+            int applied = 0;
             for (int i = 0; i < list->count(); ++i) {
                 auto* it = list->item(i);
-                if (it->flags() & Qt::ItemIsUserCheckable
-                    && it->checkState() == Qt::Checked) ++selected;
+                if (!(it->flags() & Qt::ItemIsUserCheckable) ||
+                    it->checkState() != Qt::Checked) {
+                    continue;
+                }
+                const quint32 varId =
+                    it->data(Qt::UserRole + 0).toUInt();
+                const QString newType =
+                    it->data(Qt::UserRole + 2).toString();
+                if (setVariableOverrideById(varId, QString(), newType)) {
+                    ++applied;
+                }
             }
             statusBar()->showMessage(
                 QStringLiteral(
-                    "Propagate type (dry-run): %1개 candidate 선택됨 "
-                    "[target=%2] — store 통합은 PP1 v2 phase 에서.")
-                    .arg(selected).arg(tgtEdit->text()));
+                    "Type propagation applied: %1 variable override(s).")
+                    .arg(applied));
         }
     } else if (chosen == fieldsAct) {
-        // PP2 popover (ADR-0046 D4): stack cluster list. v1 dry-run
-        // — selected items are counted but not persisted; struct
-        // definition storage is v3 (new override payload kind).
+        // PP2 popover (ADR-0046 D4): stack cluster list. Checked rows
+        // persist alias overrides; struct definition storage remains a
+        // later payload-kind phase.
         const auto cands = generateFieldCandidates(m_functions[row].entry);
         QDialog dlg(this);
         dlg.setWindowTitle(
@@ -4606,9 +5536,7 @@ void MainWindow::onFunctionContextMenu(const QPoint& pos) {
         auto* applyBtn  = new QPushButton(QStringLiteral("Apply"), &dlg);
         applyBtn->setEnabled(!cands.isEmpty());
         applyBtn->setToolTip(QStringLiteral(
-            "v1: counts checked clusters, surfaces via status bar. "
-            "Struct definition persistence ships in v3 (new payload "
-            "kind AURA_OVERRIDE_PAYLOAD_STRUCT_DEF)."));
+            "Applies checked stack variables as alias overrides."));
         auto* cancelBtn = new QPushButton(QStringLiteral("Cancel"), &dlg);
         btnRow->addStretch();
         btnRow->addWidget(applyBtn);
@@ -4617,17 +5545,24 @@ void MainWindow::onFunctionContextMenu(const QPoint& pos) {
         connect(applyBtn,  &QPushButton::clicked, &dlg, &QDialog::accept);
         connect(cancelBtn, &QPushButton::clicked, &dlg, &QDialog::reject);
         if (dlg.exec() == QDialog::Accepted) {
-            int sel = 0;
+            int applied = 0;
             for (int i = 0; i < list->count(); ++i) {
                 auto* it = list->item(i);
-                if ((it->flags() & Qt::ItemIsUserCheckable) &&
-                    it->checkState() == Qt::Checked) ++sel;
+                if (!(it->flags() & Qt::ItemIsUserCheckable) ||
+                    it->checkState() != Qt::Checked) {
+                    continue;
+                }
+                const quint32 varId = it->data(Qt::UserRole).toUInt();
+                const QString alias =
+                    QStringLiteral("field_%1").arg(varId);
+                if (setVariableOverrideById(varId, alias, QString())) {
+                    ++applied;
+                }
             }
             statusBar()->showMessage(
                 QStringLiteral(
-                    "Suggest fields (dry-run): %1개 cluster 선택됨 — "
-                    "struct 정의 저장은 v3 phase 에서.")
-                    .arg(sel));
+                    "Field suggestions applied: %1 variable override(s).")
+                    .arg(applied));
         }
     } else if (chosen == arrayAct) {
         // PP3 popover (ADR-0047 D4): merged candidate list from

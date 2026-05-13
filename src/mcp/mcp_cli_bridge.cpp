@@ -2,6 +2,7 @@
 
 #include "aura/mcp/mcp_envelope.h"
 #include "aura/safety/protected_export.h"
+#include "aura/safety/safe_export_view.h"
 #include "mcp_cli_bridge_internal.h"
 #include "mcp_path_policy.h"
 
@@ -75,6 +76,53 @@ std::string getenvString(const char* name) {
     const char* value = std::getenv(name);
     return value != nullptr ? std::string(value) : std::string();
 }
+
+class ScopedEnvVar {
+  public:
+    ScopedEnvVar(const char* name, const std::string& value)
+        : name_(name != nullptr ? name : ""),
+          had_value_(std::getenv(name_.c_str()) != nullptr),
+          old_value_(getenvString(name_.c_str())) {
+        if (!name_.empty()) {
+            set(value);
+        }
+    }
+
+    ~ScopedEnvVar() {
+        if (name_.empty()) {
+            return;
+        }
+        if (had_value_) {
+            set(old_value_);
+        } else {
+            unset();
+        }
+    }
+
+    ScopedEnvVar(const ScopedEnvVar&) = delete;
+    ScopedEnvVar& operator=(const ScopedEnvVar&) = delete;
+
+  private:
+    void set(const std::string& value) {
+#ifdef _WIN32
+        _putenv_s(name_.c_str(), value.c_str());
+#else
+        setenv(name_.c_str(), value.c_str(), 1);
+#endif
+    }
+
+    void unset() {
+#ifdef _WIN32
+        _putenv_s(name_.c_str(), "");
+#else
+        unsetenv(name_.c_str());
+#endif
+    }
+
+    std::string name_;
+    bool        had_value_ = false;
+    std::string old_value_;
+};
 
 fs::path cliName() {
 #ifdef _WIN32
@@ -720,6 +768,41 @@ std::string jsonStringField(const cJSON* object, const char* key) {
                : "";
 }
 
+const char* stringArg(cJSON* args_or_null, const char* key) {
+    cJSON* item = cJSON_GetObjectItemCaseSensitive(args_or_null, key);
+    return cJSON_IsString(item) ? item->valuestring : nullptr;
+}
+
+std::string stringArgOrEnv(cJSON* args_or_null,
+                           const char* key,
+                           const char* env_name) {
+    const char* value = stringArg(args_or_null, key);
+    if (nonempty(value)) {
+        return value;
+    }
+    return getenvString(env_name);
+}
+
+const char* stringArgOrDefault(cJSON* args_or_null,
+                               const char* key,
+                               const char* fallback) {
+    const char* value = stringArg(args_or_null, key);
+    return nonempty(value) ? value : fallback;
+}
+
+std::string numberArgOrDefault(cJSON* args_or_null,
+                               const char* key,
+                               int fallback) {
+    cJSON* item = cJSON_GetObjectItemCaseSensitive(args_or_null, key);
+    if (cJSON_IsNumber(item)) {
+        return std::to_string(item->valueint);
+    }
+    if (cJSON_IsString(item) && nonempty(item->valuestring)) {
+        return item->valuestring;
+    }
+    return std::to_string(fallback);
+}
+
 int jsonIntField(const cJSON* object, const char* key, int fallback) {
     const cJSON* item = cJSON_GetObjectItemCaseSensitive(object, key);
     return cJSON_IsNumber(item) ? item->valueint : fallback;
@@ -811,11 +894,7 @@ void removeObjectKeyRecursive(cJSON* item, const char* key) {
     }
 }
 
-void normalizeDisassemblyCliJson(cJSON* cli_json) {
-    if (!cJSON_IsObject(cli_json)) {
-        return;
-    }
-    cJSON* body = cJSON_GetObjectItemCaseSensitive(cli_json, "body");
+void normalizeDisassemblyBody(cJSON* body) {
     if (!cJSON_IsObject(body)) {
         return;
     }
@@ -839,14 +918,43 @@ void normalizeDisassemblyCliJson(cJSON* cli_json) {
     }
 }
 
+void normalizeCfgBody(cJSON* body) {
+    if (cJSON_IsObject(body)) {
+        setBoolField(body, "protected_only", true);
+    }
+}
+
+cJSON* guiRpcResult(cJSON* cli_json) {
+    if (!cJSON_IsObject(cli_json)) {
+        return nullptr;
+    }
+    cJSON* rpc = cJSON_GetObjectItemCaseSensitive(cli_json, "rpc");
+    if (!cJSON_IsObject(rpc)) {
+        return nullptr;
+    }
+    return cJSON_GetObjectItemCaseSensitive(rpc, "result");
+}
+
+void normalizeDisassemblyCliJson(cJSON* cli_json) {
+    if (!cJSON_IsObject(cli_json)) {
+        return;
+    }
+    normalizeDisassemblyBody(cJSON_GetObjectItemCaseSensitive(cli_json, "body"));
+}
+
+void normalizeGuiDisassemblyCliJson(cJSON* cli_json) {
+    normalizeDisassemblyBody(guiRpcResult(cli_json));
+}
+
 void normalizeCfgCliJson(cJSON* cli_json) {
     if (!cJSON_IsObject(cli_json)) {
         return;
     }
-    cJSON* body = cJSON_GetObjectItemCaseSensitive(cli_json, "body");
-    if (cJSON_IsObject(body)) {
-        setBoolField(body, "protected_only", true);
-    }
+    normalizeCfgBody(cJSON_GetObjectItemCaseSensitive(cli_json, "body"));
+}
+
+void normalizeGuiCfgCliJson(cJSON* cli_json) {
+    normalizeCfgBody(guiRpcResult(cli_json));
 }
 
 void normalizeLlmContextCliJson(cJSON* cli_json) {
@@ -854,11 +962,31 @@ void normalizeLlmContextCliJson(cJSON* cli_json) {
     removeObjectKeyRecursive(cli_json, "op_str");
 }
 
+aura::safety::SafeExportItem makeSafeStringExportItem(
+    const std::string& original_value,
+    const std::string& display_value,
+    const std::string& transmission_value,
+    const std::string& mask_token) {
+    return aura::safety::makeSafeExportItem({
+        "string",
+        "",
+        "",
+        original_value,
+        display_value,
+        transmission_value,
+        mask_token,
+    });
+}
+
 void normalizeFunctionDetailCliJson(const char* kind, cJSON* cli_json) {
     if (streq(kind, "aura_get_disassembly")) {
         normalizeDisassemblyCliJson(cli_json);
+    } else if (streq(kind, "aura_gui_disasm_function")) {
+        normalizeGuiDisassemblyCliJson(cli_json);
     } else if (streq(kind, "aura_get_cfg")) {
         normalizeCfgCliJson(cli_json);
+    } else if (streq(kind, "aura_gui_cfg_function")) {
+        normalizeGuiCfgCliJson(cli_json);
     } else if (streq(kind, "aura_get_llm_context")) {
         normalizeLlmContextCliJson(cli_json);
     }
@@ -938,10 +1066,111 @@ cJSON* runCliAndWrap(const char* kind, const std::vector<CliArg>& args) {
     return parseCliJsonOrError(kind, result.stdout_text);
 }
 
+cJSON* guiCliErrorFromStdoutOrGeneric(const char* kind,
+                                      const CliResult& result) {
+    cJSON* parsed =
+        cJSON_ParseWithLength(result.stdout_text.data(),
+                              result.stdout_text.size());
+    if (cJSON_IsObject(parsed)) {
+        const std::string code = jsonStringField(parsed, "error");
+        const std::string message = jsonStringField(parsed, "message");
+        cJSON_Delete(parsed);
+        if (!code.empty()) {
+            return envelopeError(kind,
+                                 code.c_str(),
+                                 message.empty()
+                                     ? std::string("aura GUI RPC call failed")
+                                     : message);
+        }
+    } else {
+        cJSON_Delete(parsed);
+    }
+
+    std::ostringstream message;
+    message << "aura CLI exited with code " << result.exit_code;
+    const std::string stderr_message = trimForMessage(result.stderr_text);
+    if (!stderr_message.empty()) {
+        message << ": " << stderr_message;
+    }
+    return envelopeError(kind, "cli_failed", message.str());
+}
+
+cJSON* runGuiCliAndWrap(const char* kind, const std::vector<CliArg>& args) {
+    const fs::path aura_cli = locateAuraCli();
+    if (aura_cli.empty()) {
+        return envelopeError(
+            kind,
+            "cli_not_found",
+            "aura CLI executable was not found under AURA_REPO_ROOT/current working directory");
+    }
+
+    const CliResult result = runAuraCli(aura_cli, args);
+    if (!result.spawned) {
+        const std::string message =
+            result.error_message.empty() ? "aura CLI could not be started"
+                                         : result.error_message;
+        return envelopeError(kind, "cli_failed", message);
+    }
+    if (result.timed_out) {
+        return envelopeError(kind, "cli_failed", "aura CLI timed out");
+    }
+    if (!result.error_message.empty()) {
+        return envelopeError(kind, "cli_failed", result.error_message);
+    }
+    if (result.stdout_truncated) {
+        return envelopeError(kind,
+                             "cli_output_too_large",
+                             "aura CLI stdout exceeded the MCP bridge limit");
+    }
+    if (result.exit_code != 0) {
+        return guiCliErrorFromStdoutOrGeneric(kind, result);
+    }
+    return parseCliJsonOrError(kind, result.stdout_text);
+}
+
 cJSON* callProbeEngines() {
     return runCliAndWrap("aura_probe_engines",
                          {literalArg("--compact"),
                           literalArg("--probe-engines")});
+}
+
+cJSON* callGatewaySnapshot(cJSON* args_or_null) {
+    const cJSON* binary_path =
+        cJSON_GetObjectItemCaseSensitive(args_or_null, "binary_path");
+    if (cJSON_IsString(binary_path) && nonempty(binary_path->valuestring)) {
+        const fs::path candidate = pathFromUtf8(binary_path->valuestring);
+        std::error_code ec;
+        const fs::path canonical_binary = fs::weakly_canonical(candidate, ec);
+        if (ec) {
+            return envelopeError("aura_get_gateway_snapshot",
+                                 "path_resolution_failed",
+                                 ec.message().c_str());
+        }
+
+        const AuraMcpPathDecision decision =
+            aura_mcp_path_allowed(canonical_binary);
+        if (!decision.allowed) {
+            const std::string code = decision.error_code.empty()
+                                         ? "path_denied"
+                                         : decision.error_code;
+            const std::string message = decision.error_message.empty()
+                                            ? "binary path is not allowed"
+                                            : decision.error_message;
+            return envelopeError("aura_get_gateway_snapshot",
+                                 code.c_str(),
+                                 message);
+        }
+
+        return runCliAndWrap("aura_get_gateway_snapshot",
+                             {literalArg("--compact"),
+                              literalArg("gateway-snapshot"),
+                              pathArg(canonical_binary)});
+    }
+
+    return runCliAndWrap("aura_get_gateway_snapshot",
+                         {literalArg("--compact"),
+                          literalArg("gateway-snapshot"),
+                          literalArg("--demo")});
 }
 
 bool resolveAllowedBinaryPath(const char* tool_name,
@@ -1034,6 +1263,95 @@ cJSON* callFunctionTool(const char* tool_name,
 
 }  // namespace
 
+extern "C" cJSON* aura_mcp_cli_bridge_gui_call_json(const char* name,
+                                                     cJSON* args_or_null) {
+    const std::string port =
+        stringArgOrEnv(args_or_null, "gui_port", "AURA_GUI_RPC_PORT");
+    const std::string token =
+        stringArgOrEnv(args_or_null, "gui_token", "AURA_GUI_RPC_TOKEN");
+    if (port.empty() || token.empty()) {
+        return aura_mcp_envelope_error("protected/1.0",
+                                       name,
+                                       "invalid_arguments",
+                                       "gui_port/gui_token arguments or AURA_GUI_RPC_PORT/AURA_GUI_RPC_TOKEN are required",
+                                       "protected");
+    }
+
+    std::vector<CliArg> args = {
+        literalArg("--compact"),
+        literalArg("gui"),
+        literalArg("--port"),
+        literalArg(port.c_str()),
+    };
+    ScopedEnvVar token_env("AURA_GUI_RPC_TOKEN", token);
+
+    if (streq(name, "aura_gui_status")) {
+        args.push_back(literalArg("status"));
+    } else if (streq(name, "aura_gui_add_binary")) {
+        fs::path canonical_binary;
+        cJSON* error = nullptr;
+        if (!resolveAllowedBinaryPath(name,
+                                      args_or_null,
+                                      canonical_binary,
+                                      &error)) {
+            return error;
+        }
+        args.push_back(literalArg("add-binary"));
+        args.push_back(pathArg(canonical_binary));
+    } else if (streq(name, "aura_gui_analyze")) {
+        const std::string row = numberArgOrDefault(args_or_null, "row", 0);
+        const char* level = stringArgOrDefault(args_or_null, "level", "full");
+        args.push_back(literalArg("analyze"));
+        args.push_back(literalArg("--row"));
+        args.push_back(literalArg(row.c_str()));
+        args.push_back(literalArg("--level"));
+        args.push_back(literalArg(level));
+    } else if (streq(name, "aura_gui_functions")) {
+        args.push_back(literalArg("functions"));
+    } else if (streq(name, "aura_gui_demo_snapshot")) {
+        args.push_back(literalArg("demo-snapshot"));
+    } else if (streq(name, "aura_gui_protected_strings")) {
+        args.push_back(literalArg("protected-strings"));
+    } else if (streq(name, "aura_gui_symbols")) {
+        args.push_back(literalArg("symbols"));
+    } else if (streq(name, "aura_gui_xrefs")) {
+        args.push_back(literalArg("xrefs"));
+    } else if (streq(name, "aura_gui_disasm_function")) {
+        const char* function_addr = stringArg(args_or_null, "function_addr");
+        args.push_back(literalArg("disasm-function"));
+        args.push_back(literalArg("--addr"));
+        args.push_back(literalArg(function_addr));
+    } else if (streq(name, "aura_gui_cfg_function")) {
+        const char* function_addr = stringArg(args_or_null, "function_addr");
+        args.push_back(literalArg("cfg-function"));
+        args.push_back(literalArg("--addr"));
+        args.push_back(literalArg(function_addr));
+    } else if (streq(name, "aura_gui_rename")) {
+        const std::string row =
+            numberArgOrDefault(args_or_null, "function_row", 0);
+        const char* new_name = stringArg(args_or_null, "new_name");
+        args.push_back(literalArg("rename"));
+        args.push_back(literalArg("--row"));
+        args.push_back(literalArg(row.c_str()));
+        args.push_back(literalArg("--name"));
+        args.push_back(literalArg(new_name));
+    } else if (streq(name, "aura_gui_reset_name")) {
+        const std::string row =
+            numberArgOrDefault(args_or_null, "function_row", 0);
+        args.push_back(literalArg("reset-name"));
+        args.push_back(literalArg("--row"));
+        args.push_back(literalArg(row.c_str()));
+    } else {
+        return aura_mcp_envelope_error("protected/1.0",
+                                       name,
+                                       "tool_not_implemented",
+                                       "GUI MCP bridge does not implement this tool",
+                                       "protected");
+    }
+
+    return runGuiCliAndWrap(name, args);
+}
+
 void aura_mcp_normalize_analyze_cli_json(cJSON* cli_json) {
     if (!cJSON_IsObject(cli_json)) {
         return;
@@ -1054,10 +1372,25 @@ void aura_mcp_normalize_analyze_cli_json(cJSON* cli_json) {
         if (!cJSON_IsObject(row)) {
             continue;
         }
-        const cJSON* content_item =
+        cJSON* content_item =
             cJSON_GetObjectItemCaseSensitive(row, "content");
         if (!cJSON_IsString(content_item) ||
             content_item->valuestring == nullptr) {
+            const auto item = makeSafeStringExportItem(
+                "",
+                jsonStringField(row, "display_value"),
+                jsonStringField(row, "transmission_value"),
+                jsonStringField(row, "mask_token"));
+            cJSON_DeleteItemFromObjectCaseSensitive(row, "content");
+            cJSON_DeleteItemFromObjectCaseSensitive(row, "raw_content");
+            cJSON_DeleteItemFromObjectCaseSensitive(row, "original");
+            cJSON_DeleteItemFromObjectCaseSensitive(row, "export_value");
+            cJSON_DeleteItemFromObjectCaseSensitive(row, "display_literal");
+            setStringField(row, "display_value", item.display_value);
+            setStringField(row, "transmission_value", item.transmission_value);
+            setStringField(row, "transmission_policy", "protected");
+            setBoolField(row, "original_included", item.original_included);
+            setBoolField(row, "protected_only", true);
             continue;
         }
 
@@ -1072,14 +1405,26 @@ void aura_mcp_normalize_analyze_cli_json(cJSON* cli_json) {
 
         const auto record = aura::safety::buildProtectedExportRecord(
             string_id, content, source);
+        std::string mask_token;
+        if (!record.findings.empty()) {
+            mask_token = record.findings.front().mask_token;
+        }
+        const auto item = makeSafeStringExportItem(
+            content, record.protected_value, record.protected_value, mask_token);
 
         cJSON_DeleteItemFromObjectCaseSensitive(row, "content");
         cJSON_DeleteItemFromObjectCaseSensitive(row, "raw_content");
         cJSON_DeleteItemFromObjectCaseSensitive(row, "original");
         cJSON_DeleteItemFromObjectCaseSensitive(row, "export_value");
+        cJSON_DeleteItemFromObjectCaseSensitive(row, "display_literal");
         setNumberField(row, "string_id", static_cast<double>(record.string_id));
-        setStringField(row, "protected_value", record.protected_value);
+        setStringField(row, "protected_value", item.transmission_value);
         setStringField(row, "masked_content", record.masked_content);
+        setStringField(row, "display_value", item.display_value);
+        setStringField(row, "transmission_value", item.transmission_value);
+        setStringField(row, "transmission_policy", "protected");
+        setBoolField(row, "original_included", item.original_included);
+        setStringField(row, "mask_token", item.mask_token);
         setStringField(row, "source", record.source);
         setNumberField(row, "findings_count",
                        static_cast<double>(record.findings_count));
@@ -1092,6 +1437,9 @@ extern "C" cJSON* aura_mcp_cli_bridge_call_json(const char* tool_name,
                                                  cJSON*      args_or_null) {
     if (streq(tool_name, "aura_probe_engines")) {
         return callProbeEngines();
+    }
+    if (streq(tool_name, "aura_get_gateway_snapshot")) {
+        return callGatewaySnapshot(args_or_null);
     }
     if (streq(tool_name, "aura_info")) {
         return callBinaryTool("aura_info", "info", args_or_null);

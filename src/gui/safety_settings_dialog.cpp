@@ -97,6 +97,14 @@ std::vector<std::string> validIdsFromRefs(
     return ids;
 }
 
+std::vector<std::string> firstValidIdFromRefs(
+    const std::vector<aura::safety::SafetyAssetRef>& refs) {
+    for (const auto& ref : refs) {
+        if (ref.valid) return {ref.id};
+    }
+    return {};
+}
+
 std::vector<std::string> activeModelIdsFromProfile(
     const aura::safety::SafetyProfile& profile) {
     if (!profile.model_policy.model_id.empty()) {
@@ -106,6 +114,32 @@ std::vector<std::string> activeModelIdsFromProfile(
         return {profile.token_classification_model_id};
     }
     return {};
+}
+
+std::vector<std::string> defaultModelIdsForProfile(
+    const aura::safety::SafetyProfile& profile,
+    const aura::safety::SafetyAssetRegistry& registry) {
+    const auto active = activeModelIdsFromProfile(profile);
+    return active.empty() ? firstValidIdFromRefs(registry.models) : active;
+}
+
+bool sameIdsAsValidRefs(
+    const std::vector<std::string>& ids,
+    const std::vector<aura::safety::SafetyAssetRef>& refs) {
+    std::vector<std::string> valid = validIdsFromRefs(refs);
+    std::vector<std::string> selected = ids;
+    std::sort(valid.begin(), valid.end());
+    std::sort(selected.begin(), selected.end());
+    return !valid.empty() && selected == valid;
+}
+
+aura::safety::RulePackSelectionMode modeForCheckedRulePacks(
+    const std::vector<std::string>& ids,
+    const std::vector<aura::safety::SafetyAssetRef>& refs) {
+    if (ids.empty()) return aura::safety::RulePackSelectionMode::None;
+    if (sameIdsAsValidRefs(ids, refs))
+        return aura::safety::RulePackSelectionMode::All;
+    return aura::safety::RulePackSelectionMode::Selected;
 }
 
 void applyModelIdsToProfile(aura::safety::SafetyProfile& profile,
@@ -218,6 +252,37 @@ SafetySettingsDialog::SafetySettingsDialog(const QString& selectedProfileId,
     detectionLayout->addLayout(ruleButtons);
     root->addWidget(detectionGroup);
 
+    auto* protectionGroup =
+        new QGroupBox(textKoEn("보호 결과 관리",
+                               "Protection results"),
+                      this);
+    auto* protectionLayout = new QVBoxLayout(protectionGroup);
+    m_protectionPolicyHelpLabel = new QLabel(
+        textKoEn("Rule Pack 해제는 다음 분석 정책만 바꿉니다. 기존 보호 결과는 명시적으로 재계산하거나 삭제할 때만 바뀝니다.",
+                 "Disabling rule packs changes only the next analysis policy. Existing protection results change only when explicitly recomputed or deleted."),
+        protectionGroup);
+    m_protectionPolicyHelpLabel->setObjectName(
+        QStringLiteral("safetyProtectionPolicyHelpLabel"));
+    m_protectionPolicyHelpLabel->setWordWrap(true);
+    protectionLayout->addWidget(m_protectionPolicyHelpLabel);
+
+    auto* protectionButtons = new QHBoxLayout();
+    m_recomputeProtectionButton = new QPushButton(
+        textKoEn("보호 결과 재계산", "Recompute protection results"),
+        protectionGroup);
+    m_recomputeProtectionButton->setObjectName(
+        QStringLiteral("safetyRecomputeProtectionButton"));
+    m_deleteProtectionButton = new QPushButton(
+        textKoEn("보호 결과 삭제...", "Delete protection results..."),
+        protectionGroup);
+    m_deleteProtectionButton->setObjectName(
+        QStringLiteral("safetyDeleteProtectionButton"));
+    protectionButtons->addWidget(m_recomputeProtectionButton);
+    protectionButtons->addWidget(m_deleteProtectionButton);
+    protectionButtons->addStretch();
+    protectionLayout->addLayout(protectionButtons);
+    root->addWidget(protectionGroup);
+
     auto* evalGroup = new QGroupBox(textKoEn("평가", "Evaluation"), this);
     auto* evalLayout = new QVBoxLayout(evalGroup);
     evalLayout->addWidget(
@@ -270,6 +335,7 @@ SafetySettingsDialog::SafetySettingsDialog(const QString& selectedProfileId,
         m_modelSelectionEdited = true;
         updateModelSelectionFromChecked();
         updateSummary();
+        emit applyProfileRequested();
     });
     connect(removeModelBtn, &QPushButton::clicked, this, [this]() {
         if (!m_modelList) return;
@@ -280,6 +346,7 @@ SafetySettingsDialog::SafetySettingsDialog(const QString& selectedProfileId,
         m_modelSelectionEdited = true;
         updateModelSelectionFromChecked();
         updateSummary();
+        emit applyProfileRequested();
     });
     connect(rulePackDirBtn, &QPushButton::clicked, this, [this]() {
         openDirectory(rulePacksDir());
@@ -292,6 +359,7 @@ SafetySettingsDialog::SafetySettingsDialog(const QString& selectedProfileId,
         item->setCheckState(Qt::Checked);
         m_rulePackSelectionEdited = true;
         updateSummary();
+        emit applyProfileRequested();
     });
     connect(removeRuleBtn, &QPushButton::clicked, this, [this]() {
         if (!m_rulePackList) return;
@@ -301,7 +369,12 @@ SafetySettingsDialog::SafetySettingsDialog(const QString& selectedProfileId,
         item->setCheckState(Qt::Unchecked);
         m_rulePackSelectionEdited = true;
         updateSummary();
+        emit applyProfileRequested();
     });
+    connect(m_recomputeProtectionButton, &QPushButton::clicked,
+            this, &SafetySettingsDialog::recomputeProtectionRequested);
+    connect(m_deleteProtectionButton, &QPushButton::clicked,
+            this, &SafetySettingsDialog::deleteProtectionRequested);
     updateSummary(/*resetSelection=*/true);
 }
 
@@ -332,17 +405,24 @@ void SafetySettingsDialog::applyRulePackSelectionToProfile(
     if (!m_rulePackSelectionEdited) return;
 
     profile.rule_pack_ids = selectedRulePackIds();
-    profile.rule_pack_selection_mode =
-        profile.rule_pack_ids.empty()
-            ? aura::safety::RulePackSelectionMode::None
-            : aura::safety::RulePackSelectionMode::Selected;
+    profile.rule_pack_selection_mode = modeForCheckedRulePacks(
+        profile.rule_pack_ids, m_registry.rule_packs);
+    if (profile.rule_pack_selection_mode ==
+        aura::safety::RulePackSelectionMode::All) {
+        profile.rule_pack_ids.clear();
+    }
 }
 
 aura::safety::SafetyProfile SafetySettingsDialog::editedProfile() const {
     const std::string id = currentComboProfileId(m_profileCombo).toStdString();
     const auto loaded = aura::safety::resolveSelectedSafetyProfile(id);
     auto profile = loaded.profile;
-    applyModelSelectionToProfile(profile);
+    if (m_modelSelectionEdited) {
+        applyModelSelectionToProfile(profile);
+    } else if (activeModelIdsFromProfile(profile).empty()) {
+        applyModelIdsToProfile(profile,
+                               defaultModelIdsForProfile(profile, m_registry));
+    }
     applyRulePackSelectionToProfile(profile);
     return profile;
 }
@@ -492,7 +572,8 @@ void SafetySettingsDialog::updateSummary(bool resetSelection) {
     m_resolvedProfileId = QString::fromStdString(loaded.profile_id);
     auto workingProfile = loaded.profile;
     if (resetSelection) {
-        const auto selectedFromProfile = activeModelIdsFromProfile(workingProfile);
+        const auto selectedFromProfile =
+            defaultModelIdsForProfile(workingProfile, m_registry);
         applyModelIdsToProfile(workingProfile, selectedFromProfile);
     } else {
         applyModelSelectionToProfile(workingProfile);
@@ -518,10 +599,8 @@ void SafetySettingsDialog::updateSummary(bool resetSelection) {
 
     addAssetRows(m_modelList, m_registry.models, selectedModels, true);
     workingProfile.rule_pack_ids = checkedRulePacks;
-    workingProfile.rule_pack_selection_mode =
-        checkedRulePacks.empty()
-            ? aura::safety::RulePackSelectionMode::None
-            : aura::safety::RulePackSelectionMode::Selected;
+    workingProfile.rule_pack_selection_mode = modeForCheckedRulePacks(
+        checkedRulePacks, m_registry.rule_packs);
     addAssetRows(m_rulePackList, m_registry.rule_packs,
                  checkedRulePacks, true);
     addAssetRows(m_evalDatasetList, m_registry.eval_datasets,

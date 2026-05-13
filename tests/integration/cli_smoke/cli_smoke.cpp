@@ -100,13 +100,25 @@ static void write_fixture_rule_pack(const fs::path &home) {
         R"({"schema_version":1,"pack_id":"fixture-rule","display_name":"fixture rule","rules_file":"rules.json"})");
     write_text_file(
         pack / "rules.json",
-        R"({"schema_version":1,"rules":[{"id":"fixture-rule/ascii-run","kind":"fixture_ascii_run","pattern":"[A-Za-z]{12,}","confidence":0.90}]})");
+        R"({"schema_version":1,"rules":[{"id":"fixture-rule/ascii-run","kind":"fixture_ascii_run","pattern":"[A-Za-z]{12,}","confidence":0.90},{"id":"fixture-rule/rrn","kind":"KR_RRN","pattern":"[0-9]{6}-[0-9]{7}","confidence":0.99}]})");
 
     const fs::path profiles = home / "safety-profiles";
     fs::create_directories(profiles);
     write_text_file(
         profiles / "default.json",
         R"({"schema_version":1,"profile_id":"default","rule_pack_selection_mode":"selected","rule_pack_ids":["fixture-rule"]})");
+}
+
+static fs::path make_sensitive_fixture() {
+    fs::path out = fs::temp_directory_path() /
+#ifdef _WIN32
+                   fs::path("aura_cli_smoke_sensitive.bin");
+#else
+                   fs::path("aura_cli_smoke_sensitive");
+#endif
+    fs::remove(out);
+    write_text_file(out, "AURA_SENSITIVE_RRN=900101-1234567\n");
+    return out;
 }
 
 // Path to the `aura` binary, injected via env by CMake (AURA_BIN).
@@ -239,6 +251,33 @@ static std::string get_string(const cJSON *obj, const char *key) {
     return cJSON_GetStringValue(v);
 }
 
+static std::string json_escape_path(const std::string &path) {
+    std::string escaped;
+    escaped.reserve(path.size() * 2);
+    for (const char ch : path) {
+        if (ch == '\\') {
+            escaped += "\\\\";
+        } else if (ch == '"') {
+            escaped += "\\\"";
+        } else {
+            escaped += ch;
+        }
+    }
+    return escaped;
+}
+
+static bool contains_repo_root_leak(const std::string &text) {
+    const fs::path root_path(repo_root());
+    const std::string native = root_path.string();
+    const std::string generic = root_path.generic_string();
+    return (!native.empty() &&
+            (text.find(native) != std::string::npos ||
+             text.find(json_escape_path(native)) != std::string::npos)) ||
+           (!generic.empty() &&
+            (text.find(generic) != std::string::npos ||
+             text.find(json_escape_path(generic)) != std::string::npos));
+}
+
 // ── tests ──────────────────────────────────────────────────────────────────
 
 TEST_CASE("cli_smoke: aura --version") {
@@ -251,6 +290,124 @@ TEST_CASE("cli_smoke: gui help advertises protected string export") {
     CmdResult r = run("\"" + aura_binary() + "\" gui --help");
     CHECK(r.exit_code == 0);
     CHECK(r.stdout_.find("protected-strings") != std::string::npos);
+    CHECK(r.stdout_.find("demo-snapshot") != std::string::npos);
+}
+
+TEST_CASE("cli_smoke: gateway-snapshot emits protected demo JSON") {
+    CmdResult r = run("\"" + aura_binary() +
+                      "\" --compact gateway-snapshot --demo");
+    REQUIRE_MESSAGE(r.exit_code == 0,
+                    "exit=", r.exit_code, " out=", r.stdout_);
+
+    CHECK(r.stdout_.find("\"command\":\"gateway-snapshot\"") !=
+          std::string::npos);
+    CHECK(r.stdout_.find("\"protected_prompt\"") != std::string::npos);
+    CHECK(r.stdout_.find("\"verification\"") != std::string::npos);
+    CHECK(r.stdout_.find("\"audit_events\"") != std::string::npos);
+    CHECK(r.stdout_.find("900101-1234567") == std::string::npos);
+
+    cJSON *root = parse_or_fail(r.stdout_);
+    CHECK(get_string(root, "command") == "gateway-snapshot");
+    cJSON *gateway = cJSON_GetObjectItem(root, "gateway");
+    REQUIRE(cJSON_IsObject(gateway));
+    CHECK(cJSON_IsArray(cJSON_GetObjectItem(gateway, "sources")));
+    cJSON *protected_items = cJSON_GetObjectItem(gateway, "protected_items");
+    REQUIRE(cJSON_IsArray(protected_items));
+    CHECK(cJSON_GetArraySize(protected_items) > 0);
+    CHECK(cJSON_IsObject(cJSON_GetObjectItem(gateway, "risk_summary")));
+    cJSON *protected_prompt = cJSON_GetObjectItem(gateway, "protected_prompt");
+    CHECK(cJSON_IsObject(protected_prompt));
+    CHECK(get_string(protected_prompt, "body").find("900101-1******") !=
+          std::string::npos);
+    cJSON *verification = cJSON_GetObjectItem(gateway, "verification");
+    REQUIRE(cJSON_IsObject(verification));
+    CHECK(get_string(verification, "status") == "pass");
+    cJSON *checks = cJSON_GetObjectItem(verification, "checks");
+    REQUIRE(cJSON_IsArray(checks));
+    cJSON *first_check = cJSON_GetArrayItem(checks, 0);
+    REQUIRE(cJSON_IsObject(first_check));
+    CHECK(cJSON_IsString(cJSON_GetObjectItem(first_check, "name")));
+    CHECK(cJSON_IsString(cJSON_GetObjectItem(first_check, "status")));
+    CHECK(cJSON_IsString(cJSON_GetObjectItem(first_check, "detail")));
+    CHECK(cJSON_IsArray(cJSON_GetObjectItem(gateway, "audit_events")));
+    cJSON_Delete(root);
+}
+
+TEST_CASE("cli_smoke: gateway-snapshot emits protected real binary JSON") {
+    const std::string rizin = discover_rizin_bin();
+    if (rizin.empty()) {
+        MESSAGE("SKIP: no rizin binary");
+        return;
+    }
+    const std::string fixture = fixture_path();
+    REQUIRE(fs::exists(fixture));
+
+    CmdResult r = run(aura_invocation(rizin) + " gateway-snapshot \"" +
+                      fixture + "\" --compact");
+    REQUIRE_MESSAGE(r.exit_code == 0,
+                    "exit=", r.exit_code, " out=", r.stdout_);
+
+    CHECK(r.stdout_.find("\"gateway\"") != std::string::npos);
+    CHECK(r.stdout_.find("\"protected_prompt\"") != std::string::npos);
+    CHECK(r.stdout_.find("\"verification\"") != std::string::npos);
+    CHECK(r.stdout_.find("900101-1234567") == std::string::npos);
+
+    cJSON *root = parse_or_fail(r.stdout_);
+    CHECK(get_string(root, "command") == "gateway-snapshot");
+    CHECK(cJSON_GetObjectItem(root, "binary") == nullptr);
+    cJSON *gateway = cJSON_GetObjectItem(root, "gateway");
+    REQUIRE(cJSON_IsObject(gateway));
+    CHECK(cJSON_IsArray(cJSON_GetObjectItem(gateway, "sources")));
+    cJSON *protected_items = cJSON_GetObjectItem(gateway, "protected_items");
+    REQUIRE(cJSON_IsArray(protected_items));
+    CHECK(cJSON_IsObject(cJSON_GetObjectItem(gateway, "protected_prompt")));
+    cJSON *verification = cJSON_GetObjectItem(gateway, "verification");
+    REQUIRE(cJSON_IsObject(verification));
+    const std::string status = get_string(verification, "status");
+    if (cJSON_GetArraySize(protected_items) == 0) {
+        CHECK(status == "warning");
+    } else {
+        CHECK(status == "pass");
+    }
+    if (status == "warning") {
+        CHECK(cJSON_GetArraySize(protected_items) == 0);
+    }
+    cJSON *checks = cJSON_GetObjectItem(verification, "checks");
+    REQUIRE(cJSON_IsArray(checks));
+    cJSON *first_check = cJSON_GetArrayItem(checks, 0);
+    REQUIRE(cJSON_IsObject(first_check));
+    CHECK(cJSON_IsString(cJSON_GetObjectItem(first_check, "name")));
+    CHECK(cJSON_IsString(cJSON_GetObjectItem(first_check, "status")));
+    CHECK(cJSON_IsString(cJSON_GetObjectItem(first_check, "detail")));
+    CHECK_FALSE(contains_repo_root_leak(r.stdout_));
+    cJSON_Delete(root);
+}
+
+TEST_CASE("cli_smoke: gui help advertises function detail and rename RPC commands") {
+    CmdResult r = run("\"" + aura_binary() + "\" gui --help");
+    REQUIRE(r.exit_code == 0);
+    CHECK(r.stdout_.find("disasm-function") != std::string::npos);
+    CHECK(r.stdout_.find("cfg-function") != std::string::npos);
+    CHECK(r.stdout_.find("rename") != std::string::npos);
+    CHECK(r.stdout_.find("reset-name") != std::string::npos);
+}
+
+TEST_CASE("cli_smoke: gui disasm-function rejects invalid address") {
+    CmdResult r = run("\"" + aura_binary() +
+                      "\" --compact gui disasm-function --addr nope");
+    CHECK(r.exit_code == 2);
+    cJSON *root = parse_or_fail(r.stdout_);
+    CHECK(get_string(root, "error") == "invalid_func_addr");
+    cJSON_Delete(root);
+}
+
+TEST_CASE("cli_smoke: gui cfg-function rejects invalid address") {
+    CmdResult r = run("\"" + aura_binary() +
+                      "\" --compact gui cfg-function --addr nope");
+    CHECK(r.exit_code == 2);
+    cJSON *root = parse_or_fail(r.stdout_);
+    CHECK(get_string(root, "error") == "invalid_func_addr");
+    cJSON_Delete(root);
 }
 
 TEST_CASE("cli_smoke: analyze emits valid unified-model JSON") {
@@ -416,12 +573,21 @@ TEST_CASE("cli_smoke: analyze body exposes strings[] array") {
         CHECK(cJSON_IsNumber(cJSON_GetObjectItem(first, "addr")));
         CHECK(cJSON_IsNumber(cJSON_GetObjectItem(first, "length")));
         CHECK(cJSON_IsString(cJSON_GetObjectItem(first, "encoding")));
+        CHECK(cJSON_IsString(cJSON_GetObjectItem(first, "detected_encoding")));
+        CHECK(cJSON_IsNumber(cJSON_GetObjectItem(first, "encoding_confidence")));
+        CHECK(cJSON_IsBool(cJSON_GetObjectItem(first, "encoding_lossy")));
+        CHECK(cJSON_IsString(cJSON_GetObjectItem(first, "display_literal")));
         CHECK(cJSON_IsString(cJSON_GetObjectItem(first, "section")));
         CHECK(cJSON_IsString(cJSON_GetObjectItem(first, "content")));
         REQUIRE(cJSON_IsObject(cJSON_GetObjectItem(first, "provenance")));
         cJSON *prov = cJSON_GetObjectItem(first, "provenance");
         CHECK(get_string(prov, "source") == std::string("rizin"));
     }
+    cJSON *risk = cJSON_GetObjectItem(body, "malware_risk");
+    REQUIRE(cJSON_IsObject(risk));
+    CHECK(cJSON_IsString(cJSON_GetObjectItem(risk, "overall")));
+    CHECK(cJSON_IsArray(cJSON_GetObjectItem(risk, "findings")));
+    CHECK(cJSON_IsArray(cJSON_GetObjectItem(risk, "tool_status")));
     cJSON_Delete(root);
 }
 
@@ -431,8 +597,8 @@ TEST_CASE("cli_smoke: analyze --string-protection emits protected string fields"
         MESSAGE("SKIP: no rizin binary");
         return;
     }
-    const std::string fixture = fixture_path();
-    REQUIRE(fs::exists(fixture));
+    const fs::path fixture_path_sensitive = make_sensitive_fixture();
+    const std::string fixture = fixture_path_sensitive.string();
 
     const fs::path home =
         fs::temp_directory_path() / fs::path("aura_cli_smoke_safety_home");
@@ -446,6 +612,7 @@ TEST_CASE("cli_smoke: analyze --string-protection emits protected string fields"
     REQUIRE_MESSAGE(r.exit_code == 0,
                     "exit=", r.exit_code, " out=",
                     r.stdout_.substr(0, 200));
+    CHECK(r.stdout_.find("900101-1234567") == std::string::npos);
 
     cJSON *root = parse_or_fail(r.stdout_);
     cJSON *body = cJSON_GetObjectItem(root, "body");
@@ -460,16 +627,41 @@ TEST_CASE("cli_smoke: analyze --string-protection emits protected string fields"
     bool saw_finding = false;
     cJSON *row = nullptr;
     cJSON_ArrayForEach(row, strings) {
-        CHECK(cJSON_IsString(cJSON_GetObjectItem(row, "content")));
+        CHECK(cJSON_GetObjectItem(row, "content") == nullptr);
+        CHECK(cJSON_GetObjectItem(row, "raw_content") == nullptr);
+        CHECK(cJSON_GetObjectItem(row, "original") == nullptr);
         CHECK(cJSON_IsString(cJSON_GetObjectItem(row, "protected_value")));
         CHECK(cJSON_IsString(cJSON_GetObjectItem(row, "masked_content")));
+        CHECK(cJSON_IsString(cJSON_GetObjectItem(row, "display_value")));
+        CHECK(cJSON_IsString(cJSON_GetObjectItem(row, "transmission_value")));
+        CHECK(get_string(row, "transmission_policy") == "protected");
+        CHECK(cJSON_IsFalse(cJSON_GetObjectItem(row, "original_included")));
+        CHECK(cJSON_IsString(cJSON_GetObjectItem(row, "mask_token")));
+        CHECK(cJSON_IsString(cJSON_GetObjectItem(row, "detected_encoding")));
         CHECK(cJSON_IsNumber(cJSON_GetObjectItem(row, "findings_count")));
         cJSON *findings = cJSON_GetObjectItem(row, "findings");
         REQUIRE(cJSON_IsArray(findings));
-        saw_finding = saw_finding || cJSON_GetArraySize(findings) > 0;
+        if (cJSON_GetArraySize(findings) > 0) {
+            saw_finding = true;
+            cJSON *display_literal =
+                cJSON_GetObjectItem(row, "display_literal");
+            if (display_literal != nullptr) {
+                REQUIRE(cJSON_IsString(display_literal));
+                CHECK(std::string(display_literal->valuestring)
+                          .find("900101-1234567") == std::string::npos);
+            }
+            const std::string display_value =
+                get_string(row, "display_value");
+            const std::string transmission_value =
+                get_string(row, "transmission_value");
+            CHECK_FALSE(display_value.empty());
+            CHECK_FALSE(transmission_value.empty());
+            CHECK(transmission_value.find('*') != std::string::npos);
+        }
     }
     CHECK(saw_finding);
     cJSON_Delete(root);
+    fs::remove(fixture_path_sensitive);
 }
 
 TEST_CASE("cli_smoke: analyze string protection modes are explicit") {
@@ -506,22 +698,35 @@ TEST_CASE("cli_smoke: analyze string protection modes are explicit") {
         bool saw_finding = false;
         cJSON *row = nullptr;
         cJSON_ArrayForEach(row, strings) {
-            if (mode == "off") continue;
+            if (mode == "off") {
+                CHECK(cJSON_IsString(cJSON_GetObjectItem(row, "content")));
+                continue;
+            }
+            CHECK(cJSON_GetObjectItem(row, "content") == nullptr);
+            CHECK(cJSON_GetObjectItem(row, "raw_content") == nullptr);
+            CHECK(cJSON_GetObjectItem(row, "original") == nullptr);
+            CHECK(get_string(row, "transmission_policy") == "protected");
+            CHECK(cJSON_IsFalse(cJSON_GetObjectItem(row, "original_included")));
             cJSON *findings = cJSON_GetObjectItem(row, "findings");
             REQUIRE(cJSON_IsArray(findings));
             if (cJSON_GetArraySize(findings) == 0) continue;
             saw_finding = true;
-            const std::string content = get_string(row, "content");
             const std::string protected_value =
                 get_string(row, "protected_value");
+            const std::string transmission_value =
+                get_string(row, "transmission_value");
             const std::string masked_content =
                 get_string(row, "masked_content");
             if (mode == "scan-only") {
                 CHECK(masked_content.empty());
-                CHECK(protected_value == content);
+                CHECK(protected_value.empty());
+                CHECK(transmission_value.empty());
             } else if (mode == "mask") {
                 CHECK_FALSE(masked_content.empty());
-                CHECK(protected_value != content);
+                CHECK_FALSE(protected_value.empty());
+                CHECK_FALSE(transmission_value.empty());
+                CHECK(masked_content.find('*') != std::string::npos);
+                CHECK(transmission_value.find('*') != std::string::npos);
             }
         }
         if (mode != "off") CHECK(saw_finding);
@@ -1040,6 +1245,142 @@ TEST_CASE("cli_smoke: engines command lists rizin reference engine") {
     cJSON *first = cJSON_GetArrayItem(list, 0);
     CHECK(get_string(first, "id") == "rizin");
     CHECK(get_string(first, "role") == "reference");
+    cJSON_Delete(root);
+}
+
+TEST_CASE("cli_smoke: mcp-json initialize emits JSON-RPC request") {
+    CmdResult r = run("\"" + aura_binary() +
+                      "\" --compact mcp-json initialize");
+    REQUIRE_MESSAGE(r.exit_code == 0,
+                    "exit=", r.exit_code, " out=", r.stdout_);
+    CHECK(!r.stdout_.empty());
+    CHECK(r.stdout_.back() == '\n');
+
+    cJSON *root = parse_or_fail(r.stdout_);
+    CHECK(get_string(root, "jsonrpc") == "2.0");
+    CHECK(get_number(root, "id") == 1.0);
+    CHECK(get_string(root, "method") == "initialize");
+    cJSON *params = cJSON_GetObjectItem(root, "params");
+    REQUIRE(cJSON_IsObject(params));
+    CHECK(get_string(params, "protocolVersion") == "2025-06-18");
+    REQUIRE(cJSON_IsObject(cJSON_GetObjectItem(params, "capabilities")));
+    cJSON *client = cJSON_GetObjectItem(params, "clientInfo");
+    REQUIRE(cJSON_IsObject(client));
+    CHECK(get_string(client, "name") == "aura-cli");
+    CHECK(get_string(client, "version") == "1");
+    cJSON_Delete(root);
+}
+
+TEST_CASE("cli_smoke: mcp-json unknown subcommand fails closed") {
+    CmdResult r = run("\"" + aura_binary() +
+                      "\" --compact mcp-json not-a-real-command 2>&1");
+    CHECK(r.exit_code != 0);
+}
+
+TEST_CASE("cli_smoke: mcp-json tools-list emits JSON-RPC request") {
+    CmdResult r = run("\"" + aura_binary() +
+                      "\" --compact mcp-json tools-list");
+    REQUIRE_MESSAGE(r.exit_code == 0,
+                    "exit=", r.exit_code, " out=", r.stdout_);
+
+    cJSON *root = parse_or_fail(r.stdout_);
+    CHECK(get_string(root, "jsonrpc") == "2.0");
+    CHECK(get_number(root, "id") == 2.0);
+    CHECK(get_string(root, "method") == "tools/list");
+    REQUIRE(cJSON_IsObject(cJSON_GetObjectItem(root, "params")));
+    cJSON_Delete(root);
+}
+
+TEST_CASE("cli_smoke: mcp-json call emits tool call request") {
+    const std::string fixture = fixture_path();
+    REQUIRE(fs::exists(fixture));
+
+    CmdResult r = run("\"" + aura_binary() +
+                      "\" --compact mcp-json call aura_get_disassembly "
+                      "--binary \"" + fixture + "\" --func 0x401000");
+    REQUIRE_MESSAGE(r.exit_code == 0,
+                    "exit=", r.exit_code, " out=", r.stdout_);
+
+    cJSON *root = parse_or_fail(r.stdout_);
+    CHECK(get_string(root, "jsonrpc") == "2.0");
+    CHECK(get_number(root, "id") == 3.0);
+    CHECK(get_string(root, "method") == "tools/call");
+    cJSON *params = cJSON_GetObjectItem(root, "params");
+    REQUIRE(cJSON_IsObject(params));
+    CHECK(get_string(params, "name") == "aura_get_disassembly");
+    cJSON *args = cJSON_GetObjectItem(params, "arguments");
+    REQUIRE(cJSON_IsObject(args));
+    CHECK(get_string(args, "binary_path") == fixture);
+    CHECK(get_string(args, "function_addr") == "0x401000");
+    cJSON_Delete(root);
+}
+
+TEST_CASE("cli_smoke: mcp-json call emits GUI demo snapshot request") {
+    CmdResult r = run("\"" + aura_binary() +
+                      "\" --compact mcp-json call aura_gui_demo_snapshot");
+    REQUIRE_MESSAGE(r.exit_code == 0,
+                    "exit=", r.exit_code, " out=", r.stdout_);
+
+    cJSON *root = parse_or_fail(r.stdout_);
+    CHECK(get_string(root, "method") == "tools/call");
+    cJSON *params = cJSON_GetObjectItem(root, "params");
+    REQUIRE(cJSON_IsObject(params));
+    CHECK(get_string(params, "name") == "aura_gui_demo_snapshot");
+    cJSON_Delete(root);
+}
+
+TEST_CASE("cli_smoke: mcp-json call validates required binary argument") {
+    CmdResult r = run("\"" + aura_binary() +
+                      "\" --compact mcp-json call aura_info");
+    CHECK(r.exit_code == 2);
+    cJSON *root = parse_or_fail(r.stdout_);
+    CHECK(get_string(root, "error") == "missing_mcp_binary");
+    cJSON_Delete(root);
+}
+
+TEST_CASE("cli_smoke: mcp-json call validates function arguments") {
+    const std::string fixture = fixture_path();
+    REQUIRE(fs::exists(fixture));
+
+    CmdResult r = run("\"" + aura_binary() +
+                      "\" --compact mcp-json call aura_get_cfg "
+                      "--binary \"" + fixture + "\"");
+    CHECK(r.exit_code == 2);
+    cJSON *root = parse_or_fail(r.stdout_);
+    CHECK(get_string(root, "error") == "missing_mcp_function_args");
+    cJSON_Delete(root);
+}
+
+TEST_CASE("cli_smoke: mcp-json call validates raw function arguments") {
+    const std::string fixture = fixture_path();
+    REQUIRE(fs::exists(fixture));
+
+    CmdResult r = run("\"" + aura_binary() +
+                      "\" --compact mcp-json call aura_get_raw_disassembly "
+                      "--binary \"" + fixture + "\"");
+    CHECK(r.exit_code == 2);
+    cJSON *root = parse_or_fail(r.stdout_);
+    CHECK(get_string(root, "error") == "missing_mcp_function_args");
+    cJSON_Delete(root);
+}
+
+TEST_CASE("cli_smoke: mcp-json call allows probe engines without arguments") {
+    CmdResult r = run("\"" + aura_binary() +
+                      "\" --compact mcp-json call aura_probe_engines");
+    REQUIRE_MESSAGE(r.exit_code == 0,
+                    "exit=", r.exit_code, " out=", r.stdout_);
+
+    cJSON *root = parse_or_fail(r.stdout_);
+    CHECK(get_string(root, "jsonrpc") == "2.0");
+    CHECK(get_number(root, "id") == 3.0);
+    CHECK(get_string(root, "method") == "tools/call");
+    cJSON *params = cJSON_GetObjectItem(root, "params");
+    REQUIRE(cJSON_IsObject(params));
+    CHECK(get_string(params, "name") == "aura_probe_engines");
+    cJSON *args = cJSON_GetObjectItem(params, "arguments");
+    REQUIRE(cJSON_IsObject(args));
+    CHECK(cJSON_GetObjectItem(args, "binary_path") == nullptr);
+    CHECK(cJSON_GetObjectItem(args, "function_addr") == nullptr);
     cJSON_Delete(root);
 }
 

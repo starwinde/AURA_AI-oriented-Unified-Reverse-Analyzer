@@ -25,6 +25,7 @@ public:
 
     AuraAnalysisLevel selectedLevel() const;
     bool stringProtectionEnabled() const;
+    void setStringProtectionEnabled(bool enabled);
 
 signals:
     void safetyAssetsRequested();

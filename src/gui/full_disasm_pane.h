@@ -35,7 +35,13 @@ public:
     void showPlaceholder(const QString& message);
 
     quint64 currentAddress() const { return m_currentAddr; }
+    quint64 loadedMinAddress() const { return m_loadedMinAddr; }
+    quint64 loadedMaxAddress() const { return m_loadedMaxAddr; }
+    bool containsAddress(quint64 addr) const;
     QString currentText() const;
+
+signals:
+    void addressOutsideLoadedRange(quint64 addr);
 
 public slots:
     void setStartAddress(quint64 addr);
@@ -47,10 +53,17 @@ private:
     QPlainTextEdit*   m_arrowView   = nullptr;
     DisasmFlowGutter* m_flowGutter  = nullptr;
     quint64           m_currentAddr = 0;
+    quint64           m_loadedMinAddr = 0;
+    quint64           m_loadedMaxAddr = 0;
     QHash<quint64, int>     m_addrToLine;
+    QHash<quint64, quint64> m_addrToEnd;
     QHash<quint64, QString> m_functionLabels;
+    quint64 m_lastScrollLoadRequest = 0;
 
+    void onStructuredScrollChanged(int value);
+    quint64 nextAddressAfterLoaded() const;
     void rebuildAddressIndex(const QString& text);
+    void updateLoadedRangeFromIndex();
     QString formatMixedListingLine(const QString& line) const;
 };
 

@@ -14,6 +14,7 @@
 class QComboBox;
 class QLabel;
 class QListWidget;
+class QPushButton;
 
 namespace aura::gui {
 
@@ -27,6 +28,11 @@ public:
     QString selectedProfileId() const;
     aura::safety::SafetyProfile editedProfile() const;
     QString statusText() const;
+
+signals:
+    void recomputeProtectionRequested();
+    void deleteProtectionRequested();
+    void applyProfileRequested();
 
 private:
     void populate();
@@ -59,6 +65,9 @@ private:
     QListWidget* m_modelList = nullptr;
     QListWidget* m_rulePackList = nullptr;
     QListWidget* m_evalDatasetList = nullptr;
+    QLabel* m_protectionPolicyHelpLabel = nullptr;
+    QPushButton* m_recomputeProtectionButton = nullptr;
+    QPushButton* m_deleteProtectionButton = nullptr;
     bool m_modelSelectionEdited = false;
     bool m_rulePackSelectionEdited = false;
 };

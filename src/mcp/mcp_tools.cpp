@@ -7,7 +7,9 @@ extern "C" {
 #include "cJSON.h"
 }
 
+#include <cstdlib>
 #include <cstring>
+#include <string>
 
 namespace {
 
@@ -16,10 +18,23 @@ struct ToolSpec {
     const char* description;
     const char* const* required_fields;
     int required_count;
+    const char* const* optional_fields = nullptr;
+    int optional_count = 0;
 };
 
 constexpr const char* kBinaryPathFields[] = {"binary_path"};
 constexpr const char* kFunctionFields[] = {"binary_path", "function_addr"};
+constexpr const char* kGuiAuthFields[] = {"gui_port", "gui_token"};
+constexpr const char* kGuiBinaryFields[] = {
+    "gui_port", "gui_token", "binary_path"};
+constexpr const char* kGuiFunctionFields[] = {
+    "gui_port", "gui_token", "function_addr"};
+constexpr const char* kGuiRenameFields[] = {
+    "gui_port", "gui_token", "function_row", "new_name",
+    "confirm_mutation"};
+constexpr const char* kGuiResetNameFields[] = {
+    "gui_port", "gui_token", "function_row", "confirm_mutation"};
+constexpr const char* kGuiAnalyzeOptionalFields[] = {"row", "level"};
 
 constexpr ToolSpec kTools[] = {
     {"aura_probe_engines", "Probe available AURA reverse-engineering engines.",
@@ -35,12 +50,51 @@ constexpr ToolSpec kTools[] = {
      kFunctionFields, 2},
     {"aura_get_llm_context",
      "Return protected LLM context for one function.", kFunctionFields, 2},
+    {"aura_get_gateway_snapshot",
+     "Return the protected AURA Gateway snapshot used for LLM pre-send review. The output excludes raw protected values and includes policy decisions, verification status, and audit events.",
+     nullptr, 0, kBinaryPathFields, 1},
     {"aura_get_raw_disassembly",
      "Denied by default; raw disassembly requires a future approval flow.",
      kFunctionFields, 2},
     {"aura_get_raw_decompile",
      "Denied by default; raw decompile requires a future approval flow.",
      kFunctionFields, 2},
+    {"aura_gui_status",
+     "Query a running foreground AURA GUI status via localhost RPC.",
+     kGuiAuthFields, 2},
+    {"aura_gui_add_binary",
+     "Add a binary to the running foreground AURA GUI project.",
+     kGuiBinaryFields, 3},
+    {"aura_gui_analyze",
+     "Run analysis in the running foreground AURA GUI.",
+     kGuiAuthFields, 2, kGuiAnalyzeOptionalFields, 2},
+    {"aura_gui_functions",
+     "List functions from the running foreground AURA GUI.",
+     kGuiAuthFields, 2},
+    {"aura_gui_demo_snapshot",
+     "Return a third-party-safe minimal snapshot from the foreground AURA GUI; output includes comments_total, comments_included, comments_sent, variable_overrides_total, variable_overrides_sent, protected_only, raw_comment_text_omitted, raw_alias_omitted, and raw_type_omitted with raw user text omitted.",
+     kGuiAuthFields, 2},
+    {"aura_gui_protected_strings",
+     "List LLM/MCP-safe protected strings from the running foreground AURA GUI.",
+     kGuiAuthFields, 2},
+    {"aura_gui_symbols",
+     "List symbols from the running foreground AURA GUI.",
+     kGuiAuthFields, 2},
+    {"aura_gui_xrefs",
+     "List xrefs from the running foreground AURA GUI.",
+     kGuiAuthFields, 2},
+    {"aura_gui_disasm_function",
+     "Return protected GUI disassembly for one function address.",
+     kGuiFunctionFields, 3},
+    {"aura_gui_cfg_function",
+     "Return protected GUI CFG for one function address.",
+     kGuiFunctionFields, 3},
+    {"aura_gui_rename",
+     "Rename a function row in the running foreground AURA GUI.",
+     kGuiRenameFields, 5},
+    {"aura_gui_reset_name",
+     "Reset a function row name in the running foreground AURA GUI.",
+     kGuiResetNameFields, 4},
 };
 
 bool streq(const char* lhs, const char* rhs) {
@@ -65,13 +119,94 @@ bool isRawTool(const char* name) {
            streq(name, "aura_get_raw_decompile");
 }
 
-cJSON* createStringProperty(const char* description) {
+bool isGuiTool(const char* name) {
+    return name != nullptr && std::strncmp(name, "aura_gui_", 9) == 0;
+}
+
+bool isGuiMutationTool(const char* name) {
+    return streq(name, "aura_gui_rename") ||
+           streq(name, "aura_gui_reset_name");
+}
+
+bool envHasValue(const char* name) {
+    const char* value = std::getenv(name);
+    return value != nullptr && value[0] != '\0';
+}
+
+const char* fieldType(const char* field);
+
+bool fieldValueMatchesType(cJSON* value, const char* field) {
+    const char* type = fieldType(field);
+    if (streq(type, "boolean")) {
+        return cJSON_IsBool(value);
+    }
+    if (streq(type, "integer")) {
+        return cJSON_IsNumber(value);
+    }
+    if (cJSON_IsString(value)) {
+        return value->valuestring != nullptr && value->valuestring[0] != '\0';
+    }
+    return false;
+}
+
+bool fieldPresent(cJSON* args_or_null, const char* field) {
+    cJSON* value = cJSON_GetObjectItemCaseSensitive(args_or_null, field);
+    if (value == nullptr) {
+        if (streq(field, "gui_port")) {
+            return envHasValue("AURA_GUI_RPC_PORT");
+        }
+        if (streq(field, "gui_token")) {
+            return envHasValue("AURA_GUI_RPC_TOKEN");
+        }
+        return false;
+    }
+    return fieldValueMatchesType(value, field);
+}
+
+bool argsHaveRequiredFields(cJSON* args_or_null,
+                            const ToolSpec& tool,
+                            const char** missing_field) {
+    if (missing_field != nullptr) {
+        *missing_field = nullptr;
+    }
+    if (tool.required_fields == nullptr || tool.required_count == 0) {
+        return true;
+    }
+    if (!cJSON_IsObject(args_or_null)) {
+        if (missing_field != nullptr) {
+            *missing_field = tool.required_fields[0];
+        }
+        return false;
+    }
+    for (int i = 0; i < tool.required_count; ++i) {
+        const char* field = tool.required_fields[i];
+        if (!fieldPresent(args_or_null, field)) {
+            if (missing_field != nullptr) {
+                *missing_field = field;
+            }
+            return false;
+        }
+    }
+    return true;
+}
+
+bool confirmMutationIsTrue(cJSON* args_or_null) {
+    cJSON* value =
+        cJSON_GetObjectItemCaseSensitive(args_or_null, "confirm_mutation");
+    if (cJSON_IsTrue(value)) {
+        return true;
+    }
+    return cJSON_IsString(value) && value->valuestring != nullptr &&
+           std::strcmp(value->valuestring, "true") == 0;
+}
+
+cJSON* createProperty(const char* type, const char* description) {
     cJSON* property = cJSON_CreateObject();
     if (property == nullptr) {
         return nullptr;
     }
 
-    if (cJSON_AddStringToObject(property, "type", "string") == nullptr ||
+    if (cJSON_AddStringToObject(property, "type", type) == nullptr ||
         cJSON_AddStringToObject(property, "description", description) ==
             nullptr) {
         cJSON_Delete(property);
@@ -80,8 +215,63 @@ cJSON* createStringProperty(const char* description) {
     return property;
 }
 
+const char* fieldDescription(const char* field) {
+    if (streq(field, "binary_path")) {
+        return "Path to an allowlisted binary.";
+    }
+    if (streq(field, "function_addr")) {
+        return "Function address.";
+    }
+    if (streq(field, "gui_port")) {
+        return "AURA GUI RPC port.";
+    }
+    if (streq(field, "gui_token")) {
+        return "AURA GUI RPC token.";
+    }
+    if (streq(field, "function_row")) {
+        return "Function table row.";
+    }
+    if (streq(field, "new_name")) {
+        return "New function display name.";
+    }
+    if (streq(field, "confirm_mutation")) {
+        return "Must be true for GUI mutation tools.";
+    }
+    if (streq(field, "row")) {
+        return "Project binary row, default 0.";
+    }
+    if (streq(field, "level")) {
+        return "Analysis level: quick, full, or advanced.";
+    }
+    return "Tool argument.";
+}
+
+const char* fieldType(const char* field) {
+    if (streq(field, "confirm_mutation")) {
+        return "boolean";
+    }
+    if (streq(field, "function_row") || streq(field, "row")) {
+        return "integer";
+    }
+    return "string";
+}
+
+bool addSchemaProperty(cJSON* properties, const char* field) {
+    cJSON* property = createProperty(fieldType(field), fieldDescription(field));
+    if (property == nullptr) {
+        return false;
+    }
+    if (!cJSON_AddItemToObject(properties, field, property)) {
+        cJSON_Delete(property);
+        return false;
+    }
+    return true;
+}
+
 cJSON* createInputSchema(const char* const* required_fields,
-                         int required_count) {
+                         int required_count,
+                         const char* const* optional_fields,
+                         int optional_count) {
     cJSON* schema = cJSON_CreateObject();
     cJSON* properties = cJSON_CreateObject();
     cJSON* required = cJSON_CreateArray();
@@ -95,30 +285,33 @@ cJSON* createInputSchema(const char* const* required_fields,
     if (required_fields != nullptr) {
         for (int i = 0; i < required_count; ++i) {
             const char* field = required_fields[i];
-            cJSON* property =
-                createStringProperty(streq(field, "binary_path")
-                                         ? "Path to an allowlisted binary."
-                                         : "Function address.");
             cJSON* required_item = cJSON_CreateString(field);
-            if (property == nullptr || required_item == nullptr) {
-                cJSON_Delete(property);
+            if (required_item == nullptr) {
                 cJSON_Delete(required_item);
                 cJSON_Delete(schema);
                 cJSON_Delete(properties);
                 cJSON_Delete(required);
                 return nullptr;
             }
-            if (!cJSON_AddItemToObject(properties, field, property)) {
-                cJSON_Delete(property);
+            if (!addSchemaProperty(properties, field)) {
                 cJSON_Delete(required_item);
                 cJSON_Delete(schema);
                 cJSON_Delete(properties);
                 cJSON_Delete(required);
                 return nullptr;
             }
-            property = nullptr;
             if (!cJSON_AddItemToArray(required, required_item)) {
                 cJSON_Delete(required_item);
+                cJSON_Delete(schema);
+                cJSON_Delete(properties);
+                cJSON_Delete(required);
+                return nullptr;
+            }
+        }
+    }
+    if (optional_fields != nullptr) {
+        for (int i = 0; i < optional_count; ++i) {
+            if (!addSchemaProperty(properties, optional_fields[i])) {
                 cJSON_Delete(schema);
                 cJSON_Delete(properties);
                 cJSON_Delete(required);
@@ -158,7 +351,10 @@ cJSON* createInputSchema(const char* const* required_fields,
 bool addTool(cJSON* tools, const ToolSpec& spec) {
     cJSON* tool = cJSON_CreateObject();
     cJSON* schema =
-        createInputSchema(spec.required_fields, spec.required_count);
+        createInputSchema(spec.required_fields,
+                          spec.required_count,
+                          spec.optional_fields,
+                          spec.optional_count);
     if (tool == nullptr || schema == nullptr) {
         cJSON_Delete(tool);
         cJSON_Delete(schema);
@@ -225,12 +421,36 @@ extern "C" cJSON* aura_mcp_call_tool_json(const char* name,
                                        "protected");
     }
 
+    const char* missing_field = nullptr;
+    if (!argsHaveRequiredFields(args_or_null, *tool, &missing_field)) {
+        std::string message = "missing required argument: ";
+        message += missing_field != nullptr ? missing_field : "unknown";
+        return aura_mcp_envelope_error("protected/1.0",
+                                       tool->name,
+                                       "invalid_arguments",
+                                       message.c_str(),
+                                       "protected");
+    }
+
+    if (isGuiMutationTool(name) && !confirmMutationIsTrue(args_or_null)) {
+        return aura_mcp_envelope_error("protected/1.0",
+                                       tool->name,
+                                       "mutation_not_confirmed",
+                                       "GUI mutation tools require confirm_mutation:true",
+                                       "protected");
+    }
+
     if (streq(name, "aura_probe_engines") || streq(name, "aura_info") ||
         streq(name, "aura_analyze") ||
         streq(name, "aura_get_disassembly") ||
         streq(name, "aura_get_cfg") ||
-        streq(name, "aura_get_llm_context")) {
+        streq(name, "aura_get_llm_context") ||
+        streq(name, "aura_get_gateway_snapshot")) {
         return aura_mcp_cli_bridge_call_json(name, args_or_null);
+    }
+
+    if (isGuiTool(name)) {
+        return aura_mcp_cli_bridge_gui_call_json(name, args_or_null);
     }
 
     return aura_mcp_envelope_error("protected/1.0",
