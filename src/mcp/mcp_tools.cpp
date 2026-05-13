@@ -35,6 +35,7 @@ constexpr const char* kGuiRenameFields[] = {
 constexpr const char* kGuiResetNameFields[] = {
     "gui_port", "gui_token", "function_row", "confirm_mutation"};
 constexpr const char* kGuiAnalyzeOptionalFields[] = {"row", "level"};
+constexpr const char* kGuiFunctionRowOptionalFields[] = {"function_row"};
 
 constexpr ToolSpec kTools[] = {
     {"aura_probe_engines", "Probe available AURA reverse-engineering engines.",
@@ -71,6 +72,9 @@ constexpr ToolSpec kTools[] = {
     {"aura_gui_functions",
      "List functions from the running foreground AURA GUI.",
      kGuiAuthFields, 2},
+    {"aura_gui_decompile",
+     "Return protected GUI decompile text for one function row.",
+     kGuiAuthFields, 2, kGuiFunctionRowOptionalFields, 1},
     {"aura_gui_demo_snapshot",
      "Return a third-party-safe minimal snapshot from the foreground AURA GUI; output includes comments_total, comments_included, comments_sent, variable_overrides_total, variable_overrides_sent, protected_only, raw_comment_text_omitted, raw_alias_omitted, and raw_type_omitted with raw user text omitted.",
      kGuiAuthFields, 2},

@@ -57,6 +57,7 @@
 #include <QTableView>
 #include <QTemporaryDir>
 #include <QTimer>
+#include <QTabWidget>
 
 #include <algorithm>
 #include <cstdlib>
@@ -466,6 +467,53 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
                   QStringLiteral("gatewayVerificationTable")) != nullptr);
         CHECK(window.findChild<QTreeWidget*>(
                   QStringLiteral("gatewayAuditTable")) != nullptr);
+    }
+
+    SUBCASE("main window records MCP RPC activity") {
+        window.show();
+
+        auto* dock = window.findChild<QDockWidget*>(
+            QStringLiteral("rpcActivityDock"));
+        REQUIRE(dock != nullptr);
+        auto* table = window.findChild<QTreeWidget*>(
+            QStringLiteral("rpcActivityTable"));
+        REQUIRE(table != nullptr);
+        auto* sensitiveTable = window.findChild<QTreeWidget*>(
+            QStringLiteral("rpcSensitiveActivityTable"));
+        REQUIRE(sensitiveTable != nullptr);
+        CHECK(table->columnCount() == 5);
+        CHECK(sensitiveTable->columnCount() == 5);
+        CHECK(window.rpcActivityCountForTest() == 0);
+        CHECK(window.rpcSensitiveActivityCountForTest() == 0);
+
+        window.recordRpcActivityForTest(
+            QStringLiteral("function_list"),
+            true,
+            QStringLiteral("functions=2"));
+
+        CHECK(window.rpcActivityCountForTest() == 1);
+        CHECK(window.rpcSensitiveActivityCountForTest() == 0);
+        REQUIRE(table->topLevelItemCount() == 1);
+        auto* row = table->topLevelItem(0);
+        REQUIRE(row != nullptr);
+        CHECK_FALSE(row->text(0).isEmpty());
+        CHECK(row->text(1) == QStringLiteral("MCP/RPC"));
+        CHECK(row->text(2) == QStringLiteral("function_list"));
+        CHECK(row->text(3) == QStringLiteral("ok"));
+        CHECK(row->text(4).contains(QStringLiteral("functions=2")));
+
+        window.recordRpcActivityForTest(
+            QStringLiteral("demo_snapshot"),
+            true,
+            QStringLiteral("snapshot=demo_minimal; protected_only=true"));
+
+        CHECK(window.rpcActivityCountForTest() == 2);
+        CHECK(window.rpcSensitiveActivityCountForTest() == 1);
+        REQUIRE(sensitiveTable->topLevelItemCount() == 1);
+        auto* sensitiveRow = sensitiveTable->topLevelItem(0);
+        REQUIRE(sensitiveRow != nullptr);
+        CHECK(sensitiveRow->text(2) == QStringLiteral("demo_snapshot"));
+        CHECK(sensitiveRow->text(4).contains(QStringLiteral("protected_only=true")));
     }
 
     SUBCASE("gateway does not show PASS when no protection state exists") {
@@ -3978,6 +4026,66 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
             Q_RETURN_ARG(QString, disabledRendered),
             Q_ARG(QString, raw)));
         CHECK(disabledRendered == raw);
+    }
+
+    SUBCASE("protected decompile export masks string memory references") {
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL, false));
+        REQUIRE_FALSE(window.stringList().isEmpty());
+
+        int stringRow = -1;
+        aura::gui::GuiStringRecord selected;
+        for (int i = 0; i < window.stringList().size(); ++i) {
+            const auto& s = window.stringList()[i];
+            if (s.addr != 0 && !s.content.isEmpty()) {
+                stringRow = i;
+                selected = s;
+                break;
+            }
+        }
+        REQUIRE(stringRow >= 0);
+
+        const QString addr = QStringLiteral("0x%1").arg(selected.addr, 0, 16);
+        const QString unprotectedRaw =
+            QStringLiteral("fcn.1400010d0(%1, \"%2\");")
+                .arg(addr, selected.content);
+        const QString unprotectedExport =
+            window.renderProtectedDecompileTextForFunctionRow(
+                0, unprotectedRaw);
+        CHECK(unprotectedExport.contains(QStringLiteral("<RAW_CONTENT_OMITTED>")));
+        CHECK_FALSE(unprotectedExport.contains(selected.content));
+
+        REQUIRE(window.setStringMaskTokenAt(
+            stringRow, QStringLiteral("fixture-mask")));
+        const QString protectedValue = window.stringProtectedValueAt(stringRow);
+        REQUIRE_FALSE(protectedValue.isEmpty());
+        CHECK(protectedValue != selected.content);
+
+        const QString raw =
+            QStringLiteral("fcn.1400010d0(%1, \"%2\");\n"
+                           "// AURA comment: analyst note\n")
+                .arg(addr, selected.content);
+        const QString exported =
+            window.renderProtectedDecompileTextForFunctionRow(0, raw);
+
+        CHECK(exported.contains(protectedValue));
+        CHECK(exported.contains(QStringLiteral("/* %1 */").arg(addr)));
+        CHECK_FALSE(exported.contains(selected.content));
+        CHECK_FALSE(exported.contains(QStringLiteral("AURA comment")));
+
+        const QString rawWithAddressComment =
+            QStringLiteral("fcn.1400010d0(\"fmt\" /* %1 */, \"%2\");")
+                .arg(addr, selected.content);
+        const QString exportedWithAddressComment =
+            window.renderProtectedDecompileTextForFunctionRow(
+                0, rawWithAddressComment);
+        CHECK(exportedWithAddressComment.contains(protectedValue));
+        CHECK(exportedWithAddressComment.contains(
+            QStringLiteral("address: %1").arg(addr)));
+        CHECK_FALSE(exportedWithAddressComment.contains(
+            QStringLiteral("/* %1 */").arg(addr)));
+        CHECK_FALSE(exportedWithAddressComment.contains(selected.content));
     }
 
     SUBCASE("symbols dock + list API populated after analyze (Phase 11.3.5)") {

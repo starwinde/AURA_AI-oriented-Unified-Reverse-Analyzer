@@ -246,6 +246,9 @@ add_subdirectory(src/engine/bootstrap)
 # ── MCP response envelope core (ADR-0057) ────────────────────────────────
 add_subdirectory(src/mcp)
 
+# ── Safety Gateway EXE ────────────────────────────────────────────────────
+add_subdirectory(src/safety_gateway)
+
 # ── Tests ──────────────────────────────────────────────────────────────────
 # Integration gates introduced in Phase 10 (ADR-0031 reference engine policy
 # + ADR-0032 external tool acquisition). Default ON; gated per-suite by
@@ -263,8 +266,10 @@ if(AURA_BUILD_TESTS)
     add_subdirectory(tests/unit/safety)
     add_subdirectory(tests/unit/security)
     add_subdirectory(tests/unit/mcp)
+    add_subdirectory(tests/unit/safety_gateway)
     add_subdirectory(tests/unit/artifact_cache)
     add_subdirectory(tests/integration/mcp_smoke)
+    add_subdirectory(tests/integration/safety_gateway_smoke)
 
     if(AURA_ENABLE_RIZIN)
         add_subdirectory(tests/integration/orchestrator_smoke)

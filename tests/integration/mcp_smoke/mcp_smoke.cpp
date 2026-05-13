@@ -738,6 +738,7 @@ TEST_CASE("aura-mcp lists GUI MCP tools") {
     CHECK(toolsArrayHasName(tools, "aura_gui_protected_strings"));
     CHECK(toolsArrayHasName(tools, "aura_gui_symbols"));
     CHECK(toolsArrayHasName(tools, "aura_gui_xrefs"));
+    CHECK(toolsArrayHasName(tools, "aura_gui_decompile"));
     CHECK(toolsArrayHasName(tools, "aura_gui_disasm_function"));
     CHECK(toolsArrayHasName(tools, "aura_gui_cfg_function"));
     CHECK(toolsArrayHasName(tools, "aura_gui_rename"));
@@ -756,6 +757,8 @@ TEST_CASE("aura-mcp lists GUI MCP tools") {
     CHECK(toolPropertyHasType(tools, "aura_gui_rename",
                               "function_row", "integer"));
     CHECK(toolPropertyHasType(tools, "aura_gui_analyze", "row", "integer"));
+    CHECK(toolPropertyHasType(tools, "aura_gui_decompile",
+                              "function_row", "integer"));
 
     cJSON_Delete(response);
     std::remove(input_path.c_str());

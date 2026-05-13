@@ -1308,6 +1308,12 @@ extern "C" cJSON* aura_mcp_cli_bridge_gui_call_json(const char* name,
         args.push_back(literalArg(level));
     } else if (streq(name, "aura_gui_functions")) {
         args.push_back(literalArg("functions"));
+    } else if (streq(name, "aura_gui_decompile")) {
+        const std::string row =
+            numberArgOrDefault(args_or_null, "function_row", 0);
+        args.push_back(literalArg("decompile"));
+        args.push_back(literalArg("--row"));
+        args.push_back(literalArg(row.c_str()));
     } else if (streq(name, "aura_gui_demo_snapshot")) {
         args.push_back(literalArg("demo-snapshot"));
     } else if (streq(name, "aura_gui_protected_strings")) {
