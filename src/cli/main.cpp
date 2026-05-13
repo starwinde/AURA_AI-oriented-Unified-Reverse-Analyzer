@@ -30,6 +30,10 @@
 #include <string>
 #include <vector>
 
+#include "aura/gateway/gateway_snapshot.h"
+#include "aura/safety/safe_export_view.h"
+#include "aura/safety/string_safety.h"
+#include "aura/security/malware_risk.h"
 #include "CLI11.hpp"
 #include "cJSON.h"
 
@@ -72,6 +76,7 @@ constexpr const char *kVendoredRizinRelPosix =
     "third_party/rizin/0.8.0-static/bin/rizin";
 constexpr const char *kVendoredSleighRel =
     "third_party/rizin/0.8.0-shared/rizin-win-installer-clang_cl-64/lib/rizin/plugins/rz_ghidra_sleigh";
+constexpr uint64_t kJsonSafeIntegerMax = 9007199254740991ULL;
 
 struct GlobalOpts {
     bool        compact      = false;
@@ -109,6 +114,83 @@ void emit_error_json(const char *code, const std::string &msg, bool compact) {
     cJSON_AddStringToObject(root, "message", msg.c_str());
     emit_json(root, compact);
     cJSON_Delete(root);
+}
+
+static cJSON *make_mcp_request_root(int id, const char *method) {
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "jsonrpc", "2.0");
+    cJSON_AddNumberToObject(root, "id", id);
+    cJSON_AddStringToObject(root, "method", method);
+    return root;
+}
+
+static int emit_mcp_initialize(bool compact) {
+    cJSON *root = make_mcp_request_root(1, "initialize");
+    cJSON *params = cJSON_CreateObject();
+    cJSON_AddStringToObject(params, "protocolVersion", "2025-06-18");
+    cJSON_AddItemToObject(params, "capabilities", cJSON_CreateObject());
+    cJSON *client = cJSON_CreateObject();
+    cJSON_AddStringToObject(client, "name", "aura-cli");
+    cJSON_AddStringToObject(client, "version", "1");
+    cJSON_AddItemToObject(params, "clientInfo", client);
+    cJSON_AddItemToObject(root, "params", params);
+    emit_json(root, compact);
+    cJSON_Delete(root);
+    return 0;
+}
+
+static int emit_mcp_tools_list(bool compact) {
+    cJSON *root = make_mcp_request_root(2, "tools/list");
+    cJSON_AddItemToObject(root, "params", cJSON_CreateObject());
+    emit_json(root, compact);
+    cJSON_Delete(root);
+    return 0;
+}
+
+static bool mcp_tool_requires_binary(const std::string &tool) {
+    return tool == "aura_info" || tool == "aura_analyze";
+}
+
+static bool mcp_tool_requires_function_args(const std::string &tool) {
+    return tool == "aura_get_disassembly" ||
+           tool == "aura_get_cfg" ||
+           tool == "aura_get_llm_context" ||
+           tool == "aura_get_raw_disassembly" ||
+           tool == "aura_get_raw_decompile";
+}
+
+static int emit_mcp_tool_call(const std::string &tool,
+                              const std::string &binary_path,
+                              const std::string &function_addr,
+                              bool compact) {
+    if (mcp_tool_requires_binary(tool) && binary_path.empty()) {
+        emit_error_json("missing_mcp_binary",
+                        "MCP tool requires --binary: " + tool, compact);
+        return 2;
+    }
+    if (mcp_tool_requires_function_args(tool) &&
+        (binary_path.empty() || function_addr.empty())) {
+        emit_error_json("missing_mcp_function_args",
+                        "MCP tool requires --binary and --func: " + tool,
+                        compact);
+        return 2;
+    }
+
+    cJSON *root = make_mcp_request_root(3, "tools/call");
+    cJSON *params = cJSON_CreateObject();
+    cJSON_AddStringToObject(params, "name", tool.c_str());
+    cJSON *args = cJSON_CreateObject();
+    if (!binary_path.empty()) {
+        cJSON_AddStringToObject(args, "binary_path", binary_path.c_str());
+    }
+    if (!function_addr.empty()) {
+        cJSON_AddStringToObject(args, "function_addr", function_addr.c_str());
+    }
+    cJSON_AddItemToObject(params, "arguments", args);
+    cJSON_AddItemToObject(root, "params", params);
+    emit_json(root, compact);
+    cJSON_Delete(root);
+    return 0;
 }
 
 struct GuiRpcOpts {
@@ -361,7 +443,328 @@ AuraOrchestrator *build_orchestrator(const GlobalOpts &g, std::string &err) {
 
 // ── analyze ────────────────────────────────────────────────────────────────
 
-cJSON *analyze_body_to_json(const AuraRizinAnalyzeBody *body) {
+cJSON *finding_to_json(const aura::safety::Finding &finding) {
+    cJSON *out = cJSON_CreateObject();
+    cJSON_AddStringToObject(out, "detector_id", finding.detector_id.c_str());
+    cJSON_AddStringToObject(out, "kind", finding.kind.c_str());
+    cJSON_AddNumberToObject(out, "start",
+                            static_cast<double>(finding.start));
+    cJSON_AddNumberToObject(out, "end", static_cast<double>(finding.end));
+    cJSON_AddNumberToObject(out, "confidence", finding.confidence);
+    cJSON_AddStringToObject(out, "mask_token", finding.mask_token.c_str());
+    return out;
+}
+
+cJSON *malware_risk_to_json(const aura::security::MalwareRiskReport &report) {
+    cJSON *out = cJSON_CreateObject();
+    cJSON_AddStringToObject(
+        out, "overall",
+        aura::security::malwareRiskSeverityToText(report.overall));
+    cJSON *findings = cJSON_AddArrayToObject(out, "findings");
+    for (const auto &finding : report.findings) {
+        cJSON *row = cJSON_CreateObject();
+        cJSON_AddStringToObject(row, "id", finding.id.c_str());
+        cJSON_AddStringToObject(
+            row, "severity",
+            aura::security::malwareRiskSeverityToText(finding.severity));
+        cJSON_AddStringToObject(row, "category", finding.category.c_str());
+        cJSON_AddStringToObject(row, "title", finding.title.c_str());
+        cJSON_AddStringToObject(row, "evidence", finding.evidence.c_str());
+        cJSON_AddStringToObject(row, "source", finding.source.c_str());
+        cJSON_AddItemToArray(findings, row);
+    }
+    cJSON *tools = cJSON_AddArrayToObject(out, "tool_status");
+    for (const auto &tool : report.tool_status) {
+        cJSON *row = cJSON_CreateObject();
+        cJSON_AddStringToObject(row, "tool", tool.tool.c_str());
+        cJSON_AddBoolToObject(row, "available", tool.available);
+        cJSON_AddStringToObject(row, "version", tool.version.c_str());
+        cJSON_AddStringToObject(row, "diagnostic", tool.diagnostic.c_str());
+        cJSON_AddItemToArray(tools, row);
+    }
+    return out;
+}
+
+cJSON *gateway_snapshot_to_json(
+    const aura::gateway::GatewaySnapshot &snapshot) {
+    cJSON *root = cJSON_CreateObject();
+
+    cJSON *sources = cJSON_AddArrayToObject(root, "sources");
+    for (const auto &source : snapshot.sources) {
+        cJSON *item = cJSON_CreateObject();
+        cJSON_AddStringToObject(
+            item, "kind",
+            aura::gateway::gatewaySourceKindToText(source.kind));
+        cJSON_AddStringToObject(
+            item, "status",
+            aura::gateway::gatewaySourceStatusToText(source.status));
+        cJSON_AddStringToObject(item, "detail", source.detail.c_str());
+        cJSON_AddItemToArray(sources, item);
+    }
+
+    cJSON *protected_items = cJSON_AddArrayToObject(root, "protected_items");
+    for (const auto &protected_item : snapshot.protected_items) {
+        cJSON *item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "id", protected_item.id.c_str());
+        cJSON_AddStringToObject(item, "kind", protected_item.kind.c_str());
+        cJSON_AddStringToObject(
+            item, "location", protected_item.location.c_str());
+        cJSON_AddStringToObject(
+            item, "category", protected_item.category.c_str());
+        cJSON_AddStringToObject(
+            item, "display_value", protected_item.display_value.c_str());
+        cJSON_AddStringToObject(item,
+                                "transmission_value",
+                                protected_item.transmission_value.c_str());
+        cJSON_AddStringToObject(
+            item, "mask_token", protected_item.mask_token.c_str());
+        cJSON_AddStringToObject(
+            item, "action",
+            aura::gateway::gatewayPolicyActionToText(protected_item.action));
+        cJSON_AddStringToObject(item, "reason", protected_item.reason.c_str());
+        cJSON_AddBoolToObject(
+            item, "original_included", protected_item.original_included);
+        cJSON_AddItemToArray(protected_items, item);
+    }
+
+    cJSON *risk = cJSON_AddObjectToObject(root, "risk_summary");
+    cJSON_AddStringToObject(
+        risk, "severity", snapshot.risk_summary.severity.c_str());
+    cJSON_AddNumberToObject(
+        risk, "finding_count",
+        static_cast<double>(snapshot.risk_summary.finding_count));
+    cJSON *categories = cJSON_AddArrayToObject(risk, "categories");
+    for (const auto &category : snapshot.risk_summary.categories) {
+        cJSON_AddItemToArray(categories, cJSON_CreateString(category.c_str()));
+    }
+
+    cJSON *prompt = cJSON_AddObjectToObject(root, "protected_prompt");
+    cJSON_AddStringToObject(prompt, "title", snapshot.prompt.title.c_str());
+    cJSON_AddStringToObject(prompt, "body", snapshot.prompt.body.c_str());
+    cJSON_AddNumberToObject(prompt,
+                            "included_items",
+                            static_cast<double>(
+                                snapshot.prompt.included_items));
+    cJSON_AddNumberToObject(prompt,
+                            "omitted_items",
+                            static_cast<double>(
+                                snapshot.prompt.omitted_items));
+    cJSON_AddNumberToObject(prompt,
+                            "blocked_items",
+                            static_cast<double>(
+                                snapshot.prompt.blocked_items));
+
+    cJSON *verification = cJSON_AddObjectToObject(root, "verification");
+    cJSON_AddStringToObject(
+        verification,
+        "status",
+        aura::gateway::gatewayReadinessStatusToText(
+            snapshot.verification.status));
+    cJSON *checks = cJSON_AddArrayToObject(verification, "checks");
+    for (const auto &check : snapshot.verification.checks) {
+        cJSON *item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "name", check.name.c_str());
+        cJSON_AddStringToObject(
+            item, "status",
+            aura::gateway::gatewayCheckStatusToText(check.status));
+        cJSON_AddStringToObject(item, "detail", check.detail.c_str());
+        cJSON_AddItemToArray(checks, item);
+    }
+
+    cJSON *audit_events = cJSON_AddArrayToObject(root, "audit_events");
+    for (const auto &event : snapshot.audit_events) {
+        cJSON *item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "id", event.id.c_str());
+        cJSON_AddStringToObject(item, "action", event.action.c_str());
+        cJSON_AddStringToObject(item, "item_id", event.item_id.c_str());
+        cJSON_AddStringToObject(item, "category", event.category.c_str());
+        cJSON_AddStringToObject(
+            item, "safe_preview", event.safe_preview.c_str());
+        cJSON_AddStringToObject(item, "reason", event.reason.c_str());
+        cJSON_AddItemToArray(audit_events, item);
+    }
+
+    return root;
+}
+
+aura::gateway::GatewaySnapshot build_demo_gateway_snapshot() {
+    aura::gateway::GatewayBuildInput input;
+    input.sources.push_back({aura::gateway::GatewaySourceKind::Rizin,
+                             aura::gateway::GatewaySourceStatus::Ready,
+                             "demo analysis loaded"});
+    input.sources.push_back(
+        {aura::gateway::GatewaySourceKind::Ghidra,
+         aura::gateway::GatewaySourceStatus::NotConfigured,
+         "Ghidra runtime is not configured"});
+    input.items.push_back({"string",
+                           "demo.strings[0]",
+                           "korean_rrn",
+                           "900101-1234567",
+                           "900101-1******",
+                           "900101-1******",
+                           "KR_RRN_1"});
+    input.safety_state.protection_enabled = true;
+    input.safety_state.safety_scan_executed = true;
+    input.safety_state.safety_profile_applied = true;
+    input.safety_state.rule_packs_loaded = true;
+    input.safety_state.masking_cache_current = true;
+    input.safety_state.scanned_string_count = 1;
+    input.safety_state.protected_finding_count = 1;
+    input.safety_state.active_rule_count = 1;
+    input.malware_risk_severity = "low";
+    input.malware_risk_categories.push_back("network");
+    return aura::gateway::buildGatewaySnapshot(input);
+}
+
+static aura::gateway::GatewayBuildInput build_gateway_input_from_analyze_body(
+    const AuraRizinAnalyzeBody *body) {
+    aura::gateway::GatewayBuildInput input;
+    input.sources.push_back({aura::gateway::GatewaySourceKind::Rizin,
+                             aura::gateway::GatewaySourceStatus::Ready,
+                             "Rizin analysis requested"});
+    input.sources.push_back({aura::gateway::GatewaySourceKind::Ghidra,
+                             aura::gateway::GatewaySourceStatus::NotConfigured,
+                             "Ghidra is not required for gateway MVP"});
+
+    const AuraStringRecord *strings = aura_rizin_analyze_body_strings(body);
+    const auto safety_profile = aura::safety::loadDefaultSafetyProfile();
+    const auto effective_rule_count =
+        aura::safety::effectiveRuleCount(safety_profile);
+    input.safety_state.protection_enabled = true;
+    input.safety_state.safety_scan_executed = true;
+    input.safety_state.safety_profile_applied = true;
+    input.safety_state.rule_packs_loaded = effective_rule_count > 0;
+    input.safety_state.masking_cache_current = true;
+    input.safety_state.active_rule_count =
+        static_cast<int>(effective_rule_count);
+    input.safety_state.scanned_string_count =
+        static_cast<int>(body->strings_count);
+
+    aura::security::MalwareRiskInput risk_input;
+    for (size_t i = 0; strings && i < body->strings_count; ++i) {
+        const std::string content =
+            strings[i].content[0] ? strings[i].content : "";
+        risk_input.strings.push_back(content);
+
+        auto findings = aura::safety::scanStringWithRulePacks(
+            content, safety_profile);
+        auto protected_view = aura::safety::buildProtectedStringView(
+            content, std::string(), std::move(findings));
+
+        if (protected_view.findings.empty()) {
+            continue;
+        }
+
+        input.safety_state.protected_finding_count +=
+            static_cast<int>(protected_view.findings.size());
+
+        char addr_buf[32];
+        std::snprintf(addr_buf, sizeof(addr_buf), "0x%llx",
+                      static_cast<unsigned long long>(strings[i].addr));
+
+        const aura::safety::SafeExportItem export_item =
+            aura::safety::makeSafeExportItem({
+                "string",
+                addr_buf,
+                protected_view.findings.front().kind,
+                content,
+                protected_view.protected_value,
+                protected_view.protected_value,
+                protected_view.findings.front().mask_token,
+            });
+
+        input.items.push_back({"string",
+                               addr_buf,
+                               export_item.category,
+                               content,
+                               export_item.display_value,
+                               export_item.transmission_value,
+                               export_item.mask_token});
+    }
+
+    const AuraSymbolRecord *syms = aura_rizin_analyze_body_symbols(body);
+    for (size_t i = 0; syms && i < body->symbols_count; ++i) {
+        const std::string name = syms[i].name[0] ? syms[i].name : "";
+        if (syms[i].kind == AURA_SYMBOL_IMPORT) {
+            risk_input.imports.push_back(name);
+        } else {
+            risk_input.symbols.push_back(name);
+        }
+    }
+
+    const auto risk = aura::security::analyzeMalwareRisk(risk_input);
+    input.malware_risk_severity =
+        aura::security::malwareRiskSeverityToText(risk.overall);
+    for (const auto &finding : risk.findings) {
+        input.malware_risk_categories.push_back(finding.category);
+    }
+    return input;
+}
+
+int run_gateway_snapshot(bool demo, const std::string &binary,
+                         const GlobalOpts &g) {
+    if (!demo && binary.empty()) {
+        emit_error_json("gateway_snapshot_requires_input",
+                        "gateway-snapshot requires --demo or a binary path",
+                        g.compact);
+        return 2;
+    }
+
+    aura::gateway::GatewaySnapshot snapshot;
+    if (demo) {
+        snapshot = build_demo_gateway_snapshot();
+    } else {
+        std::string err;
+        AuraOrchestrator *orch = build_orchestrator(g, err);
+        if (!orch) {
+            emit_error_json("orchestrator_init_failed", err, g.compact);
+            return 3;
+        }
+
+        AuraEngineRequest req{};
+        req.type = AURA_ENGINE_REQ_ANALYZE;
+        req.binary_path = binary.c_str();
+        req.addr = 0;
+        req.arch_or_null = nullptr;
+
+        AuraEngineResponse resp{};
+        AuraEngineStatus st = aura_orchestrator_dispatch(
+            orch, g.engine_id.empty() ? nullptr : g.engine_id.c_str(), &req,
+            &resp);
+        if (st != AURA_ENGINE_OK || resp.body == nullptr) {
+            std::string msg = "dispatch failed (status=";
+            msg += std::to_string(static_cast<int>(st));
+            msg += ")";
+            emit_error_json("dispatch_failed", msg, g.compact);
+            aura_engine_response_dispose(&resp);
+            aura_orchestrator_destroy(orch);
+            return 1;
+        }
+
+        auto *body = static_cast<AuraRizinAnalyzeBody *>(resp.body);
+        snapshot = aura::gateway::buildGatewaySnapshot(
+            build_gateway_input_from_analyze_body(body));
+        aura_engine_response_dispose(&resp);
+        aura_orchestrator_destroy(orch);
+    }
+
+    cJSON *root = make_root();
+    cJSON_AddStringToObject(root, "command", "gateway-snapshot");
+    cJSON_AddItemToObject(
+        root, "gateway",
+        gateway_snapshot_to_json(snapshot));
+    emit_json(root, g.compact);
+    cJSON_Delete(root);
+    return 0;
+}
+
+cJSON *analyze_body_to_json(
+    const AuraRizinAnalyzeBody *body,
+    aura::safety::StringProtectionMode string_protection_mode) {
+    const bool enable_string_protection =
+        string_protection_mode != aura::safety::StringProtectionMode::Off;
+    const bool mask_string_protection =
+        string_protection_mode == aura::safety::StringProtectionMode::Mask;
     cJSON *out = cJSON_CreateObject();
     cJSON_AddNumberToObject(out, "magic", static_cast<double>(body->magic));
     cJSON_AddNumberToObject(out, "version",
@@ -385,6 +788,12 @@ cJSON *analyze_body_to_json(const AuraRizinAnalyzeBody *body) {
     /* Phase 11.3.6: strings_count is v3+; older bodies report 0. */
     cJSON_AddNumberToObject(out, "strings_count",
                             static_cast<double>(body->strings_count));
+    cJSON_AddBoolToObject(out, "string_protection_enabled",
+                          enable_string_protection);
+    cJSON_AddStringToObject(
+        out, "string_protection_mode",
+        aura::safety::stringProtectionModeToText(
+            string_protection_mode).c_str());
 
     cJSON *fns = cJSON_AddArrayToObject(out, "functions");
     const AuraFunctionRecord *funcs = aura_rizin_analyze_body_functions(body);
@@ -467,6 +876,10 @@ cJSON *analyze_body_to_json(const AuraRizinAnalyzeBody *body) {
     // this array directly. Body schema v3+; v2 bodies report 0 entries.
     cJSON *strings_arr = cJSON_AddArrayToObject(out, "strings");
     const AuraStringRecord *strings = aura_rizin_analyze_body_strings(body);
+    aura::security::MalwareRiskInput risk_input;
+    const auto safety_profile = enable_string_protection
+                                    ? aura::safety::loadDefaultSafetyProfile()
+                                    : aura::safety::SafetyProfile{};
     for (size_t i = 0; strings && i < body->strings_count; ++i) {
         cJSON *s = cJSON_CreateObject();
         cJSON_AddNumberToObject(s, "string_id",
@@ -487,8 +900,94 @@ cJSON *analyze_body_to_json(const AuraRizinAnalyzeBody *body) {
         cJSON_AddStringToObject(s, "encoding", enc);
         cJSON_AddStringToObject(s, "section",
                                 strings[i].section[0] ? strings[i].section : "");
-        cJSON_AddStringToObject(s, "content",
-                                strings[i].content[0] ? strings[i].content : "");
+        const std::string content =
+            strings[i].content[0] ? strings[i].content : "";
+        if (!enable_string_protection) {
+            cJSON_AddStringToObject(s, "content", content.c_str());
+        }
+        const auto detected_encoding =
+            aura::safety::detectStringEncoding(content);
+        cJSON_AddStringToObject(s, "detected_encoding",
+                                detected_encoding.label.c_str());
+        cJSON_AddNumberToObject(s, "encoding_confidence",
+                                detected_encoding.confidence);
+        cJSON_AddBoolToObject(s, "encoding_lossy",
+                              detected_encoding.lossy);
+        const auto raw_display_literal =
+            aura::safety::displayLiteralForEncoding(detected_encoding);
+        if (!enable_string_protection) {
+            cJSON_AddStringToObject(s, "display_literal",
+                                    raw_display_literal.c_str());
+        }
+        if (enable_string_protection) {
+            auto findings = aura::safety::scanStringWithRulePacks(
+                content, safety_profile);
+            auto protected_view = aura::safety::buildProtectedStringView(
+                content, std::string(), std::move(findings));
+            std::string location;
+            {
+                char addr_buf[32];
+                std::snprintf(addr_buf, sizeof(addr_buf), "0x%llx",
+                              static_cast<unsigned long long>(
+                                  strings[i].addr));
+                location = addr_buf;
+            }
+            std::string category;
+            std::string mask_token;
+            if (!protected_view.findings.empty()) {
+                category = protected_view.findings.front().kind;
+                mask_token = protected_view.findings.front().mask_token;
+            }
+            const std::string candidate_value =
+                mask_string_protection ? protected_view.protected_value
+                                       : content;
+            const aura::safety::SafeExportItem export_item =
+                aura::safety::makeSafeExportItem({
+                    "string",
+                    location,
+                    category,
+                    content,
+                    candidate_value,
+                    candidate_value,
+                    mask_token,
+                });
+            cJSON_AddStringToObject(s, "protected_value",
+                                    export_item.transmission_value.c_str());
+            cJSON_AddStringToObject(
+                s, "masked_content",
+                mask_string_protection ? protected_view.masked.c_str() : "");
+            cJSON_AddStringToObject(s, "display_value",
+                                    export_item.display_value.c_str());
+            cJSON_AddStringToObject(s, "transmission_value",
+                                    export_item.transmission_value.c_str());
+            if (!protected_view.findings.empty()) {
+                const std::string safe_display_literal =
+                    !export_item.display_value.empty()
+                        ? export_item.display_value
+                        : export_item.transmission_value;
+                if (!safe_display_literal.empty()) {
+                    cJSON_AddStringToObject(
+                        s, "display_literal",
+                        safe_display_literal.c_str());
+                }
+            } else {
+                cJSON_AddStringToObject(s, "display_literal",
+                                        raw_display_literal.c_str());
+            }
+            cJSON_AddStringToObject(s, "transmission_policy", "protected");
+            cJSON_AddBoolToObject(s, "original_included",
+                                  export_item.original_included);
+            cJSON_AddStringToObject(s, "mask_token",
+                                    export_item.mask_token.c_str());
+            cJSON_AddNumberToObject(
+                s, "findings_count",
+                static_cast<double>(protected_view.findings.size()));
+            cJSON *findings_arr = cJSON_AddArrayToObject(s, "findings");
+            for (const auto &finding : protected_view.findings) {
+                cJSON_AddItemToArray(findings_arr,
+                                     finding_to_json(finding));
+            }
+        }
         cJSON *prov = cJSON_AddObjectToObject(s, "provenance");
         cJSON_AddStringToObject(prov, "source", strings[i].provenance.source);
         cJSON_AddNumberToObject(prov, "confidence",
@@ -496,11 +995,24 @@ cJSON *analyze_body_to_json(const AuraRizinAnalyzeBody *body) {
         cJSON_AddNumberToObject(prov, "completeness",
                                 strings[i].provenance.completeness);
         cJSON_AddItemToArray(strings_arr, s);
+        risk_input.strings.push_back(content);
     }
+    for (size_t i = 0; syms && i < body->symbols_count; ++i) {
+        const std::string name = syms[i].name[0] ? syms[i].name : "";
+        if (syms[i].kind == AURA_SYMBOL_IMPORT)
+            risk_input.imports.push_back(name);
+        else
+            risk_input.symbols.push_back(name);
+    }
+    cJSON_AddItemToObject(
+        out, "malware_risk",
+        malware_risk_to_json(aura::security::analyzeMalwareRisk(risk_input)));
     return out;
 }
 
-int run_analyze(const std::string &binary, const GlobalOpts &g) {
+int run_analyze(const std::string &binary,
+                aura::safety::StringProtectionMode string_protection_mode,
+                const GlobalOpts &g) {
     std::string err;
     AuraOrchestrator *orch = build_orchestrator(g, err);
     if (!orch) {
@@ -532,7 +1044,9 @@ int run_analyze(const std::string &binary, const GlobalOpts &g) {
     cJSON *root = make_root();
     cJSON_AddStringToObject(root, "command", "analyze");
     cJSON_AddStringToObject(root, "binary", binary.c_str());
-    cJSON_AddItemToObject(root, "body", analyze_body_to_json(body));
+    cJSON_AddItemToObject(root, "body",
+                          analyze_body_to_json(
+                              body, string_protection_mode));
 
     emit_json(root, g.compact);
 
@@ -2376,9 +2890,19 @@ int main(int argc, char **argv) {
     auto *cmd_analyze = app.add_subcommand(
         "analyze", "ANALYZE dispatch → unified model JSON");
     std::string analyze_bin;
+    std::string analyze_string_protection_mode = "off";
+    bool analyze_string_protection_legacy = false;
     cmd_analyze->add_option("binary", analyze_bin, "path to binary")
         ->required()
         ->check(CLI::ExistingFile);
+    cmd_analyze
+        ->add_option("--string-protection-mode",
+                     analyze_string_protection_mode,
+                     "string protection mode: off, scan-only, mask")
+        ->check(CLI::IsMember({"off", "scan-only", "mask"}));
+    cmd_analyze->add_flag(
+        "--string-protection", analyze_string_protection_legacy,
+        "compatibility alias for --string-protection-mode mask");
 
     // field-candidates (Phase 11.4.4 / P4.PP2 — struct field misidentification)
     auto *cmd_fldc = app.add_subcommand(
@@ -2477,6 +3001,42 @@ int main(int argc, char **argv) {
     // engines
     auto *cmd_engines = app.add_subcommand(
         "engines", "list registered engines + availability (debug)");
+
+    // gateway-snapshot
+    auto *cmd_gateway_snapshot = app.add_subcommand(
+        "gateway-snapshot",
+        "protected Gateway snapshot JSON for LLM pre-send review");
+    bool gateway_snapshot_demo = false;
+    std::string gateway_snapshot_binary;
+    cmd_gateway_snapshot
+        ->add_option("binary", gateway_snapshot_binary, "path to binary")
+        ->check(CLI::ExistingFile);
+    cmd_gateway_snapshot->add_flag(
+        "--demo", gateway_snapshot_demo,
+        "emit deterministic protected demo gateway snapshot");
+    cmd_gateway_snapshot->add_flag(
+        "--compact", g.compact,
+        "compact JSON output (accepted after the subcommand)");
+
+    // mcp-json: developer-only JSON-RPC request generator for aura-mcp stdin.
+    auto *cmd_mcp_json = app.add_subcommand(
+        "mcp-json", "emit one JSON-RPC request line for aura-mcp stdin");
+    cmd_mcp_json->require_subcommand(1);
+    auto *cmd_mcp_initialize = cmd_mcp_json->add_subcommand(
+        "initialize", "emit MCP initialize request");
+    auto *cmd_mcp_tools_list = cmd_mcp_json->add_subcommand(
+        "tools-list", "emit MCP tools/list request");
+    auto *cmd_mcp_call = cmd_mcp_json->add_subcommand(
+        "call", "emit MCP tools/call request");
+    std::string mcp_tool_name;
+    std::string mcp_binary_path;
+    std::string mcp_function_addr;
+    cmd_mcp_call->add_option("tool", mcp_tool_name, "MCP tool name")
+        ->required();
+    cmd_mcp_call->add_option("--binary", mcp_binary_path,
+                             "binary path argument for MCP tool call");
+    cmd_mcp_call->add_option("--func", mcp_function_addr,
+                             "function address argument for MCP tool call");
 
     // override (Phase 11.4 — list/get/delete only; put pending Q10)
     auto *cmd_override = app.add_subcommand(
@@ -2590,6 +3150,9 @@ int main(int argc, char **argv) {
 
     auto *cmd_gui_functions = cmd_gui->add_subcommand(
         "functions", "list functions currently loaded in the GUI");
+    auto *cmd_gui_demo_snapshot = cmd_gui->add_subcommand(
+        "demo-snapshot",
+        "show third-party-safe minimal GUI/MCP demo snapshot");
 
     auto *cmd_gui_decompile = cmd_gui->add_subcommand(
         "decompile", "decompile a function row in the running GUI");
@@ -2602,6 +3165,40 @@ int main(int argc, char **argv) {
     int gui_string_row = 0;
     cmd_gui_jump_string->add_option("--row", gui_string_row,
                                     "string row (default: 0)");
+
+    auto *cmd_gui_disasm_function = cmd_gui->add_subcommand(
+        "disasm-function", "fetch GUI disassembly for a function address");
+    std::string gui_disasm_addr;
+    cmd_gui_disasm_function
+        ->add_option("--addr", gui_disasm_addr,
+                     "function address, e.g. 0x40117b")
+        ->required();
+
+    auto *cmd_gui_cfg_function = cmd_gui->add_subcommand(
+        "cfg-function", "fetch GUI CFG for a function address");
+    std::string gui_cfg_addr;
+    cmd_gui_cfg_function
+        ->add_option("--addr", gui_cfg_addr,
+                     "function address, e.g. 0x40117b")
+        ->required();
+
+    auto *cmd_gui_rename = cmd_gui->add_subcommand(
+        "rename", "rename a GUI function row");
+    int gui_rename_row = 0;
+    std::string gui_rename_name;
+    cmd_gui_rename->add_option("--row", gui_rename_row,
+                               "function row to rename")
+        ->required();
+    cmd_gui_rename->add_option("--name", gui_rename_name,
+                               "new function display name")
+        ->required();
+
+    auto *cmd_gui_reset_name = cmd_gui->add_subcommand(
+        "reset-name", "reset a GUI function row name");
+    int gui_reset_name_row = 0;
+    cmd_gui_reset_name->add_option("--row", gui_reset_name_row,
+                                   "function row to reset")
+        ->required();
 
     auto *cmd_gui_strings = cmd_gui->add_subcommand(
         "strings", "list strings from the last GUI analysis");
@@ -2617,8 +3214,27 @@ int main(int argc, char **argv) {
 
     CLI11_PARSE(app, argc, argv);
 
+    if (cmd_mcp_json->parsed()) {
+        if (cmd_mcp_initialize->parsed()) return emit_mcp_initialize(g.compact);
+        if (cmd_mcp_tools_list->parsed()) return emit_mcp_tools_list(g.compact);
+        if (cmd_mcp_call->parsed()) {
+            return emit_mcp_tool_call(mcp_tool_name, mcp_binary_path,
+                                      mcp_function_addr, g.compact);
+        }
+    }
     if (cmd_engines->parsed()) return run_engines(g);
-    if (cmd_analyze->parsed()) return run_analyze(analyze_bin, g);
+    if (cmd_gateway_snapshot->parsed()) {
+        return run_gateway_snapshot(gateway_snapshot_demo,
+                                    gateway_snapshot_binary, g);
+    }
+    if (cmd_analyze->parsed()) {
+        const auto protection_mode =
+            analyze_string_protection_legacy
+                ? aura::safety::StringProtectionMode::Mask
+                : aura::safety::parseStringProtectionMode(
+                      analyze_string_protection_mode);
+        return run_analyze(analyze_bin, protection_mode, g);
+    }
     if (cmd_disasm->parsed()) {
         uint64_t addr = 0;
         try { addr = std::stoull(disasm_func_str, nullptr, 0); }
@@ -2726,6 +3342,15 @@ int main(int argc, char **argv) {
     }
     if (cmd_gui->parsed()) {
         auto params_object = []() { return cJSON_CreateObject(); };
+        auto parse_gui_addr = [&](const std::string &s,
+                                  uint64_t &out) -> bool {
+            try {
+                out = std::stoull(s, nullptr, 0);
+                return true;
+            } catch (...) {
+                return false;
+            }
+        };
         if (cmd_gui_status->parsed()) {
             return run_gui_rpc("status", params_object(), gui_rpc, g,
                                "gui status");
@@ -2760,6 +3385,10 @@ int main(int argc, char **argv) {
             return run_gui_rpc("function_list", params_object(), gui_rpc, g,
                                "gui functions");
         }
+        if (cmd_gui_demo_snapshot->parsed()) {
+            return run_gui_rpc("demo_snapshot", params_object(), gui_rpc, g,
+                               "gui demo-snapshot");
+        }
         if (cmd_gui_decompile->parsed()) {
             cJSON *p = params_object();
             cJSON_AddNumberToObject(p, "function_row", gui_function_row);
@@ -2770,6 +3399,57 @@ int main(int argc, char **argv) {
             cJSON_AddNumberToObject(p, "string_row", gui_string_row);
             return run_gui_rpc("jump_string_reference", p, gui_rpc, g,
                                "gui jump-string");
+        }
+        if (cmd_gui_disasm_function->parsed()) {
+            uint64_t addr = 0;
+            if (!parse_gui_addr(gui_disasm_addr, addr)) {
+                emit_error_json("invalid_func_addr",
+                                "could not parse --addr: " + gui_disasm_addr,
+                                g.compact);
+                return 2;
+            }
+            if (addr > kJsonSafeIntegerMax) {
+                emit_error_json("invalid_func_addr",
+                                "--addr exceeds the JSON safe integer range",
+                                g.compact);
+                return 2;
+            }
+            cJSON *p = params_object();
+            cJSON_AddNumberToObject(p, "addr", static_cast<double>(addr));
+            return run_gui_rpc("disasm_function", p, gui_rpc, g,
+                               "gui disasm-function");
+        }
+        if (cmd_gui_cfg_function->parsed()) {
+            uint64_t addr = 0;
+            if (!parse_gui_addr(gui_cfg_addr, addr)) {
+                emit_error_json("invalid_func_addr",
+                                "could not parse --addr: " + gui_cfg_addr,
+                                g.compact);
+                return 2;
+            }
+            if (addr > kJsonSafeIntegerMax) {
+                emit_error_json("invalid_func_addr",
+                                "--addr exceeds the JSON safe integer range",
+                                g.compact);
+                return 2;
+            }
+            cJSON *p = params_object();
+            cJSON_AddNumberToObject(p, "addr", static_cast<double>(addr));
+            return run_gui_rpc("cfg_function", p, gui_rpc, g,
+                               "gui cfg-function");
+        }
+        if (cmd_gui_rename->parsed()) {
+            cJSON *p = params_object();
+            cJSON_AddNumberToObject(p, "function_row", gui_rename_row);
+            cJSON_AddStringToObject(p, "new_name",
+                                    gui_rename_name.c_str());
+            return run_gui_rpc("rename", p, gui_rpc, g, "gui rename");
+        }
+        if (cmd_gui_reset_name->parsed()) {
+            cJSON *p = params_object();
+            cJSON_AddNumberToObject(p, "function_row", gui_reset_name_row);
+            return run_gui_rpc("reset_name", p, gui_rpc, g,
+                               "gui reset-name");
         }
         if (cmd_gui_strings->parsed()) {
             return run_gui_rpc("list_strings", params_object(), gui_rpc, g,

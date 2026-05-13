@@ -15,6 +15,20 @@ namespace aura::gui {
 class StringTableModel : public QAbstractItemModel {
     Q_OBJECT
 public:
+    enum class Filter {
+        All = 0,
+        Protected,
+        Unprotected,
+        Alias,
+        Masked,
+        Email,
+        KoreanRrn,
+        Phone,
+        Url,
+        SecretToken,
+        OtherFinding,
+    };
+
     enum MetaRow {
         MetaAddr = 0,
         MetaLength,
@@ -31,6 +45,8 @@ public:
     explicit StringTableModel(QObject* parent = nullptr);
 
     void setStrings(const QVector<GuiStringRecord>& strs);
+    void setFilter(Filter filter);
+    Filter filter() const { return m_filter; }
     int stringRowForIndex(const QModelIndex& index) const;
 
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
@@ -44,7 +60,12 @@ public:
                         int role = Qt::DisplayRole) const override;
 
 private:
+    void rebuildVisibleRows();
+    bool acceptsRow(const GuiStringRecord& row) const;
+
     QVector<GuiStringRecord> m_rows;
+    QVector<int> m_visibleRows;
+    Filter m_filter = Filter::All;
 };
 
 }  // namespace aura::gui

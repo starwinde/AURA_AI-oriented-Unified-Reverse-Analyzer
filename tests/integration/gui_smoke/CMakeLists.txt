@@ -41,6 +41,10 @@ target_sources(gui_smoke PRIVATE
     ${CMAKE_SOURCE_DIR}/src/gui/safety_settings_dialog.h
     ${CMAKE_SOURCE_DIR}/src/gui/code_syntax_highlighter.cpp
     ${CMAKE_SOURCE_DIR}/src/gui/code_syntax_highlighter.h
+    ${CMAKE_SOURCE_DIR}/src/gui/demo_mode_pane.cpp
+    ${CMAKE_SOURCE_DIR}/src/gui/demo_mode_pane.h
+    ${CMAKE_SOURCE_DIR}/src/gui/gateway_pane.cpp
+    ${CMAKE_SOURCE_DIR}/src/gui/gateway_pane.h
     ${CMAKE_SOURCE_DIR}/src/gui/analysis_options_dialog.cpp
     ${CMAKE_SOURCE_DIR}/src/gui/analysis_options_dialog.h
     ${CMAKE_SOURCE_DIR}/src/gui/decompile_pane.cpp

@@ -18,11 +18,15 @@
 #include <QAbstractItemModel>
 #include <QApplication>
 #include <QByteArray>
+#include <QCheckBox>
 #include <QDir>
 #include <QDockWidget>
 #include <QFile>
 #include <QIODevice>
 #include <QComboBox>
+#include <QLabel>
+#include <QMainWindow>
+#include <QMetaObject>
 #include <QMouseEvent>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -31,10 +35,12 @@
 #include <QPointF>
 #include <QSettings>
 #include <QSignalSpy>
+#include <QScrollBar>
 #include <QTextBlock>
 #include <QTextCursor>
 #include <QTextDocument>
 #include <QTreeView>
+#include <QTreeWidget>
 #include <QVariant>
 
 #include "disasm_pane.h"
@@ -47,12 +53,17 @@
 #include <QImage>
 #include <QStackedWidget>
 #include <QString>
+#include <QTableWidget>
 #include <QTableView>
 #include <QTemporaryDir>
+#include <QTimer>
 
+#include <algorithm>
 #include <cstdlib>
 
 #include "code_syntax_highlighter.h"
+#include "demo_mode_pane.h"
+#include "analysis_options_dialog.h"
 #include "main_window.h"
 #include "aura/safety/string_safety.h"
 
@@ -133,11 +144,69 @@ private:
     bool m_hadValue = false;
 };
 
+class EnvVarGuard {
+public:
+    explicit EnvVarGuard(const char* name)
+        : m_name(name ? name : "") {
+        m_hadValue = qEnvironmentVariableIsSet(m_name.constData());
+        if (m_hadValue) {
+            m_oldValue = qgetenv(m_name.constData());
+        }
+    }
+
+    ~EnvVarGuard() {
+        if (m_hadValue) {
+            qputenv(m_name.constData(), m_oldValue);
+        } else {
+            qunsetenv(m_name.constData());
+        }
+    }
+
+    EnvVarGuard(const EnvVarGuard&) = delete;
+    EnvVarGuard& operator=(const EnvVarGuard&) = delete;
+
+private:
+    QByteArray m_name;
+    QByteArray m_oldValue;
+    bool m_hadValue = false;
+};
+
+void startModalCloser(QTimer* timer) {
+    REQUIRE(timer != nullptr);
+    QObject::connect(timer, &QTimer::timeout, []() {
+        if (auto* box = QApplication::activeModalWidget()) {
+            box->close();
+        }
+    });
+    timer->start(50);
+}
+
 void writeTextFile(const QString& path, const QString& text) {
     QFile file(path);
     REQUIRE(file.open(QIODevice::WriteOnly | QIODevice::Text));
     const auto bytes = text.toUtf8();
     CHECK(file.write(bytes) == bytes.size());
+}
+
+void writeFixtureRulePack(const QString& homePath) {
+    const QString rulePackDir =
+        QDir(homePath).filePath(QStringLiteral("rule-packs/fixture-rule"));
+    REQUIRE(QDir().mkpath(rulePackDir));
+    writeTextFile(
+        QDir(rulePackDir).filePath(QStringLiteral("manifest.json")),
+        QStringLiteral(R"({"schema_version":1,"pack_id":"fixture-rule","display_name":"fixture rule","rules_file":"rules.json"})"));
+    writeTextFile(
+        QDir(rulePackDir).filePath(QStringLiteral("rules.json")),
+        QStringLiteral(R"({"schema_version":1,"rules":[{"id":"fixture-rule/ascii-run","kind":"fixture_ascii_run","pattern":"[A-Za-z]{12,}","confidence":0.90}]})"));
+}
+
+void writeFixtureTokenModel(const QString& homePath) {
+    const QString modelDir = QDir(homePath).filePath(
+        QStringLiteral("token-classification-models/fixture-model"));
+    REQUIRE(QDir().mkpath(modelDir));
+    writeTextFile(
+        QDir(modelDir).filePath(QStringLiteral("manifest.json")),
+        QStringLiteral(R"({"schema_version":1,"model_id":"fixture-model","display_name":"fixture model"})"));
 }
 
 QStringList checkedModelIds(const QListWidget* modelList) {
@@ -311,6 +380,9 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
     const QString fixture = QDir(repoRoot())
         .filePath(QStringLiteral("tests/fixtures/bin/elf_smoke.x86_64"));
     REQUIRE(QFile::exists(fixture));
+    const QString stringFixture = QDir(repoRoot())
+        .filePath(QStringLiteral("tests/fixtures/bin/pe_smoke.x86_64.exe"));
+    REQUIRE(QFile::exists(stringFixture));
 
     aura::gui::MainWindow window;
 
@@ -328,6 +400,421 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
               != CodeSyntaxHighlighter::colorForRole(QStringLiteral("register")));
     }
 
+    SUBCASE("demo mode pane exposes the graduation demo flow") {
+        aura::gui::DemoModePane pane;
+        pane.show();
+
+        auto* claim = pane.findChild<QLabel*>(QStringLiteral("demoClaimLabel"));
+        REQUIRE(claim != nullptr);
+        CHECK(claim->text().contains(QStringLiteral("LLM")));
+        CHECK(claim->text().contains(QStringLiteral("mask"), Qt::CaseInsensitive));
+
+        CHECK(pane.findChild<QWidget*>(QStringLiteral("demoStageAnalyze")) != nullptr);
+        CHECK(pane.findChild<QWidget*>(QStringLiteral("demoStageDetect")) != nullptr);
+        CHECK(pane.findChild<QWidget*>(QStringLiteral("demoStageMask")) != nullptr);
+        CHECK(pane.findChild<QWidget*>(QStringLiteral("demoStageExport")) != nullptr);
+        auto* flowSummary =
+            pane.findChild<QLabel*>(QStringLiteral("demoFlowSummaryLabel"));
+        REQUIRE(flowSummary != nullptr);
+        CHECK(flowSummary->text().contains(QStringLiteral("수집")));
+        CHECK(flowSummary->text().contains(QStringLiteral("탐지")));
+        CHECK(flowSummary->text().contains(QStringLiteral("마스킹")));
+        CHECK(flowSummary->text().contains(QStringLiteral("검증")));
+
+        auto* table =
+            pane.findChild<QTableWidget*>(QStringLiteral("demoSensitiveItemsTable"));
+        REQUIRE(table != nullptr);
+        CHECK(table->horizontalHeaderItem(0)->text().contains(QStringLiteral("종류")));
+        CHECK(table->horizontalHeaderItem(1)->text().contains(
+            QStringLiteral("UI 확인용 원본")));
+        CHECK(table->horizontalHeaderItem(2)->text().contains(QStringLiteral("마스킹")));
+        CHECK(table->horizontalHeaderItem(3)->text().contains(
+            QStringLiteral("LLM 전송")));
+
+        auto* exportPreview =
+            pane.findChild<QLabel*>(QStringLiteral("demoExportPreview"));
+        REQUIRE(exportPreview != nullptr);
+        CHECK(exportPreview->text().contains(QStringLiteral("original_included")));
+        CHECK(exportPreview->text().contains(QStringLiteral("false")));
+        CHECK(pane.minimumSizeHint().width() <= 320);
+    }
+
+    SUBCASE("main window contains demo mode pane") {
+        window.show();
+
+        auto* demoPane =
+            window.findChild<aura::gui::DemoModePane*>(QStringLiteral("demoModePane"));
+        REQUIRE(demoPane != nullptr);
+
+        auto* exportPreview =
+            demoPane->findChild<QLabel*>(QStringLiteral("demoExportPreview"));
+        REQUIRE(exportPreview != nullptr);
+        CHECK(exportPreview->text().contains(QStringLiteral("original_included")));
+        CHECK(exportPreview->text().contains(QStringLiteral("false")));
+    }
+
+    SUBCASE("main window contains LLM Gateway dock") {
+        window.show();
+
+        CHECK(window.findChild<QDockWidget*>(
+                  QStringLiteral("gatewayDock")) != nullptr);
+        CHECK(window.findChild<QLabel*>(
+                  QStringLiteral("gatewayStatusLabel")) != nullptr);
+        CHECK(window.findChild<QPlainTextEdit*>(
+                  QStringLiteral("gatewayProtectedPrompt")) != nullptr);
+        CHECK(window.findChild<QTreeWidget*>(
+                  QStringLiteral("gatewayVerificationTable")) != nullptr);
+        CHECK(window.findChild<QTreeWidget*>(
+                  QStringLiteral("gatewayAuditTable")) != nullptr);
+    }
+
+    SUBCASE("gateway does not show PASS when no protection state exists") {
+        window.show();
+        QApplication::processEvents();
+
+        auto* status = window.findChild<QLabel*>(
+            QStringLiteral("gatewayStatusLabel"));
+        REQUIRE(status != nullptr);
+        CHECK_FALSE(status->text().contains(QStringLiteral("PASS")));
+        const bool hasNonPassState =
+            status->text().contains(QStringLiteral("NOT_READY")) ||
+            status->text().contains(QStringLiteral("WARNING")) ||
+            status->text().contains(QStringLiteral("대기"));
+        CHECK(hasNonPassState);
+    }
+
+    SUBCASE("gateway pane uses presentation labels for checks") {
+        window.show();
+        QApplication::processEvents();
+
+        auto* verification = window.findChild<QTreeWidget*>(
+            QStringLiteral("gatewayVerificationTable"));
+        REQUIRE(verification != nullptr);
+        CHECK(verification->topLevelItemCount() > 0);
+
+        bool sawProtectionLabel = false;
+        bool sawRawIdTooltip = false;
+        for (int row = 0; row < verification->topLevelItemCount(); ++row) {
+            const QTreeWidgetItem* item = verification->topLevelItem(row);
+            REQUIRE(item != nullptr);
+            sawProtectionLabel =
+                sawProtectionLabel ||
+                item->text(0) == QStringLiteral("보호 기능 활성화");
+            sawRawIdTooltip =
+                sawRawIdTooltip ||
+                item->toolTip(0) == QStringLiteral("protection_enabled");
+            CHECK(item->text(0) != item->toolTip(0));
+        }
+        CHECK(sawProtectionLabel);
+        CHECK(sawRawIdTooltip);
+    }
+
+    SUBCASE("gateway pane preview excludes raw protected string") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureRulePack(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::Selected;
+        profile.rule_pack_ids = {"fixture-rule"};
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+        REQUIRE_FALSE(window.stringList().isEmpty());
+
+        int protectedRow = -1;
+        QString original;
+        for (int i = 0; i < window.stringList().size(); ++i) {
+            const QString candidate = window.stringList()[i].content;
+            if (!window.stringList()[i].findings.isEmpty() &&
+                candidate.size() >= 8 &&
+                !candidate.contains(QLatin1Char('*'))) {
+                protectedRow = i;
+                original = candidate;
+                break;
+            }
+        }
+        REQUIRE(protectedRow >= 0);
+        REQUIRE(window.setStringMaskTokenAt(protectedRow,
+                                            QStringLiteral("DEMO_MASK")));
+
+        auto* status = window.findChild<QLabel*>(
+            QStringLiteral("gatewayStatusLabel"));
+        REQUIRE(status != nullptr);
+        CHECK(status->text().contains(QStringLiteral("PASS")));
+
+        auto* prompt = window.findChild<QPlainTextEdit*>(
+            QStringLiteral("gatewayProtectedPrompt"));
+        REQUIRE(prompt != nullptr);
+        const QString promptText = prompt->toPlainText();
+        CHECK(promptText.contains(
+            QStringLiteral("Only protected values are included.")));
+        CHECK_FALSE(promptText.contains(original));
+        CHECK_FALSE(promptText.contains(QStringLiteral("900101-1234567")));
+
+        auto* audit = window.findChild<QTreeWidget*>(
+            QStringLiteral("gatewayAuditTable"));
+        REQUIRE(audit != nullptr);
+        CHECK(audit->topLevelItemCount() > 0);
+        for (int row = 0; row < audit->topLevelItemCount(); ++row) {
+            const QTreeWidgetItem* item = audit->topLevelItem(row);
+            QString rowText;
+            for (int col = 0; col < audit->columnCount(); ++col) {
+                rowText += item->text(col);
+                rowText += QLatin1Char(' ');
+            }
+            CHECK_FALSE(rowText.contains(original));
+            CHECK_FALSE(rowText.contains(QStringLiteral("900101-1234567")));
+        }
+
+        auto* summary = window.findChild<QLabel*>(
+            QStringLiteral("gatewaySummaryLabel"));
+        REQUIRE(summary != nullptr);
+        CHECK_FALSE(summary->text().contains(QStringLiteral("900101-1234567")));
+        CHECK_FALSE(status->text().contains(QStringLiteral("900101-1234567")));
+
+        auto* verification = window.findChild<QTreeWidget*>(
+            QStringLiteral("gatewayVerificationTable"));
+        REQUIRE(verification != nullptr);
+        CHECK(verification->columnCount() == 3);
+        CHECK(verification->topLevelItemCount() >= 2);
+        bool sawSafetyScan = false;
+        for (int row = 0; row < verification->topLevelItemCount(); ++row) {
+            const QTreeWidgetItem* item = verification->topLevelItem(row);
+            CHECK_FALSE(item->text(0).contains(original));
+            CHECK_FALSE(item->text(0).contains(QStringLiteral("900101-1234567")));
+            CHECK_FALSE(item->text(2).contains(original));
+            CHECK_FALSE(item->text(2).contains(QStringLiteral("900101-1234567")));
+            if (item->text(0) == QStringLiteral("안전 스캔 실행") &&
+                item->toolTip(0) == QStringLiteral("safety_scan_executed") &&
+                item->text(1) == QStringLiteral("pass")) {
+                sawSafetyScan = true;
+            }
+        }
+        CHECK(sawSafetyScan);
+    }
+
+    SUBCASE("gateway becomes not ready after protection results are cleared") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureRulePack(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::Selected;
+        profile.rule_pack_ids = {"fixture-rule"};
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+        REQUIRE_FALSE(window.stringList().isEmpty());
+
+        int protectedRow = -1;
+        for (int i = 0; i < window.stringList().size(); ++i) {
+            if (!window.stringList()[i].findings.isEmpty() &&
+                window.stringList()[i].content.size() >= 8) {
+                protectedRow = i;
+                break;
+            }
+        }
+        REQUIRE(protectedRow >= 0);
+        REQUIRE(window.setStringMaskTokenAt(protectedRow,
+                                            QStringLiteral("DEMO_MASK")));
+
+        auto* status = window.findChild<QLabel*>(
+            QStringLiteral("gatewayStatusLabel"));
+        REQUIRE(status != nullptr);
+        CHECK(status->text().contains(QStringLiteral("PASS")));
+
+        REQUIRE(window.clearStringProtectionForCurrentBinary());
+        CHECK_FALSE(status->text().contains(QStringLiteral("PASS")));
+        CHECK(status->text().contains(QStringLiteral("NOT_READY")));
+    }
+
+    SUBCASE("gateway clears stale PASS when analyze fails after PASS") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureRulePack(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::Selected;
+        profile.rule_pack_ids = {"fixture-rule"};
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+        REQUIRE_FALSE(window.stringList().isEmpty());
+
+        int protectedRow = -1;
+        for (int i = 0; i < window.stringList().size(); ++i) {
+            if (!window.stringList()[i].findings.isEmpty() &&
+                window.stringList()[i].content.size() >= 8) {
+                protectedRow = i;
+                break;
+            }
+        }
+        REQUIRE(protectedRow >= 0);
+        REQUIRE(window.setStringMaskTokenAt(protectedRow,
+                                            QStringLiteral("DEMO_MASK")));
+
+        auto* status = window.findChild<QLabel*>(
+            QStringLiteral("gatewayStatusLabel"));
+        REQUIRE(status != nullptr);
+        CHECK(status->text().contains(QStringLiteral("PASS")));
+
+        EnvVarGuard rizinBinGuard("AURA_RIZIN_BIN");
+        qputenv("AURA_RIZIN_BIN",
+                QDir(tmp.path())
+                    .filePath(QStringLiteral("missing-rizin.exe"))
+                    .toUtf8());
+        QTimer modalCloser;
+        startModalCloser(&modalCloser);
+        CHECK_FALSE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+        modalCloser.stop();
+
+        CHECK_FALSE(status->text().contains(QStringLiteral("PASS")));
+        CHECK(status->text().contains(QStringLiteral("NOT_READY")));
+    }
+
+    SUBCASE("gateway pane clears stale protected prompt when project changes") {
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+        REQUIRE_FALSE(window.stringList().isEmpty());
+
+        int protectedRow = -1;
+        QString original;
+        for (int i = 0; i < window.stringList().size(); ++i) {
+            const QString candidate = window.stringList()[i].content;
+            if (candidate.size() >= 8 && !candidate.contains(QLatin1Char('*'))) {
+                protectedRow = i;
+                original = candidate;
+                break;
+            }
+        }
+        REQUIRE(protectedRow >= 0);
+        REQUIRE(window.setStringMaskTokenAt(protectedRow,
+                                            QStringLiteral("DEMO_MASK")));
+
+        auto* prompt = window.findChild<QPlainTextEdit*>(
+            QStringLiteral("gatewayProtectedPrompt"));
+        REQUIRE(prompt != nullptr);
+        const QString before = prompt->toPlainText();
+        CHECK(before.contains(
+            QStringLiteral("Only protected values are included.")));
+        CHECK_FALSE(before.contains(original));
+
+        const QString secondDbPath =
+            QDir(tmp.path()).filePath(QStringLiteral("second.aura.db"));
+        REQUIRE(window.openProject(secondDbPath));
+
+        const QString after = prompt->toPlainText();
+        CHECK(after.contains(
+            QStringLiteral("Only protected values are included.")));
+        CHECK_FALSE(after.contains(QStringLiteral("900101-1******")));
+        CHECK_FALSE(after.contains(original));
+        CHECK_FALSE(after.contains(QStringLiteral("900101-1234567")));
+
+        auto* audit = window.findChild<QTreeWidget*>(
+            QStringLiteral("gatewayAuditTable"));
+        REQUIRE(audit != nullptr);
+        CHECK(audit->topLevelItemCount() == 0);
+
+        auto* verification = window.findChild<QTreeWidget*>(
+            QStringLiteral("gatewayVerificationTable"));
+        REQUIRE(verification != nullptr);
+        CHECK(verification->topLevelItemCount() >= 2);
+    }
+
+    SUBCASE("demo tab does not lock horizontal dock resizing") {
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+        window.resize(1280, 800);
+        window.show();
+        QApplication::processEvents();
+
+        auto* workspace =
+            window.findChild<QMainWindow*>(QStringLiteral("workspace"));
+        REQUIRE(workspace != nullptr);
+        auto* functionDock =
+            window.findChild<QDockWidget*>(QStringLiteral("functionDock"));
+        auto* decompileDock =
+            window.findChild<QDockWidget*>(QStringLiteral("decompileDock"));
+        REQUIRE(functionDock != nullptr);
+        REQUIRE(decompileDock != nullptr);
+
+        auto* stringsDock =
+            window.findChild<QDockWidget*>(QStringLiteral("stringsDock"));
+        REQUIRE(stringsDock != nullptr);
+        CHECK(functionDock->minimumSizeHint().width() <= 180);
+        CHECK(stringsDock->minimumSizeHint().width() <= 220);
+        CHECK(decompileDock->minimumSizeHint().width() <= 700);
+        CHECK(functionDock->width() >= functionDock->minimumSizeHint().width());
+        CHECK(stringsDock->width() >= stringsDock->minimumSizeHint().width());
+    }
+
+    SUBCASE("demo mode preview excludes original protected string") {
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+        REQUIRE_FALSE(window.stringList().isEmpty());
+
+        int protectedRow = -1;
+        QString original;
+        for (int i = 0; i < window.stringList().size(); ++i) {
+            const QString candidate = window.stringList()[i].content;
+            if (candidate.size() >= 8 && !candidate.contains(QLatin1Char('*'))) {
+                protectedRow = i;
+                original = candidate;
+                break;
+            }
+        }
+        REQUIRE(protectedRow >= 0);
+        REQUIRE(window.setStringMaskTokenAt(protectedRow, QStringLiteral("DEMO_MASK")));
+
+        auto* demoPane =
+            window.findChild<aura::gui::DemoModePane*>(QStringLiteral("demoModePane"));
+        REQUIRE(demoPane != nullptr);
+
+        auto* table =
+            demoPane->findChild<QTableWidget*>(QStringLiteral("demoSensitiveItemsTable"));
+        REQUIRE(table != nullptr);
+        CHECK(table->rowCount() >= 1);
+
+        auto* exportPreview =
+            demoPane->findChild<QLabel*>(QStringLiteral("demoExportPreview"));
+        REQUIRE(exportPreview != nullptr);
+        const QString preview = exportPreview->text();
+        CHECK(preview.contains(QStringLiteral("transmission_policy")));
+        CHECK(preview.contains(QStringLiteral("protected")));
+        CHECK(preview.contains(QStringLiteral("original_included")));
+        CHECK(preview.contains(QStringLiteral("false")));
+        CHECK_FALSE(preview.contains(original));
+        CHECK(preview.contains(QLatin1Char('*')));
+    }
+
     SUBCASE("open project") {
         REQUIRE(window.openProject(dbPath));
         CHECK(window.projectBinaryCount() == 0);
@@ -336,6 +823,22 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
     SUBCASE("project opens artifact cache schema") {
         REQUIRE(window.openProject(dbPath));
         CHECK(sqliteTableExists(dbPath, "analysis_artifacts"));
+    }
+
+    SUBCASE("safety settings dialog localizes Korean UI labels") {
+        const SettingsKeyGuard guard(QStringLiteral("ui/language"));
+        QSettings settings(QStringLiteral("AURA"), QStringLiteral("aura-gui"));
+        settings.setValue(QStringLiteral("ui/language"), QStringLiteral("ko"));
+
+        aura::gui::SafetySettingsDialog dlg(QStringLiteral("default"));
+        CHECK(dlg.windowTitle() == QStringLiteral("안전 자산"));
+        CHECK(dlg.statusText().contains(QStringLiteral("프로필")));
+        auto* summaryLabel =
+            dlg.findChild<QLabel*>(QStringLiteral("safetySummaryLabel"));
+        REQUIRE(summaryLabel != nullptr);
+        CHECK(summaryLabel->text().contains(QStringLiteral("프로필:")));
+        CHECK(summaryLabel->text().contains(QStringLiteral("모델:")));
+        CHECK(summaryLabel->text().contains(QStringLiteral("규칙 팩:")));
     }
 
     SUBCASE("safety settings profile selection persists through QSettings") {
@@ -384,6 +887,110 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         CHECK(modelFolderAction != nullptr);
     }
 
+    SUBCASE("analysis options dialog defaults string protection on for active safety assets") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureRulePack(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::Selected;
+        profile.rule_pack_ids = {"fixture-rule"};
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        aura::gui::AnalysisOptionsDialog dlg(
+            QStringLiteral("C:/tmp/aura-test-binary.exe"));
+        auto* checkbox = dlg.findChild<QCheckBox*>(
+            QStringLiteral("analysisStringProtectionCheckBox"));
+        auto* modeCombo = dlg.findChild<QComboBox*>(
+            QStringLiteral("analysisStringProtectionModeCombo"));
+        auto* safetyAssetsButton = dlg.findChild<QPushButton*>(
+            QStringLiteral("analysisSafetyAssetsButton"));
+
+        REQUIRE(checkbox != nullptr);
+        CHECK(modeCombo == nullptr);
+        REQUIRE(safetyAssetsButton != nullptr);
+        CHECK(dlg.stringProtectionEnabled());
+        CHECK(dlg.selectedLevel() == AURA_ANALYSIS_LEVEL_FULL);
+        int requested = 0;
+        QObject::connect(
+            &dlg, &aura::gui::AnalysisOptionsDialog::safetyAssetsRequested,
+            [&requested]() { ++requested; });
+        safetyAssetsButton->click();
+        CHECK(requested == 1);
+        CHECK(safetyAssetsButton->isEnabled());
+        dlg.setStringProtectionEnabled(false);
+        CHECK_FALSE(dlg.stringProtectionEnabled());
+        dlg.setStringProtectionEnabled(true);
+        CHECK(dlg.stringProtectionEnabled());
+        CHECK(safetyAssetsButton->isEnabled());
+        checkbox->setChecked(false);
+        CHECK_FALSE(dlg.stringProtectionEnabled());
+        CHECK(safetyAssetsButton->isEnabled());
+    }
+
+    SUBCASE("analysis options dialog does not treat model-only profile as runnable protection") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureTokenModel(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::None;
+        profile.model_policy.enabled = true;
+        profile.model_policy.mode =
+            aura::safety::ModelPolicyMode::Conditional;
+        profile.model_policy.model_id = "fixture-model";
+        profile.token_classification_model_id = "fixture-model";
+        profile.token_classification_enabled = true;
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        aura::gui::AnalysisOptionsDialog dlg(
+            QStringLiteral("C:/tmp/aura-test-binary.exe"));
+
+        CHECK_FALSE(dlg.stringProtectionEnabled());
+    }
+
+    SUBCASE("safety settings defaults an empty token model to the first valid model") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureTokenModel(home.path());
+        writeFixtureRulePack(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::All;
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        aura::gui::SafetySettingsDialog dlg(QStringLiteral("default"));
+        auto* modelList =
+            dlg.findChild<QListWidget*>(QStringLiteral("safetyModelList"));
+        REQUIRE(modelList != nullptr);
+        CHECK(checkedModelIds(modelList) ==
+              QStringList{QStringLiteral("fixture-model")});
+
+        const auto edited = dlg.editedProfile();
+        CHECK(edited.model_policy.enabled);
+        CHECK(edited.model_policy.model_id == "fixture-model");
+        CHECK(edited.token_classification_enabled);
+        CHECK(edited.token_classification_model_id == "fixture-model");
+    }
+
     SUBCASE("safety model selection resets when switching profiles") {
         QTemporaryDir home;
         REQUIRE(home.isValid());
@@ -395,14 +1002,30 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
             QDir(modelRoot).filePath(QStringLiteral("model-alpha"));
         const QString modelBetaDir =
             QDir(modelRoot).filePath(QStringLiteral("model-beta"));
+        const QString rulePackRoot =
+            QDir(homeSafetyRoot).filePath(QStringLiteral("rule-packs"));
+        const QString ruleAlphaDir =
+            QDir(rulePackRoot).filePath(QStringLiteral("rule-alpha"));
+        const QString ruleBetaDir =
+            QDir(rulePackRoot).filePath(QStringLiteral("rule-beta"));
 
         REQUIRE(QDir().mkpath(modelAlphaDir));
         REQUIRE(QDir().mkpath(modelBetaDir));
+        REQUIRE(QDir().mkpath(ruleAlphaDir));
+        REQUIRE(QDir().mkpath(ruleBetaDir));
 
         writeTextFile(QDir(modelAlphaDir).filePath(QStringLiteral("manifest.json")),
                       QStringLiteral(R"({"model_id":"model-alpha","display_name":"alpha"})"));
         writeTextFile(QDir(modelBetaDir).filePath(QStringLiteral("manifest.json")),
                       QStringLiteral(R"({"model_id":"model-beta","display_name":"beta"})"));
+        writeTextFile(QDir(ruleAlphaDir).filePath(QStringLiteral("manifest.json")),
+                      QStringLiteral(R"({"schema_version":1,"pack_id":"rule-alpha","display_name":"alpha rules","rules_file":"rules.json"})"));
+        writeTextFile(QDir(ruleAlphaDir).filePath(QStringLiteral("rules.json")),
+                      QStringLiteral(R"({"schema_version":1,"rules":[{"id":"rule-alpha/test","kind":"test_alpha","pattern":"ALPHA-[0-9]+","confidence":0.90}]})"));
+        writeTextFile(QDir(ruleBetaDir).filePath(QStringLiteral("manifest.json")),
+                      QStringLiteral(R"({"schema_version":1,"pack_id":"rule-beta","display_name":"beta rules","rules_file":"rules.json"})"));
+        writeTextFile(QDir(ruleBetaDir).filePath(QStringLiteral("rules.json")),
+                      QStringLiteral(R"({"schema_version":1,"rules":[{"id":"rule-beta/test","kind":"test_beta","pattern":"BETA-[0-9]+","confidence":0.90}]})"));
         AuraHomeGuard auraHome(homeSafetyRoot);
 
         aura::safety::SafetyProfile defaultProfile;
@@ -410,6 +1033,8 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         defaultProfile.model_policy.mode =
             aura::safety::ModelPolicyMode::Conditional;
         defaultProfile.model_policy.model_id = "model-alpha";
+        defaultProfile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::All;
         defaultProfile.rule_pack_ids = {};
         defaultProfile.eval_dataset_ids = {};
         defaultProfile.token_classification_model_id = "model-alpha";
@@ -420,7 +1045,9 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         highSecurityProfile.model_policy.mode =
             aura::safety::ModelPolicyMode::Required;
         highSecurityProfile.model_policy.model_id = "model-beta";
-        highSecurityProfile.rule_pack_ids = {};
+        highSecurityProfile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::Selected;
+        highSecurityProfile.rule_pack_ids = {"rule-beta"};
         highSecurityProfile.eval_dataset_ids = {};
         highSecurityProfile.token_classification_model_id = "model-beta";
         highSecurityProfile.token_classification_enabled = true;
@@ -442,15 +1069,48 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
             dlg.findChild<QComboBox*>(QStringLiteral("safetyProfileCombo"));
         auto* modelList =
             dlg.findChild<QListWidget*>(QStringLiteral("safetyModelList"));
+        auto* modelDirButton = dlg.findChild<QPushButton*>(
+            QStringLiteral("safetyModelDirectoryButton"));
         auto* addBtn =
             dlg.findChild<QPushButton*>(QStringLiteral("safetyModelAddButton"));
         auto* rmBtn = dlg.findChild<QPushButton*>(
             QStringLiteral("safetyModelRemoveButton"));
+        auto* rulePackList =
+            dlg.findChild<QListWidget*>(QStringLiteral("safetyRulePackList"));
+        auto* rulePackDirButton = dlg.findChild<QPushButton*>(
+            QStringLiteral("safetyRulePackDirectoryButton"));
+        auto* rulePackAddBtn = dlg.findChild<QPushButton*>(
+            QStringLiteral("safetyRulePackAddButton"));
+        auto* rulePackRmBtn = dlg.findChild<QPushButton*>(
+            QStringLiteral("safetyRulePackRemoveButton"));
 
         REQUIRE(profileCombo != nullptr);
         REQUIRE(modelList != nullptr);
+        REQUIRE(modelDirButton != nullptr);
         REQUIRE(addBtn != nullptr);
         REQUIRE(rmBtn != nullptr);
+        REQUIRE(rulePackList != nullptr);
+        REQUIRE(rulePackDirButton != nullptr);
+        REQUIRE(rulePackAddBtn != nullptr);
+        REQUIRE(rulePackRmBtn != nullptr);
+        QSignalSpy applySpy(&dlg, SIGNAL(applyProfileRequested()));
+
+        const QString modelAssetPath =
+            modelDirButton->property("assetPath").toString();
+        const QString rulePackAssetPath =
+            rulePackDirButton->property("assetPath").toString();
+        CHECK(modelAssetPath.startsWith(QDir::cleanPath(homeSafetyRoot)));
+        CHECK(rulePackAssetPath.startsWith(QDir::cleanPath(homeSafetyRoot)));
+        const bool modelPathLooksRight =
+            modelAssetPath.endsWith(
+                QStringLiteral("/token-classification-models")) ||
+            modelAssetPath.endsWith(
+                QStringLiteral("\\token-classification-models"));
+        const bool rulePackPathLooksRight =
+            rulePackAssetPath.endsWith(QStringLiteral("/rule-packs")) ||
+            rulePackAssetPath.endsWith(QStringLiteral("\\rule-packs"));
+        CHECK(modelPathLooksRight);
+        CHECK(rulePackPathLooksRight);
 
         auto indexOfProfile = [&](const QString& id) {
             return profileCombo->findData(id);
@@ -461,9 +1121,32 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
             profileCombo->setCurrentIndex(index);
             QApplication::processEvents();
         };
+        auto clickModelSelection = [&](const QString& modelId, bool checked) {
+            REQUIRE(modelList != nullptr);
+            REQUIRE(addBtn != nullptr);
+            REQUIRE(rmBtn != nullptr);
+            for (int i = 0; i < modelList->count(); ++i) {
+                auto* item = modelList->item(i);
+                REQUIRE(item != nullptr);
+                if (item->data(Qt::UserRole).toString() == modelId) {
+                    modelList->setCurrentRow(i);
+                    QApplication::processEvents();
+                    if (checked) {
+                        addBtn->click();
+                    } else {
+                        rmBtn->click();
+                    }
+                    QApplication::processEvents();
+                    return;
+                }
+            }
+            FAIL_CHECK("model id not found: " << modelId.toStdString());
+        };
 
         CHECK(addBtn->text().contains(QStringLiteral("선택")));
         CHECK(rmBtn->text().contains(QStringLiteral("해제")));
+        CHECK(rulePackAddBtn->text().contains(QStringLiteral("선택")));
+        CHECK(rulePackRmBtn->text().contains(QStringLiteral("해제")));
 
         CHECK(modelList->count() >= 2);
         QStringList rowIds;
@@ -486,6 +1169,59 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
             CHECK(actual == expectedBytes);
         };
 
+        auto checkedRulePackIds = [&](const QListWidget* list) {
+            QStringList ids;
+            REQUIRE(list != nullptr);
+            for (int i = 0; i < list->count(); ++i) {
+                const auto* item = list->item(i);
+                REQUIRE(item != nullptr);
+                if (item->checkState() == Qt::Checked) {
+                    ids.push_back(item->data(Qt::UserRole).toString());
+                }
+            }
+            ids.sort();
+            return ids;
+        };
+        auto clickRulePackSelection = [&](const QString& rulePackId,
+                                          bool checked) {
+            REQUIRE(rulePackList != nullptr);
+            REQUIRE(rulePackAddBtn != nullptr);
+            REQUIRE(rulePackRmBtn != nullptr);
+            for (int i = 0; i < rulePackList->count(); ++i) {
+                auto* item = rulePackList->item(i);
+                REQUIRE(item != nullptr);
+                if (item->data(Qt::UserRole).toString() == rulePackId) {
+                    rulePackList->setCurrentRow(i);
+                    QApplication::processEvents();
+                    if (checked) {
+                        rulePackAddBtn->click();
+                    } else {
+                        rulePackRmBtn->click();
+                    }
+                    QApplication::processEvents();
+                    return;
+                }
+            }
+            FAIL_CHECK("rule pack id not found: "
+                       << rulePackId.toStdString());
+        };
+        auto requireCheckedRulePacks = [&](std::initializer_list<const char*> ids) {
+            QStringList expected;
+            for (const char* id : ids) {
+                expected.push_back(QString::fromUtf8(id));
+            }
+            expected.sort();
+            CHECK(checkedRulePackIds(rulePackList) == expected);
+        };
+        auto sortedEditedRulePackIds = [&]() {
+            auto ids = dlg.editedProfile().rule_pack_ids;
+            std::sort(ids.begin(), ids.end());
+            return ids;
+        };
+        auto editedRulePackMode = [&]() {
+            return dlg.editedProfile().rule_pack_selection_mode;
+        };
+
         const int defaultIndex = indexOfProfile(QStringLiteral("default"));
         const int highIndex = indexOfProfile(QStringLiteral("high-security"));
         REQUIRE(defaultIndex >= 0);
@@ -499,17 +1235,71 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         QApplication::processEvents();
         switchProfile(QStringLiteral("default"));
         requireCheckedModel(modelList, "model-alpha");
+        requireCheckedRulePacks({"rule-alpha", "rule-beta"});
+        CHECK(editedRulePackMode() == aura::safety::RulePackSelectionMode::All);
+
+        clickRulePackSelection(QStringLiteral("rule-alpha"), false);
+        requireCheckedRulePacks({"rule-beta"});
+        CHECK(sortedEditedRulePackIds()
+              == std::vector<std::string>{"rule-beta"});
+        CHECK(editedRulePackMode()
+              == aura::safety::RulePackSelectionMode::Selected);
+
+        clickRulePackSelection(QStringLiteral("rule-alpha"), true);
+        requireCheckedRulePacks({"rule-alpha", "rule-beta"});
+        CHECK(sortedEditedRulePackIds().empty());
+        CHECK(editedRulePackMode() == aura::safety::RulePackSelectionMode::All);
+
+        clickRulePackSelection(QStringLiteral("rule-alpha"), false);
+        requireCheckedRulePacks({"rule-beta"});
+        CHECK(sortedEditedRulePackIds()
+              == std::vector<std::string>{"rule-beta"});
+
+        clickRulePackSelection(QStringLiteral("rule-beta"), false);
+        requireCheckedRulePacks({});
+        CHECK(sortedEditedRulePackIds().empty());
+        CHECK(editedRulePackMode() == aura::safety::RulePackSelectionMode::None);
 
         setCheckedModelId(modelList, QStringLiteral("model-alpha"));
 
         // User toggling should be replaced by selected profile defaults on switch.
         switchProfile(QStringLiteral("high-security"));
         requireCheckedModel(modelList, "model-beta");
+        requireCheckedRulePacks({"rule-beta"});
 
         // Switching back resets to default model again.
         setCheckedModelId(modelList, QStringLiteral("model-beta"));
+        clickRulePackSelection(QStringLiteral("rule-alpha"), true);
+        requireCheckedRulePacks({"rule-alpha", "rule-beta"});
         switchProfile(QStringLiteral("default"));
         requireCheckedModel(modelList, "model-alpha");
+        requireCheckedRulePacks({"rule-alpha", "rule-beta"});
+        CHECK(editedRulePackMode() == aura::safety::RulePackSelectionMode::All);
+
+        clickModelSelection(QStringLiteral("model-beta"), true);
+        clickRulePackSelection(QStringLiteral("rule-alpha"), false);
+        CHECK(applySpy.count() >= 2);
+        auto edited = dlg.editedProfile();
+        CHECK(edited.model_policy.model_id == "model-beta");
+        CHECK(edited.token_classification_model_id == "model-beta");
+        CHECK(edited.model_policy.enabled);
+        CHECK(edited.token_classification_enabled);
+        CHECK(edited.rule_pack_selection_mode ==
+              aura::safety::RulePackSelectionMode::Selected);
+        CHECK(edited.rule_pack_ids == std::vector<std::string>{"rule-beta"});
+        REQUIRE(aura::safety::saveSafetyProfile(
+            dlg.selectedProfileId().toStdString(), edited, &profileDiagnostic));
+
+        aura::gui::SafetySettingsDialog reopened(QStringLiteral("default"));
+        auto* reopenedModels = reopened.findChild<QListWidget*>(
+            QStringLiteral("safetyModelList"));
+        auto* reopenedRulePacks = reopened.findChild<QListWidget*>(
+            QStringLiteral("safetyRulePackList"));
+        REQUIRE(reopenedModels != nullptr);
+        REQUIRE(reopenedRulePacks != nullptr);
+        requireCheckedModel(reopenedModels, "model-beta");
+        CHECK(checkedRulePackIds(reopenedRulePacks) ==
+              QStringList{QStringLiteral("rule-beta")});
     }
 
     SUBCASE("analyze auto-discovers vendored Rizin without bin override") {
@@ -1421,6 +2211,113 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         CHECK(shown.contains(QStringLiteral("0x13fffffed")));
     }
 
+    SUBCASE("FullDisasmPane requests Cutter-style reload outside loaded range") {
+        aura::gui::FullDisasmPane pane;
+        QVector<aura::gui::GuiInstructionRecord> ins;
+        aura::gui::GuiInstructionRecord first;
+        first.addr = 0x140000010;
+        first.size = 4;
+        first.bytes = QStringLiteral("90");
+        first.mnemonic = QStringLiteral("nop");
+        ins.push_back(first);
+        aura::gui::GuiInstructionRecord second;
+        second.addr = 0x140000014;
+        second.size = 1;
+        second.bytes = QStringLiteral("c3");
+        second.mnemonic = QStringLiteral("ret");
+        ins.push_back(second);
+
+        pane.showInstructions(0x140000010, 2, ins);
+        CHECK(pane.loadedMinAddress() == 0x140000010);
+        CHECK(pane.loadedMaxAddress() == 0x140000014);
+        CHECK(pane.containsAddress(0x140000010));
+        CHECK_FALSE(pane.containsAddress(0x140001000));
+
+        bool requested = false;
+        quint64 requestedAddr = 0;
+        QObject::connect(
+            &pane, &aura::gui::FullDisasmPane::addressOutsideLoadedRange,
+            [&requested, &requestedAddr](quint64 addr) {
+                requested = true;
+                requestedAddr = addr;
+            });
+        pane.setStartAddress(0x140000012);
+        CHECK_FALSE(requested);
+
+        pane.setStartAddress(0x140001000);
+        CHECK(requested);
+        CHECK(requestedAddr == 0x140001000);
+
+        requested = false;
+        requestedAddr = 0;
+        pane.setStartAddress(0x140000100);
+        CHECK(requested);
+        CHECK(requestedAddr == 0x140000100);
+    }
+
+    SUBCASE("FullDisasmPane requests next Cutter-style window at scroll end") {
+        aura::gui::FullDisasmPane pane;
+        QVector<aura::gui::GuiInstructionRecord> ins;
+        for (int i = 0; i < 96; ++i) {
+            aura::gui::GuiInstructionRecord r;
+            r.addr = 0x140000000ull + static_cast<quint64>(i * 4);
+            r.size = 4;
+            r.bytes = QStringLiteral("90");
+            r.mnemonic = QStringLiteral("nop");
+            ins.push_back(r);
+        }
+
+        pane.resize(720, 180);
+        pane.show();
+        pane.showInstructions(0x140000000, 96, ins);
+        QApplication::processEvents();
+
+        auto* text = pane.findChild<QPlainTextEdit*>(
+            QStringLiteral("fullDisasmStructuredText"));
+        REQUIRE(text != nullptr);
+        auto* bar = text->verticalScrollBar();
+        REQUIRE(bar != nullptr);
+        REQUIRE(bar->maximum() > 0);
+
+        bool requested = false;
+        quint64 requestedAddr = 0;
+        QObject::connect(
+            &pane, &aura::gui::FullDisasmPane::addressOutsideLoadedRange,
+            [&requested, &requestedAddr](quint64 addr) {
+                requested = true;
+                requestedAddr = addr;
+            });
+
+        bar->setValue(bar->maximum());
+        QApplication::processEvents();
+        CHECK(requested);
+        CHECK(requestedAddr == 0x140000000ull + 96ull * 4ull);
+    }
+
+    SUBCASE("Safety Assets exposes explicit protection result controls") {
+        aura::gui::SafetySettingsDialog dlg(QStringLiteral("default"));
+
+        auto* recompute = dlg.findChild<QPushButton*>(
+            QStringLiteral("safetyRecomputeProtectionButton"));
+        auto* remove = dlg.findChild<QPushButton*>(
+            QStringLiteral("safetyDeleteProtectionButton"));
+        auto* help = dlg.findChild<QLabel*>(
+            QStringLiteral("safetyProtectionPolicyHelpLabel"));
+
+        REQUIRE(recompute != nullptr);
+        REQUIRE(remove != nullptr);
+        REQUIRE(help != nullptr);
+        CHECK(help->text().contains(QStringLiteral("기존 보호 결과")));
+    }
+
+    SUBCASE("protection deletion confirmation text is explicit") {
+        const QString text =
+            aura::gui::MainWindow::protectionDeletionWarningText();
+        CHECK(text.contains(QStringLiteral("원본 문자열")));
+        CHECK(text.contains(QStringLiteral("삭제")));
+        CHECK(text.contains(QStringLiteral("되돌릴 수")));
+    }
+
     SUBCASE("jumpToFunction by entry address (Phase 11.5 P5)") {
         // After analyze, jumpToFunction(known entry) must succeed and
         // drive the function-row-selected pipeline. Unknown entry must
@@ -1546,6 +2443,100 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
 
         REQUIRE(window.resetFunctionNameAt(0));
         CHECK(window.functionDisplayNameAt(0) == original);
+    }
+
+    SUBCASE("function comments persist and reappear after reopen") {
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(fixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+        REQUIRE(window.functionCount() >= 1);
+
+        const QString note =
+            QStringLiteral("review note: check arithmetic");
+        REQUIRE(window.setFunctionCommentAt(0, note));
+        CHECK(window.functionCommentAt(0) == note);
+
+        aura::gui::MainWindow reopened;
+        REQUIRE(reopened.openProject(dbPath));
+        REQUIRE(reopened.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+        REQUIRE(reopened.functionCount() >= 1);
+        CHECK(reopened.functionCommentAt(0) == note);
+    }
+
+    SUBCASE("function comments render in decompile display") {
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(fixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+        REQUIRE(window.functionCount() >= 1);
+
+        const QString note =
+            QStringLiteral("manual comment visible in decompile");
+        REQUIRE(window.setFunctionCommentAt(0, note));
+
+        const QString raw = QStringLiteral("int f(void) { return 0; }");
+        const QString shown =
+            window.renderDecompileTextForFunctionRow(0, raw);
+        CHECK(shown.contains(note));
+        CHECK(shown.contains(raw));
+    }
+
+    SUBCASE("variable alias/type overrides persist after reopen when variables exist") {
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(fixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+
+        if (window.variableList().isEmpty()) {
+            MESSAGE("SKIP: fixture produced no variables");
+            return;
+        }
+
+        const quint32 varId = window.variableList()[0].varId;
+        const QString alias =
+            QStringLiteral("user_counter\nalias=should_not_override");
+        const QString typeName =
+            QStringLiteral("int32_t\ntype=should_not_override");
+        REQUIRE(window.setVariableOverrideById(varId, alias, typeName));
+
+        const auto applied = window.variableOverrideById(varId);
+        CHECK(applied.alias == alias);
+        CHECK(applied.typeName == typeName);
+        CHECK(applied.hasAlias);
+        CHECK(applied.hasType);
+        CHECK(window.variableOverrideList().size() >= 1);
+
+        aura::gui::MainWindow reopened;
+        REQUIRE(reopened.openProject(dbPath));
+        REQUIRE(reopened.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+        if (!reopened.variableList().isEmpty()) {
+            const auto reopenedApplied = reopened.variableOverrideById(varId);
+            CHECK(reopenedApplied.alias == alias);
+            CHECK(reopenedApplied.typeName == typeName);
+            CHECK(reopenedApplied.hasAlias);
+            CHECK(reopenedApplied.hasType);
+        }
+    }
+
+    SUBCASE("variable override API stores type-only and alias-only edits") {
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(fixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+        if (window.variableList().isEmpty()) {
+            MESSAGE("SKIP: fixture produced no variables");
+            return;
+        }
+
+        const quint32 varId = window.variableList()[0].varId;
+        CHECK(window.setVariableOverrideById(
+            varId, QString(), QStringLiteral("UserStruct*")));
+        CHECK(window.variableOverrideById(varId).typeName
+              == QStringLiteral("UserStruct*"));
+        CHECK(window.variableOverrideById(varId).hasType);
+
+        CHECK(window.setVariableOverrideById(
+            varId, QStringLiteral("renamed_var"), QString()));
+        CHECK(window.variableOverrideById(varId).alias
+              == QStringLiteral("renamed_var"));
+        CHECK(window.variableOverrideById(varId).hasAlias);
     }
 
     SUBCASE("xrefs dock is wired and reflects analyze output (Phase 11.3.5)") {
@@ -2241,6 +3232,347 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         CHECK(mdl->columnCount() == 1);
     }
 
+    SUBCASE("string protection can be disabled for analyze") {
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL, false));
+
+        const auto strs = window.stringList();
+        REQUIRE_FALSE(strs.isEmpty());
+
+        for (const auto& s : strs) {
+            CHECK_FALSE(s.hasProtection);
+            CHECK(s.maskedContent.isEmpty());
+            CHECK(s.protectedValue == s.content);
+            CHECK(s.exportValue == s.content);
+            CHECK(s.findings.isEmpty());
+            CHECK(s.protectionSummary.isEmpty());
+        }
+    }
+
+    SUBCASE("string protection scan-only records findings without masking") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureRulePack(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::Selected;
+        profile.rule_pack_ids = {"fixture-rule"};
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        const QString scanDb =
+            QDir(tmp.path()).filePath(QStringLiteral("scan-only.aura.db"));
+        REQUIRE(window.openProject(scanDb));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(
+            0, AURA_ANALYSIS_LEVEL_FULL,
+            aura::safety::StringProtectionMode::ScanOnly));
+
+        REQUIRE_FALSE(window.stringList().isEmpty());
+        bool sawFinding = false;
+        const auto scanOnlyStrings = window.stringList();
+        for (int row = 0; row < scanOnlyStrings.size(); ++row) {
+            const auto& s = scanOnlyStrings[row];
+            if (s.hasProtection || !s.findings.isEmpty()) {
+                sawFinding = true;
+                CHECK(s.maskedContent.isEmpty());
+                CHECK(s.protectedValue == s.content);
+                CHECK(s.exportValue == s.content);
+                const QString external =
+                    window.stringTransmissionValueAt(
+                        row, aura::gui::TransmissionTarget::ExternalLlm);
+                CHECK(external.contains(QLatin1Char('*')));
+                CHECK_FALSE(external.contains(s.content));
+            }
+        }
+        CHECK(sawFinding);
+    }
+
+    SUBCASE("string protection mask mode records masked values") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureRulePack(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::Selected;
+        profile.rule_pack_ids = {"fixture-rule"};
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        const QString maskDb =
+            QDir(tmp.path()).filePath(QStringLiteral("mask-mode.aura.db"));
+        aura::gui::MainWindow maskWindow;
+        REQUIRE(maskWindow.openProject(maskDb));
+        REQUIRE(maskWindow.addBinary(stringFixture));
+        REQUIRE(maskWindow.analyzeBinaryAt(
+            0, AURA_ANALYSIS_LEVEL_FULL,
+            aura::safety::StringProtectionMode::Mask));
+
+        REQUIRE_FALSE(maskWindow.stringList().isEmpty());
+        bool sawMasked = false;
+        for (const auto& s : maskWindow.stringList()) {
+            if (s.hasProtection || !s.findings.isEmpty()) {
+                sawMasked = true;
+                CHECK_FALSE(s.maskedContent.isEmpty());
+                CHECK(s.exportValue != s.content);
+            }
+        }
+        CHECK(sawMasked);
+    }
+
+    SUBCASE("strings filter combo changes visible GUI rows") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureRulePack(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::Selected;
+        profile.rule_pack_ids = {"fixture-rule"};
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        const QString filterDb =
+            QDir(tmp.path()).filePath(QStringLiteral("filter-combo.aura.db"));
+        aura::gui::MainWindow filterWindow;
+        REQUIRE(filterWindow.openProject(filterDb));
+        REQUIRE(filterWindow.addBinary(stringFixture));
+        REQUIRE(filterWindow.analyzeBinaryAt(
+            0, AURA_ANALYSIS_LEVEL_FULL,
+            aura::safety::StringProtectionMode::Mask));
+
+        auto* combo = filterWindow.findChild<QComboBox*>(
+            QStringLiteral("stringsCategoryFilterCombo"));
+        REQUIRE(combo != nullptr);
+        auto* label = filterWindow.findChild<QLabel*>(
+            QStringLiteral("stringsCategoryCountLabel"));
+        REQUIRE(label != nullptr);
+        QDockWidget* dock = filterWindow.findChild<QDockWidget*>(
+            QStringLiteral("stringsDock"));
+        REQUIRE(dock != nullptr);
+        auto* view = dock->findChild<QTreeView*>();
+        REQUIRE(view != nullptr);
+        REQUIRE(view->model() != nullptr);
+
+        const int allRows = view->model()->rowCount();
+        REQUIRE(allRows > 0);
+        const int protectedIndex = combo->findData(
+            static_cast<int>(aura::gui::StringTableModel::Filter::Protected));
+        REQUIRE(protectedIndex >= 0);
+        combo->setCurrentIndex(protectedIndex);
+        const int protectedRows = view->model()->rowCount();
+        CHECK(protectedRows > 0);
+        CHECK(protectedRows <= allRows);
+        CHECK(label->text() == QString::number(protectedRows));
+
+        const int maskedIndex = combo->findData(
+            static_cast<int>(aura::gui::StringTableModel::Filter::Masked));
+        REQUIRE(maskedIndex >= 0);
+        combo->setCurrentIndex(maskedIndex);
+        const int maskedRows = view->model()->rowCount();
+        CHECK(maskedRows == protectedRows);
+        CHECK(label->text() == QString::number(maskedRows));
+
+        const int unprotectedIndex = combo->findData(
+            static_cast<int>(aura::gui::StringTableModel::Filter::Unprotected));
+        REQUIRE(unprotectedIndex >= 0);
+        combo->setCurrentIndex(unprotectedIndex);
+        CHECK(view->model()->rowCount() <= allRows);
+    }
+
+    SUBCASE("string display policy is separate from transmission policy") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureRulePack(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::Selected;
+        profile.rule_pack_ids = {"fixture-rule"};
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(
+            0, AURA_ANALYSIS_LEVEL_FULL,
+            aura::safety::StringProtectionMode::Mask));
+        REQUIRE_FALSE(window.stringList().isEmpty());
+
+        int protectedRow = -1;
+        for (int i = 0; i < window.stringList().size(); ++i) {
+            if (window.stringList()[i].hasProtection) {
+                protectedRow = i;
+                break;
+            }
+        }
+        REQUIRE(protectedRow >= 0);
+
+        REQUIRE(window.setStringDisplayModeAt(protectedRow, 0));
+        CHECK(window.stringList()[protectedRow].protectedValue
+              == window.stringList()[protectedRow].content);
+        CHECK(window.stringTransmissionValueAt(
+                  protectedRow,
+                  aura::gui::TransmissionTarget::ExternalLlm)
+              != window.stringList()[protectedRow].content);
+        CHECK(window.stringTransmissionValueAt(
+                  protectedRow,
+                  aura::gui::TransmissionTarget::Mcp)
+              != window.stringList()[protectedRow].content);
+    }
+
+    SUBCASE("protection recompute and delete are explicit actions") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureRulePack(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::Selected;
+        profile.rule_pack_ids = {"fixture-rule"};
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(
+            0, AURA_ANALYSIS_LEVEL_FULL,
+            aura::safety::StringProtectionMode::Mask));
+        REQUIRE_FALSE(window.stringList().isEmpty());
+
+        REQUIRE(window.clearStringProtectionForCurrentBinary());
+        bool anyProtected = false;
+        for (const auto& s : window.stringList()) {
+            anyProtected = anyProtected || s.hasProtection;
+        }
+        CHECK_FALSE(anyProtected);
+        CHECK(window.latestSafetyAuditEventForTest().contains(
+            QStringLiteral("protection_results_deleted")));
+
+        REQUIRE(window.recomputeStringProtectionForCurrentBinary());
+        bool protectedAgain = false;
+        for (const auto& s : window.stringList()) {
+            protectedAgain = protectedAgain || s.hasProtection;
+        }
+        CHECK(protectedAgain);
+        CHECK(window.latestSafetyAuditEventForTest().contains(
+            QStringLiteral("protection_results_recomputed")));
+    }
+
+    SUBCASE("Strings dock exposes display mode selector") {
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(
+            0, AURA_ANALYSIS_LEVEL_FULL,
+            aura::safety::StringProtectionMode::Mask));
+
+        auto* combo = window.findChild<QComboBox*>(
+            QStringLiteral("stringsDisplayModeCombo"));
+        REQUIRE(combo != nullptr);
+        CHECK(combo->findText(QStringLiteral("마스킹")) >= 0);
+        CHECK(combo->findText(QStringLiteral("별칭")) >= 0);
+        CHECK(combo->findText(QStringLiteral("원본")) >= 0);
+    }
+
+    SUBCASE("first add-binary analysis honors string protection toggle") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureRulePack(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::Selected;
+        profile.rule_pack_ids = {"fixture-rule"};
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        aura::gui::MainWindow offWindow;
+        const QString offDb =
+            QDir(tmp.path()).filePath(QStringLiteral("first-off.aura.db"));
+        REQUIRE(offWindow.openProject(offDb));
+        REQUIRE(offWindow.addBinaryAndAnalyze(
+            stringFixture, AURA_ANALYSIS_LEVEL_FULL, false));
+        REQUIRE_FALSE(offWindow.stringList().isEmpty());
+        for (const auto& s : offWindow.stringList()) {
+            CHECK_FALSE(s.hasProtection);
+            CHECK(s.maskedContent.isEmpty());
+            CHECK(s.protectedValue == s.content);
+            CHECK(s.exportValue == s.content);
+            CHECK(s.findings.isEmpty());
+        }
+
+        aura::gui::MainWindow onWindow;
+        const QString onDb =
+            QDir(tmp.path()).filePath(QStringLiteral("first-on.aura.db"));
+        REQUIRE(onWindow.openProject(onDb));
+        REQUIRE(onWindow.addBinaryAndAnalyze(
+            stringFixture, AURA_ANALYSIS_LEVEL_FULL, true));
+        REQUIRE_FALSE(onWindow.stringList().isEmpty());
+        bool sawFinding = false;
+        for (const auto& s : onWindow.stringList()) {
+            sawFinding = sawFinding || s.hasProtection || !s.findings.isEmpty();
+        }
+        CHECK(sawFinding);
+    }
+
+    SUBCASE("disabled rule packs suppress findings with protection enabled") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureRulePack(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::None;
+        profile.rule_pack_ids = {};
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        const QString noneDb =
+            QDir(tmp.path()).filePath(QStringLiteral("rule-packs-none.aura.db"));
+        REQUIRE(window.openProject(noneDb));
+        REQUIRE(window.addBinaryAndAnalyze(
+            stringFixture, AURA_ANALYSIS_LEVEL_FULL, true));
+        REQUIRE_FALSE(window.stringList().isEmpty());
+        for (const auto& s : window.stringList()) {
+            CHECK_FALSE(s.hasProtection);
+            CHECK(s.maskedContent.isEmpty());
+            CHECK(s.protectedValue == s.content);
+            CHECK(s.exportValue == s.content);
+            CHECK(s.findings.isEmpty());
+        }
+    }
+
     SUBCASE("strings tree maps child metadata rows back to their string row") {
         aura::gui::StringTableModel model;
         QVector<aura::gui::GuiStringRecord> rows;
@@ -2268,7 +3600,7 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         CHECK(model.stringRowForIndex(child) == 1);
     }
 
-    SUBCASE("strings tree exposes protection rows while parent keeps original") {
+    SUBCASE("strings tree exposes protection rows while parent shows selected value") {
         QSettings settings(QStringLiteral("AURA"), QStringLiteral("aura-gui"));
         settings.setValue(QStringLiteral("privacy/showOriginalStringDetails"),
                           false);
@@ -2280,10 +3612,11 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         s.length = 23;
         s.content = QStringLiteral("alice.smith@example.com");
         s.source = QStringLiteral("test");
-        s.maskedContent = QStringLiteral("[EMAIL_1]");
-        s.protectedValue = QStringLiteral("[EMAIL_1]");
-        s.exportValue = QStringLiteral("[EMAIL_1]");
-        s.protectionSummary = QStringLiteral("마스킹 가능: [EMAIL_1]");
+        s.alias = QStringLiteral("customer_email");
+        s.maskedContent = QStringLiteral("alic***************e.com");
+        s.protectedValue = QStringLiteral("alic***************e.com");
+        s.exportValue = QStringLiteral("alic***************e.com");
+        s.protectionSummary = QStringLiteral("마스킹 가능: alic***************e.com");
         s.hasProtection = true;
         aura::gui::GuiStringRecord::ProtectionFinding f;
         f.detectorId = QStringLiteral("builtin/email");
@@ -2299,16 +3632,55 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         const QModelIndex top = model.index(0, 0);
         REQUIRE(top.isValid());
         const QString parentText = model.data(top).toString();
-        CHECK(parentText == QStringLiteral(
-              "alice.smith@example.com : - : [EMAIL_1]"));
+        CHECK(parentText == QStringLiteral("alic***************e.com"));
+        CHECK(parentText.contains(QLatin1Char('*')));
+        CHECK_FALSE(parentText.contains(QStringLiteral("alice.smith@example.com")));
 
-        CHECK(model.rowCount(top) == aura::gui::StringTableModel::MetaCount - 1);
+        rows[0].displayMode = 1;
+        model.setStrings(rows);
+        CHECK(model.data(model.index(0, 0)).toString()
+              == QStringLiteral("customer_email"));
+
+        rows[0].alias.clear();
+        rows[0].displayMode = 1;
+        model.setStrings(rows);
+        const QString aliasMissingText = model.data(model.index(0, 0)).toString();
+        CHECK(aliasMissingText == QStringLiteral("alic***************e.com"));
+        CHECK(aliasMissingText.contains(QLatin1Char('*')));
+        CHECK_FALSE(aliasMissingText.contains(QStringLiteral("alice.smith@example.com")));
+
+        aura::gui::GuiStringRecord whitespaceAlias;
+        whitespaceAlias.addr = 0x140021015;
+        whitespaceAlias.length = 13;
+        whitespaceAlias.content = QStringLiteral("010-1234-5678");
+        whitespaceAlias.alias = QStringLiteral("   ");
+        whitespaceAlias.maskedContent = QStringLiteral("010-********78");
+        whitespaceAlias.protectedValue = whitespaceAlias.maskedContent;
+        whitespaceAlias.exportValue = whitespaceAlias.maskedContent;
+        whitespaceAlias.hasProtection = true;
+        whitespaceAlias.displayMode = 1;
+        rows.push_back(whitespaceAlias);
+        model.setStrings(rows);
+        model.setFilter(aura::gui::StringTableModel::Filter::Alias);
+        CHECK(model.rowCount() == 0);
+
+        rows.pop_back();
+        model.setFilter(aura::gui::StringTableModel::Filter::All);
+        rows[0].alias = QStringLiteral("customer_email");
+        rows[0].displayMode = 2;
+        model.setStrings(rows);
+        const QModelIndex maskedTop = model.index(0, 0);
+        REQUIRE(maskedTop.isValid());
+        CHECK(model.data(maskedTop).toString()
+              == QStringLiteral("alic***************e.com"));
+
+        CHECK(model.rowCount(maskedTop) == aura::gui::StringTableModel::MetaCount - 1);
         bool sawOriginal = false;
         bool sawAlias = false;
         bool sawMasked = false;
         bool sawFindings = false;
-        for (int i = 0; i < model.rowCount(top); ++i) {
-            const QString text = model.data(model.index(i, 0, top)).toString();
+        for (int i = 0; i < model.rowCount(maskedTop); ++i) {
+            const QString text = model.data(model.index(i, 0, maskedTop)).toString();
             sawOriginal = sawOriginal || text.startsWith(QStringLiteral("기존:"));
             sawAlias = sawAlias || text.startsWith(QStringLiteral("별칭:"));
             sawMasked = sawMasked || text.startsWith(QStringLiteral("마스킹:"));
@@ -2330,13 +3702,19 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         const QModelIndex plainTop = unmaskedModel.index(0, 0);
         REQUIRE(plainTop.isValid());
         CHECK(unmaskedModel.data(plainTop).toString()
-              == QStringLiteral("hello world : - : -"));
+              == QStringLiteral("hello world"));
+        CHECK(unmaskedModel.rowCount(plainTop)
+              == aura::gui::StringTableModel::MetaCount - 2);
         bool plainMaskedDash = false;
         bool plainFindingsDash = false;
+        bool plainSawAlias = false;
         for (int i = 0; i < unmaskedModel.rowCount(plainTop); ++i) {
             const QString text =
                 unmaskedModel.data(unmaskedModel.index(i, 0, plainTop))
                     .toString();
+            plainSawAlias = plainSawAlias ||
+                text.startsWith(QStringLiteral("별칭:")) ||
+                text.startsWith(QStringLiteral("Alias:"));
             plainMaskedDash =
                 plainMaskedDash || text == QStringLiteral("마스킹: -")
                 || text == QStringLiteral("Masked: -");
@@ -2346,6 +3724,7 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
             CHECK_FALSE(text.contains(QStringLiteral("마스킹: hello world")));
             CHECK_FALSE(text.contains(QStringLiteral("Masked: hello world")));
         }
+        CHECK_FALSE(plainSawAlias);
         CHECK(plainMaskedDash);
         CHECK(plainFindingsDash);
 
@@ -2365,6 +3744,116 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
                 detailSawOriginal || text.startsWith(QStringLiteral("기존:"));
         }
         CHECK(detailSawOriginal);
+
+        aura::gui::GuiStringRecord unprotected;
+        unprotected.addr = 0x140021030;
+        unprotected.length = 5;
+        unprotected.content = QStringLiteral("plain");
+        unprotected.source = QStringLiteral("test");
+        rows.push_back(unprotected);
+        model.setStrings(rows);
+        CHECK(model.rowCount() == 2);
+        model.setFilter(aura::gui::StringTableModel::Filter::Protected);
+        CHECK(model.rowCount() == 1);
+        const QString protectedFilteredText =
+            model.data(model.index(0, 0)).toString();
+        CHECK(protectedFilteredText == QStringLiteral("alic***************e.com"));
+        CHECK(protectedFilteredText.contains(QLatin1Char('*')));
+        CHECK_FALSE(protectedFilteredText.contains(QStringLiteral("alice.smith@example.com")));
+        model.setFilter(aura::gui::StringTableModel::Filter::Email);
+        CHECK(model.rowCount() == 1);
+        model.setFilter(aura::gui::StringTableModel::Filter::Unprotected);
+        CHECK(model.rowCount() == 1);
+        CHECK(model.data(model.index(0, 0)).toString()
+              == QStringLiteral("plain"));
+
+        aura::gui::GuiStringRecord phone;
+        phone.addr = 0x140021040;
+        phone.length = 13;
+        phone.content = QStringLiteral("010-1234-5678");
+        phone.source = QStringLiteral("test");
+        phone.hasProtection = true;
+        aura::gui::GuiStringRecord::ProtectionFinding phoneFinding;
+        phoneFinding.kind = QStringLiteral("phone_number");
+        phone.findings.push_back(phoneFinding);
+        rows.push_back(phone);
+        model.setStrings(rows);
+        model.setFilter(aura::gui::StringTableModel::Filter::Phone);
+        CHECK(model.rowCount() == 1);
+        const QString phoneDisplay = model.data(model.index(0, 0)).toString();
+        CHECK(phoneDisplay.contains(QLatin1Char('*')));
+        CHECK_FALSE(phoneDisplay.contains(QStringLiteral("010-1234-5678")));
+
+        aura::gui::GuiStringRecord protectedWithoutStoredMask;
+        protectedWithoutStoredMask.addr = 0x140021050;
+        protectedWithoutStoredMask.length = 14;
+        protectedWithoutStoredMask.content = QStringLiteral("900101-1234567");
+        protectedWithoutStoredMask.hasProtection = true;
+        protectedWithoutStoredMask.displayMode = 2;
+        model.setFilter(aura::gui::StringTableModel::Filter::All);
+        model.setStrings(QVector<aura::gui::GuiStringRecord>{
+            protectedWithoutStoredMask});
+        const QString fallbackMasked = model.data(model.index(0, 0)).toString();
+        CHECK(fallbackMasked.contains(QLatin1Char('*')));
+        CHECK_FALSE(fallbackMasked.contains(QStringLiteral("900101-1234567")));
+    }
+
+    SUBCASE("strings dock alias mode hides non-aliased rows") {
+        const SettingsKeyGuard activeProfileGuard(
+            QStringLiteral("safety/activeProfileId"));
+        QTemporaryDir home;
+        REQUIRE(home.isValid());
+        writeFixtureRulePack(home.path());
+        AuraHomeGuard auraHome(home.path());
+
+        aura::safety::SafetyProfile profile;
+        profile.rule_pack_selection_mode =
+            aura::safety::RulePackSelectionMode::Selected;
+        profile.rule_pack_ids = {"fixture-rule"};
+        std::string diagnostic;
+        REQUIRE(aura::safety::saveSafetyProfile(
+            "default", profile, &diagnostic));
+
+        aura::gui::MainWindow aliasWindow;
+        const QString aliasDb =
+            QDir(tmp.path()).filePath(QStringLiteral("alias-mode.aura.db"));
+        REQUIRE(aliasWindow.openProject(aliasDb));
+        REQUIRE(aliasWindow.addBinary(stringFixture));
+        REQUIRE(aliasWindow.analyzeBinaryAt(
+            0, AURA_ANALYSIS_LEVEL_FULL,
+            aura::safety::StringProtectionMode::Mask));
+        REQUIRE_FALSE(aliasWindow.stringList().isEmpty());
+
+        int protectedRow = -1;
+        for (int i = 0; i < aliasWindow.stringList().size(); ++i) {
+            if (aliasWindow.stringList()[i].hasProtection) {
+                protectedRow = i;
+                break;
+            }
+        }
+        REQUIRE(protectedRow >= 0);
+        REQUIRE(aliasWindow.setStringAliasAt(
+            protectedRow, QStringLiteral("customer_email")));
+
+        auto* modeCombo = aliasWindow.findChild<QComboBox*>(
+            QStringLiteral("stringsDisplayModeCombo"));
+        REQUIRE(modeCombo != nullptr);
+        const int aliasMode = modeCombo->findData(1);
+        REQUIRE(aliasMode >= 0);
+        modeCombo->setCurrentIndex(aliasMode);
+        QApplication::processEvents();
+
+        auto* categoryCombo = aliasWindow.findChild<QComboBox*>(
+            QStringLiteral("stringsCategoryFilterCombo"));
+        REQUIRE(categoryCombo != nullptr);
+        CHECK(categoryCombo->currentData().toInt()
+              == static_cast<int>(
+                  aura::gui::StringTableModel::Filter::Alias));
+
+        auto* label = aliasWindow.findChild<QLabel*>(
+            QStringLiteral("stringsCategoryCountLabel"));
+        REQUIRE(label != nullptr);
+        CHECK(label->text() == QStringLiteral("1"));
     }
 
     SUBCASE("string alias and mask helpers update protected value") {
@@ -2383,12 +3872,18 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
 
         REQUIRE(window.setStringMaskTokenAt(0, QStringLiteral("MASK_1")));
         REQUIRE(window.setStringDisplayModeAt(0, 2));
-        CHECK(window.stringProtectedValueAt(0) == QStringLiteral("[MASK_1]"));
-        CHECK(window.stringList()[0].exportValue == QStringLiteral("[MASK_1]"));
+        const QString content = window.stringList()[0].content;
+        const QString expectedMask = window.stringProtectedValueAt(0);
+        CHECK(expectedMask.contains(QLatin1Char('*')));
+        CHECK(expectedMask.size() == content.size());
+        CHECK(expectedMask != QString(content.size(), QLatin1Char('*')));
+        CHECK(window.stringProtectedValueAt(0) == expectedMask);
+        CHECK(window.stringList()[0].exportValue == expectedMask);
+        CHECK_FALSE(window.stringProtectedValueAt(0).contains(QStringLiteral("MASK_1")));
 
         REQUIRE(window.setStringDisplayModeAt(0, 0));
         CHECK_FALSE(window.stringProtectedValueAt(0).isEmpty());
-        CHECK(window.stringList()[0].exportValue == QStringLiteral("[MASK_1]"));
+        CHECK(window.stringList()[0].exportValue == expectedMask);
     }
 
     SUBCASE("string overrides reapply after reopening project") {
@@ -2403,15 +3898,86 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         REQUIRE(window.setStringAliasAt(0, QStringLiteral("persisted_label")));
         REQUIRE(window.setStringMaskTokenAt(0, QStringLiteral("PERSISTED_1")));
         REQUIRE(window.setStringDisplayModeAt(0, 2));
-        CHECK(window.stringProtectedValueAt(0) == QStringLiteral("[PERSISTED_1]"));
+        const QString persistedMask = window.stringProtectedValueAt(0);
+        CHECK(persistedMask.contains(QLatin1Char('*')));
+        CHECK_FALSE(persistedMask.contains(QStringLiteral("PERSISTED_1")));
 
         aura::gui::MainWindow reopened;
         REQUIRE(reopened.openProject(dbPath));
         REQUIRE(reopened.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
         REQUIRE_FALSE(reopened.stringList().isEmpty());
-        CHECK(reopened.stringProtectedValueAt(0) == QStringLiteral("[PERSISTED_1]"));
+        CHECK(reopened.stringProtectedValueAt(0) == persistedMask);
         CHECK(reopened.stringList()[0].alias == QStringLiteral("persisted_label"));
-        CHECK(reopened.stringList()[0].maskedContent == QStringLiteral("[PERSISTED_1]"));
+        CHECK(reopened.stringList()[0].maskedContent == persistedMask);
+    }
+
+    SUBCASE("stored string overrides do not reapply when protection is disabled") {
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL, true));
+        REQUIRE_FALSE(window.stringList().isEmpty());
+
+        REQUIRE(window.setStringAliasAt(0, QStringLiteral("disabled_alias")));
+        REQUIRE(window.setStringMaskTokenAt(0, QStringLiteral("DISABLED_MASK")));
+        REQUIRE(window.setStringDisplayModeAt(0, 2));
+        CHECK(window.stringProtectedValueAt(0).contains(QLatin1Char('*')));
+        CHECK_FALSE(window.stringProtectedValueAt(0).contains(QStringLiteral("DISABLED_MASK")));
+
+        aura::gui::MainWindow reopened;
+        REQUIRE(reopened.openProject(dbPath));
+        REQUIRE(reopened.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL, false));
+        REQUIRE_FALSE(reopened.stringList().isEmpty());
+        CHECK(reopened.stringList()[0].alias.isEmpty());
+        CHECK(reopened.stringList()[0].maskedContent.isEmpty());
+        CHECK(reopened.stringProtectedValueAt(0) == reopened.stringList()[0].content);
+    }
+
+    SUBCASE("decompile display substitutes string addresses without mutating raw text") {
+        const SettingsKeyGuard substitutionGuard(
+            QStringLiteral("decompile/autoSubstituteStringAddresses"));
+        QSettings settings(QStringLiteral("AURA"), QStringLiteral("aura-gui"));
+        settings.setValue(QStringLiteral("decompile/autoSubstituteStringAddresses"),
+                          true);
+
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+        REQUIRE_FALSE(window.stringList().isEmpty());
+
+        aura::gui::GuiStringRecord selected;
+        bool found = false;
+        for (const auto& s : window.stringList()) {
+            if (s.addr != 0 && !s.content.isEmpty()) {
+                selected = s;
+                found = true;
+                break;
+            }
+        }
+        REQUIRE(found);
+
+        const QString addr = QStringLiteral("0x%1").arg(selected.addr, 0, 16);
+        const QString raw = QStringLiteral("return (const char*)%1;").arg(addr);
+        QString rendered;
+        REQUIRE(QMetaObject::invokeMethod(
+            &window, "renderDecompileTextForDisplay",
+            Qt::DirectConnection,
+            Q_RETURN_ARG(QString, rendered),
+            Q_ARG(QString, raw)));
+        CHECK(rendered != raw);
+        CHECK(rendered.contains(QStringLiteral("/* %1 */").arg(addr)));
+        CHECK(rendered.contains(selected.protectedValue.isEmpty()
+                                ? selected.content
+                                : selected.protectedValue));
+
+        settings.setValue(QStringLiteral("decompile/autoSubstituteStringAddresses"),
+                          false);
+        QString disabledRendered;
+        REQUIRE(QMetaObject::invokeMethod(
+            &window, "renderDecompileTextForDisplay",
+            Qt::DirectConnection,
+            Q_RETURN_ARG(QString, disabledRendered),
+            Q_ARG(QString, raw)));
+        CHECK(disabledRendered == raw);
     }
 
     SUBCASE("symbols dock + list API populated after analyze (Phase 11.3.5)") {
@@ -2435,6 +4001,34 @@ TEST_CASE("gui_smoke: project-first flow → function list (FULL)") {
         REQUIRE(mdl != nullptr);
         CHECK(mdl->rowCount() == syms.size());
         CHECK(mdl->columnCount() == 1);
+    }
+
+    SUBCASE("malware risk dock mirrors static analysis result") {
+        REQUIRE(window.openProject(dbPath));
+        REQUIRE(window.addBinary(stringFixture));
+        REQUIRE(window.analyzeBinaryAt(0, AURA_ANALYSIS_LEVEL_FULL));
+
+        QDockWidget* dock = window.findChild<QDockWidget*>(
+            QStringLiteral("malwareRiskDock"));
+        REQUIRE_MESSAGE(dock != nullptr, "malwareRiskDock not found");
+        auto* table = dock->findChild<QTreeWidget*>(
+            QStringLiteral("malwareRiskTable"));
+        REQUIRE_MESSAGE(table != nullptr, "malwareRiskTable not found");
+        CHECK(table->columnCount() == 4);
+        CHECK(table->topLevelItemCount() == window.malwareRiskList().size());
+        for (int i = 0; i < table->topLevelItemCount(); ++i) {
+            const auto risk = window.malwareRiskList()[i];
+            auto* item = table->topLevelItem(i);
+            REQUIRE(item != nullptr);
+            CHECK(item->text(0) == risk.severity);
+            CHECK(item->text(1) == risk.category);
+            CHECK(item->text(2) == risk.title);
+            CHECK(item->text(3) == risk.evidence);
+            for (const auto& s : window.stringList()) {
+                if (!s.hasProtection || s.content.isEmpty()) continue;
+                CHECK_FALSE(item->text(3).contains(s.content));
+            }
+        }
     }
 
     SUBCASE("xrefs accessible via public list API after analyze (Phase 11.3.5)") {

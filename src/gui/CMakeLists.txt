@@ -20,6 +20,8 @@ set(AURA_GUI_SOURCES
     string_table_model.cpp
     safety_settings_dialog.cpp
     code_syntax_highlighter.cpp
+    demo_mode_pane.cpp
+    gateway_pane.cpp
     decompile_pane.cpp
     disasm_pane.cpp
     full_disasm_pane.cpp
@@ -39,6 +41,8 @@ set(AURA_GUI_HEADERS
     string_table_model.h
     safety_settings_dialog.h
     code_syntax_highlighter.h
+    demo_mode_pane.h
+    gateway_pane.h
     decompile_pane.h
     disasm_pane.h
     full_disasm_pane.h

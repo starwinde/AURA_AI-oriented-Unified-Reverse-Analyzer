@@ -125,7 +125,11 @@ set(AURA_CORE_SOURCES
     src/core/project_binaries.c
     src/core/artifact_cache.c
     src/core/string_protection_store.c
+    src/core/gateway/gateway_snapshot.cpp
+    src/core/security/malware_risk.cpp
     src/core/safety/protected_export.cpp
+    src/core/safety/safe_export_view.cpp
+    src/core/safety/string_encoding.cpp
     src/core/safety/string_safety.cpp
     src/adapter/ghidra/ghidra_adapter.c
     src/adapter/ghidra/ghidra_subprocess.c
@@ -257,6 +261,7 @@ if(AURA_BUILD_TESTS)
     # Phase 2.5 §1.6/§1.7 — bootstrap classify/dispatch unit tests.
     add_subdirectory(tests/unit/bootstrap)
     add_subdirectory(tests/unit/safety)
+    add_subdirectory(tests/unit/security)
     add_subdirectory(tests/unit/mcp)
     add_subdirectory(tests/unit/artifact_cache)
     add_subdirectory(tests/integration/mcp_smoke)

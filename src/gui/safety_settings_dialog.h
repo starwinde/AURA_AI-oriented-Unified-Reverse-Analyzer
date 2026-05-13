@@ -14,6 +14,7 @@
 class QComboBox;
 class QLabel;
 class QListWidget;
+class QPushButton;
 
 namespace aura::gui {
 
@@ -28,6 +29,11 @@ public:
     aura::safety::SafetyProfile editedProfile() const;
     QString statusText() const;
 
+signals:
+    void recomputeProtectionRequested();
+    void deleteProtectionRequested();
+    void applyProfileRequested();
+
 private:
     void populate();
     void updateSummary(bool resetSelection = false);
@@ -41,7 +47,14 @@ private:
     void applyModelSelectionToProfile(
         aura::safety::SafetyProfile& profile) const;
     std::vector<std::string> selectedModelIds() const;
+    void applyRulePackSelectionToProfile(
+        aura::safety::SafetyProfile& profile) const;
+    std::vector<std::string> selectedRulePackIds() const;
     void updateModelSelectionFromChecked();
+    QString runtimeSafetyAssetRoot() const;
+    QString tokenClassificationModelsDir() const;
+    QString rulePacksDir() const;
+    bool openDirectory(const QString& path);
 
     aura::safety::SafetyAssetRegistry m_registry;
     QString m_initialProfileId;
@@ -52,6 +65,11 @@ private:
     QListWidget* m_modelList = nullptr;
     QListWidget* m_rulePackList = nullptr;
     QListWidget* m_evalDatasetList = nullptr;
+    QLabel* m_protectionPolicyHelpLabel = nullptr;
+    QPushButton* m_recomputeProtectionButton = nullptr;
+    QPushButton* m_deleteProtectionButton = nullptr;
+    bool m_modelSelectionEdited = false;
+    bool m_rulePackSelectionEdited = false;
 };
 
 }  // namespace aura::gui

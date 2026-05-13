@@ -6,6 +6,8 @@
 
 #include <QHostAddress>
 #include <QRandomGenerator>
+#include <QRegularExpression>
+#include <QSet>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTextStream>
@@ -15,10 +17,16 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 namespace aura::gui {
 
 namespace {
+
+constexpr int kDemoMaxFunctions = 3;
+constexpr int kDemoMaxStrings = 5;
+constexpr int kDemoMaxReferences = 5;
+constexpr int kDemoMaxVariableReferences = 5;
 
 QString genRandomTokenHex() {
     QByteArray raw(32, 0);
@@ -67,6 +75,13 @@ cJSON* stringRecordJson(const GuiStringRecord& s, bool protectedOnly) {
                             static_cast<double>(s.length));
     cJSON_AddStringToObject(row, "encoding",
                             s.encoding.toUtf8().constData());
+    cJSON_AddStringToObject(row, "detected_encoding",
+                            s.encoding.toUtf8().constData());
+    cJSON_AddNumberToObject(row, "encoding_confidence",
+                            s.encodingConfidence);
+    cJSON_AddBoolToObject(row, "encoding_lossy", s.encodingLossy);
+    cJSON_AddStringToObject(row, "display_literal",
+                            s.displayLiteral.toUtf8().constData());
     cJSON_AddStringToObject(row, "section",
                             s.section.toUtf8().constData());
     if (!protectedOnly) {
@@ -85,6 +100,10 @@ cJSON* stringRecordJson(const GuiStringRecord& s, bool protectedOnly) {
                                 .toUtf8().constData());
     cJSON_AddStringToObject(row, "display_value",
                             s.protectedValue.toUtf8().constData());
+    cJSON_AddStringToObject(row, "transmission_value",
+                            s.exportValue.toUtf8().constData());
+    cJSON_AddStringToObject(row, "transmission_policy", "protected");
+    cJSON_AddBoolToObject(row, "original_included", false);
     cJSON_AddStringToObject(row, "export_value",
                             s.exportValue.toUtf8().constData());
     cJSON_AddStringToObject(row, "protection_summary",
@@ -107,6 +126,126 @@ cJSON* stringRecordJson(const GuiStringRecord& s, bool protectedOnly) {
                             s.source.toUtf8().constData());
     cJSON_AddBoolToObject(row, "protected_only", protectedOnly);
     return row;
+}
+
+QString hexAddr(quint64 value) {
+    return QStringLiteral("0x%1").arg(value, 0, 16);
+}
+
+cJSON* demoFunctionJson(int row, const QString& name) {
+    cJSON* item = cJSON_CreateObject();
+    cJSON_AddNumberToObject(item, "row", row);
+    cJSON_AddStringToObject(item, "name", name.toUtf8().constData());
+    return item;
+}
+
+cJSON* demoCommentJson(int row, const QString& functionName) {
+    cJSON* item = cJSON_CreateObject();
+    cJSON_AddNumberToObject(item, "function_row", row);
+    cJSON_AddStringToObject(item, "function_name",
+                            functionName.toUtf8().constData());
+    cJSON_AddStringToObject(item, "comment", "<COMMENT_OMITTED>");
+    cJSON_AddBoolToObject(item, "raw_comment_text_omitted", true);
+    return item;
+}
+
+cJSON* demoStringJson(const GuiStringRecord& s) {
+    const bool masked =
+        !s.maskedContent.isEmpty() && s.maskedContent != s.content;
+    const QString protectedValue =
+        masked ? s.exportValue : QStringLiteral("<RAW_CONTENT_OMITTED>");
+
+    cJSON* item = cJSON_CreateObject();
+    cJSON_AddNumberToObject(item, "string_id",
+                            static_cast<double>(s.stringId));
+    cJSON_AddNumberToObject(item, "addr", static_cast<double>(s.addr));
+    cJSON_AddStringToObject(item, "addr_hex",
+                            hexAddr(s.addr).toUtf8().constData());
+    cJSON_AddNumberToObject(item, "length",
+                            static_cast<double>(s.length));
+    cJSON_AddStringToObject(item, "encoding",
+                            s.encoding.toUtf8().constData());
+    cJSON_AddStringToObject(item, "detected_encoding",
+                            s.encoding.toUtf8().constData());
+    cJSON_AddBoolToObject(item, "encoding_lossy", s.encodingLossy);
+    cJSON_AddStringToObject(item, "protected_value",
+                            protectedValue.toUtf8().constData());
+    cJSON_AddBoolToObject(item, "masked", masked);
+    cJSON_AddBoolToObject(item, "has_protection", s.hasProtection);
+    cJSON_AddNumberToObject(item, "findings_count", s.findings.size());
+    cJSON_AddBoolToObject(item, "raw_content_omitted", true);
+    return item;
+}
+
+cJSON* demoXrefJson(const GuiXrefRecord& x,
+                    const QSet<quint64>& stringAddrs) {
+    cJSON* item = cJSON_CreateObject();
+    cJSON_AddNumberToObject(item, "from", static_cast<double>(x.from));
+    cJSON_AddStringToObject(item, "from_hex",
+                            hexAddr(x.from).toUtf8().constData());
+    cJSON_AddNumberToObject(item, "to", static_cast<double>(x.to));
+    cJSON_AddStringToObject(item, "to_hex",
+                            hexAddr(x.to).toUtf8().constData());
+    cJSON_AddStringToObject(item, "kind", x.kind.toUtf8().constData());
+    cJSON_AddStringToObject(item, "target_kind",
+                            stringAddrs.contains(x.to) ? "string" : "address");
+    return item;
+}
+
+cJSON* demoVariableJson(const GuiVariableRecord& v) {
+    cJSON* item = cJSON_CreateObject();
+    cJSON_AddNumberToObject(item, "var_id", v.varId);
+    cJSON_AddNumberToObject(item, "function_id", v.functionId);
+    cJSON_AddStringToObject(item, "name",
+                            v.name.isEmpty()
+                                ? "<unnamed>"
+                                : v.name.toUtf8().constData());
+    cJSON_AddStringToObject(item, "kind", v.kind.toUtf8().constData());
+    cJSON_AddNumberToObject(item, "stack_offset", v.stackOffset);
+    cJSON_AddBoolToObject(item, "op_str_omitted", true);
+    return item;
+}
+
+cJSON* variableOverrideJson(const GuiVariableOverride& ov) {
+    cJSON* item = cJSON_CreateObject();
+    cJSON_AddNumberToObject(item, "var_id", ov.varId);
+    cJSON_AddNumberToObject(item, "function_id", ov.functionId);
+    cJSON_AddBoolToObject(item, "has_alias", ov.hasAlias);
+    cJSON_AddBoolToObject(item, "has_type", ov.hasType);
+    cJSON_AddStringToObject(
+        item, "alias",
+        ov.hasAlias ? "<ALIAS_OMITTED>" : "");
+    cJSON_AddStringToObject(
+        item, "type",
+        ov.hasType ? "<TYPE_OMITTED>" : "");
+    cJSON_AddBoolToObject(item, "raw_alias_omitted", ov.hasAlias);
+    cJSON_AddBoolToObject(item, "raw_type_omitted", ov.hasType);
+    cJSON_AddBoolToObject(item, "protected_only", true);
+    return item;
+}
+
+cJSON* demoRiskJson(const GuiMalwareRiskFinding& risk) {
+    cJSON* item = cJSON_CreateObject();
+    cJSON_AddStringToObject(item, "severity", risk.severity.toUtf8().constData());
+    cJSON_AddStringToObject(item, "category", risk.category.toUtf8().constData());
+    cJSON_AddStringToObject(item, "title", risk.title.toUtf8().constData());
+    cJSON_AddStringToObject(item, "source", risk.source.toUtf8().constData());
+    cJSON_AddStringToObject(item, "evidence", "<EVIDENCE_OMITTED>");
+    cJSON_AddBoolToObject(item, "raw_evidence_omitted", true);
+    return item;
+}
+
+QString protectedDecompileText(QString text) {
+    static const QRegularExpression commentLine(
+        QStringLiteral("(?m)^// AURA comment:.*(?:\\r?\\n)?"));
+    text.remove(commentLine);
+    return text;
+}
+
+int boundedQtCount(qsizetype value, int maxValue) {
+    if (value <= 0) return 0;
+    const qsizetype cap = static_cast<qsizetype>(maxValue);
+    return static_cast<int>(value < cap ? value : cap);
 }
 
 }  // namespace
@@ -257,7 +396,10 @@ QString RpcServer::dispatch(const QByteArray& jsonLine) {
         }
         cJSON* r = cJSON_CreateObject();
         cJSON_AddStringToObject(r, "text",
-            m_mw->currentDecompileText().toUtf8().constData());
+            protectedDecompileText(m_mw->currentDecompileText())
+                .toUtf8()
+                .constData());
+        cJSON_AddBoolToObject(r, "raw_comment_text_omitted", true);
         out = resultJson(true, r, nullptr);
     } else if (std::strcmp(method, "jump_string_reference") == 0) {
         const int row = intval(params, "string_row", 0);
@@ -270,7 +412,10 @@ QString RpcServer::dispatch(const QByteArray& jsonLine) {
         cJSON* r = cJSON_CreateObject();
         cJSON_AddNumberToObject(r, "string_row", row);
         cJSON_AddStringToObject(r, "text",
-            m_mw->currentDecompileText().toUtf8().constData());
+            protectedDecompileText(m_mw->currentDecompileText())
+                .toUtf8()
+                .constData());
+        cJSON_AddBoolToObject(r, "raw_comment_text_omitted", true);
         out = resultJson(true, r, nullptr);
     } else if (std::strcmp(method, "rename") == 0) {
         const int row = intval(params, "function_row", 0);
@@ -460,6 +605,122 @@ QString RpcServer::dispatch(const QByteArray& jsonLine) {
         }
         cJSON* r = cJSON_CreateObject();
         cJSON_AddItemToObject(r, "xrefs", arr);
+        out = resultJson(true, r, nullptr);
+    } else if (std::strcmp(method, "demo_snapshot") == 0) {
+        const auto strings = m_mw->stringList();
+        const auto xrefs = m_mw->xrefList();
+        const auto variables = m_mw->variableList();
+        const auto variableOverrides = m_mw->variableOverrideList();
+        const auto risks = m_mw->malwareRiskList();
+        const int functionCount = m_mw->functionCount();
+        const int functionsIncluded =
+            functionCount < kDemoMaxFunctions ? functionCount : kDemoMaxFunctions;
+        const int stringsIncluded =
+            boundedQtCount(strings.size(), kDemoMaxStrings);
+        const int refsIncluded =
+            boundedQtCount(xrefs.size(), kDemoMaxReferences);
+        const int variablesIncluded =
+            boundedQtCount(variables.size(), kDemoMaxVariableReferences);
+        const int variableOverridesIncluded =
+            boundedQtCount(variableOverrides.size(),
+                           kDemoMaxVariableReferences);
+        int commentsTotal = 0;
+        for (int i = 0; i < functionCount; ++i) {
+            if (!m_mw->functionCommentAt(i).isEmpty()) {
+                ++commentsTotal;
+            }
+        }
+        const int commentsIncluded =
+            commentsTotal < 5 ? commentsTotal : 5;
+
+        cJSON* r = cJSON_CreateObject();
+        cJSON_AddNumberToObject(r, "snapshot_schema", 1);
+        cJSON_AddStringToObject(r, "disclosure", "demo_minimal");
+        cJSON_AddBoolToObject(r, "protected_only", true);
+
+        cJSON* counts = cJSON_AddObjectToObject(r, "counts");
+        cJSON_AddNumberToObject(counts, "functions_total", functionCount);
+        cJSON_AddNumberToObject(counts, "functions_included",
+                                functionsIncluded);
+        cJSON_AddNumberToObject(counts, "strings_total", strings.size());
+        cJSON_AddNumberToObject(counts, "strings_included",
+                                stringsIncluded);
+        cJSON_AddNumberToObject(counts, "references_total", xrefs.size());
+        cJSON_AddNumberToObject(counts, "references_included",
+                                refsIncluded);
+        cJSON_AddNumberToObject(counts, "variable_references_total",
+                                variables.size());
+        cJSON_AddNumberToObject(counts, "variable_references_included",
+                                variablesIncluded);
+        cJSON_AddNumberToObject(counts, "variable_overrides_total",
+                                variableOverrides.size());
+        cJSON_AddNumberToObject(counts, "variable_overrides_included",
+                                variableOverridesIncluded);
+        cJSON_AddNumberToObject(counts, "malware_risks_total",
+                                risks.size());
+        cJSON_AddNumberToObject(counts, "comments_total", commentsTotal);
+        cJSON_AddNumberToObject(counts, "comments_included",
+                                commentsIncluded);
+
+        cJSON* functions = cJSON_AddArrayToObject(r, "functions_sent");
+        for (int i = 0; i < functionsIncluded; ++i) {
+            cJSON_AddItemToArray(
+                functions,
+                demoFunctionJson(i, m_mw->functionDisplayNameAt(i)));
+        }
+
+        cJSON* comments = cJSON_AddArrayToObject(r, "comments_sent");
+        int emittedComments = 0;
+        for (int i = 0; i < functionCount &&
+                        emittedComments < commentsIncluded; ++i) {
+            if (m_mw->functionCommentAt(i).isEmpty()) continue;
+            cJSON_AddItemToArray(
+                comments,
+                demoCommentJson(i, m_mw->functionDisplayNameAt(i)));
+            ++emittedComments;
+        }
+
+        QSet<quint64> stringAddrs;
+        cJSON* stringItems = cJSON_AddArrayToObject(r, "strings_sent");
+        for (int i = 0; i < strings.size(); ++i) {
+            stringAddrs.insert(strings[i].addr);
+            if (i < kDemoMaxStrings) {
+                cJSON_AddItemToArray(stringItems, demoStringJson(strings[i]));
+            }
+        }
+
+        cJSON* refs = cJSON_AddArrayToObject(r, "references_sent");
+        for (int i = 0; i < refsIncluded; ++i) {
+            cJSON_AddItemToArray(refs, demoXrefJson(xrefs[i], stringAddrs));
+        }
+
+        cJSON* varRefs =
+            cJSON_AddArrayToObject(r, "variable_references_sent");
+        for (int i = 0; i < variablesIncluded; ++i) {
+            cJSON_AddItemToArray(varRefs, demoVariableJson(variables[i]));
+        }
+
+        cJSON* variableOverrideItems =
+            cJSON_AddArrayToObject(r, "variable_overrides_sent");
+        for (int i = 0; i < variableOverridesIncluded; ++i) {
+            cJSON_AddItemToArray(variableOverrideItems,
+                                 variableOverrideJson(variableOverrides[i]));
+        }
+
+        cJSON* riskItems = cJSON_AddArrayToObject(r, "malware_risks_sent");
+        for (int i = 0; i < boundedQtCount(risks.size(), 5); ++i) {
+            cJSON_AddItemToArray(riskItems, demoRiskJson(risks[i]));
+        }
+
+        cJSON* omissions = cJSON_AddObjectToObject(r, "omissions");
+        cJSON_AddBoolToObject(omissions, "raw_string_content_omitted", true);
+        cJSON_AddBoolToObject(omissions, "disassembly_text_omitted", true);
+        cJSON_AddBoolToObject(omissions, "op_str_omitted", true);
+        cJSON_AddBoolToObject(omissions, "raw_comment_text_omitted", true);
+        cJSON_AddBoolToObject(omissions, "raw_variable_alias_omitted", true);
+        cJSON_AddBoolToObject(omissions, "raw_variable_type_omitted", true);
+        cJSON_AddBoolToObject(omissions, "raw_risk_evidence_omitted", true);
+
         out = resultJson(true, r, nullptr);
     } else if (std::strcmp(method, "quit") == 0) {
         out = resultJson(true, nullptr, nullptr);

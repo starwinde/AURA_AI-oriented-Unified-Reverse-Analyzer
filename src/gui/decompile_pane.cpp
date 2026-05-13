@@ -7,6 +7,7 @@
 #include <QFontDatabase>
 #include <QLabel>
 #include <QMenu>
+#include <QSettings>
 #include <QPlainTextEdit>
 #include <QSettings>
 #include <QTextBlock>
@@ -115,6 +116,15 @@ void DecompilePane::onContextMenuRequested(const QPoint& pos) {
         ko ? QStringLiteral("주석 추가(&C)...")
            : QStringLiteral("Add &comment..."));
     commentAct->setEnabled(addr != 0);
+    menu.addSeparator();
+    QAction* substituteStringsAct = menu.addAction(
+        ko ? QStringLiteral("문자열 주소 자동 치환")
+           : QStringLiteral("Auto-substitute string addresses"));
+    substituteStringsAct->setCheckable(true);
+    QSettings settings(QStringLiteral("AURA"), QStringLiteral("aura-gui"));
+    substituteStringsAct->setChecked(
+        settings.value(QStringLiteral("decompile/autoSubstituteStringAddresses"),
+                       true).toBool());
 
     QAction* chosen = menu.exec(m_textView->mapToGlobal(pos));
     if (!chosen) return;
@@ -124,6 +134,8 @@ void DecompilePane::onContextMenuRequested(const QPoint& pos) {
     else if (chosen == resetAct)   emit contextResetName();
     else if (chosen == xrefsAct)   emit contextFindXrefs(addr);
     else if (chosen == commentAct) emit contextAddComment(addr);
+    else if (chosen == substituteStringsAct)
+        emit contextToggleStringSubstitution();
 }
 
 void DecompilePane::selectLine(quint64 addr) {

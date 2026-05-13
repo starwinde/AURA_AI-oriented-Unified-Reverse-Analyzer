@@ -2,11 +2,15 @@
 
 #include "analysis_options_dialog.h"
 
+#include "aura/safety/string_safety.h"
+
+#include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QRadioButton>
 #include <QSettings>
 #include <QVBoxLayout>
@@ -19,6 +23,16 @@ bool useKoreanUi() {
     QSettings s(QStringLiteral("AURA"), QStringLiteral("aura-gui"));
     return s.value(QStringLiteral("ui/language"),
                    QStringLiteral("ko")).toString() != QStringLiteral("en");
+}
+
+bool activeSafetyProfileEnablesProtection() {
+    QSettings settings(QStringLiteral("AURA"), QStringLiteral("aura-gui"));
+    const QString id = settings.value(QStringLiteral("safety/activeProfileId"),
+                                      QStringLiteral("default")).toString();
+    const auto selected =
+        aura::safety::resolveSelectedSafetyProfile(id.toStdString());
+    const auto& profile = selected.profile;
+    return aura::safety::effectiveRuleCount(profile) > 0u;
 }
 
 }  // namespace
@@ -41,6 +55,35 @@ AnalysisOptionsDialog::AnalysisOptionsDialog(const QString& binaryPath,
     form->addRow(ko ? QStringLiteral("바이너리:")
                     : QStringLiteral("Binary:"), pathEdit);
     outer->addLayout(form);
+
+    m_enableStringProtection = new QCheckBox(
+        ko ? QStringLiteral("문자열 마스킹/보호 스캔 사용")
+           : QStringLiteral("Enable string masking/protection scan"),
+        this);
+    m_enableStringProtection->setObjectName(
+        QStringLiteral("analysisStringProtectionCheckBox"));
+    m_enableStringProtection->setChecked(activeSafetyProfileEnablesProtection());
+    outer->addWidget(m_enableStringProtection);
+
+    auto* safetyAssetsButton = new QPushButton(
+        ko ? QStringLiteral("안전 자산 세부 설정...")
+           : QStringLiteral("Safety Assets settings..."),
+        this);
+    safetyAssetsButton->setObjectName(
+        QStringLiteral("analysisSafetyAssetsButton"));
+    form->addRow(ko ? QStringLiteral("보호 세부 설정:")
+                    : QStringLiteral("Protection settings:"),
+                 safetyAssetsButton);
+    connect(safetyAssetsButton, &QPushButton::clicked,
+            this, &AnalysisOptionsDialog::safetyAssetsRequested);
+
+    auto* protectionHint = new QLabel(
+        ko ? QStringLiteral("켜면 현재 안전 자산 프로필의 모델/규칙 팩으로 문자열을 보호합니다.")
+           : QStringLiteral("When enabled, this analysis uses the active Safety Assets profile."),
+        this);
+    protectionHint->setStyleSheet(QStringLiteral("color: gray;"));
+    protectionHint->setWordWrap(true);
+    outer->addWidget(protectionHint);
 
     // Level radio group.
     auto* levelBox    = new QGroupBox(
@@ -88,6 +131,14 @@ AuraAnalysisLevel AnalysisOptionsDialog::selectedLevel() const {
     if (m_radioAdvanced && m_radioAdvanced->isChecked())
         return AURA_ANALYSIS_LEVEL_ADVANCED;
     return AURA_ANALYSIS_LEVEL_FULL;
+}
+
+bool AnalysisOptionsDialog::stringProtectionEnabled() const {
+    return m_enableStringProtection && m_enableStringProtection->isChecked();
+}
+
+void AnalysisOptionsDialog::setStringProtectionEnabled(bool enabled) {
+    if (m_enableStringProtection) m_enableStringProtection->setChecked(enabled);
 }
 
 }  // namespace aura::gui

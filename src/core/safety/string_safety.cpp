@@ -108,6 +108,17 @@ const char* modelFailureActionToText(ModelFailureAction action) {
     }
 }
 
+const char* rulePackSelectionModeToText(RulePackSelectionMode mode) {
+    switch (mode) {
+        case RulePackSelectionMode::Selected:
+            return "selected";
+        case RulePackSelectionMode::None:
+            return "none";
+        default:
+            return "all";
+    }
+}
+
 bool isSafeProfileId(const std::string& id) {
     if (id.empty()) return false;
     for (const unsigned char ch : id) {
@@ -241,6 +252,18 @@ ModelFailureAction parseModelFailureAction(const std::string& text) {
     return ModelFailureAction::Degrade;
 }
 
+RulePackSelectionMode parseRulePackSelectionMode(const std::string& text,
+                                                 bool hasMode,
+                                                 bool hasRulePackIds) {
+    if (hasMode) {
+        if (text == "selected") return RulePackSelectionMode::Selected;
+        if (text == "none") return RulePackSelectionMode::None;
+        return RulePackSelectionMode::All;
+    }
+    return hasRulePackIds ? RulePackSelectionMode::Selected
+                          : RulePackSelectionMode::All;
+}
+
 std::vector<Rule> builtinRules() {
     return {
         {
@@ -355,7 +378,8 @@ std::vector<Rule> loadRulesFromRoot(const std::filesystem::path& root,
     if (!std::filesystem::exists(root, ec)) return out;
 
     std::vector<std::string> wanted = profile.rule_pack_ids;
-    const bool acceptAll = wanted.empty();
+    const bool acceptAll =
+        profile.rule_pack_selection_mode == RulePackSelectionMode::All;
     auto wants = [&](const std::filesystem::path& p) {
         if (acceptAll) return true;
         const std::string stem = p.stem().string();
@@ -388,6 +412,8 @@ std::vector<Rule> loadRulesFromRoot(const std::filesystem::path& root,
 }
 
 std::vector<Rule> loadRuntimeRules(const SafetyProfile& profile) {
+    if (profile.rule_pack_selection_mode == RulePackSelectionMode::None)
+        return {};
     std::set<std::string> loadedIds;
     std::vector<Rule> out =
         loadRulesFromRoot(auraHome() / "rule-packs", profile,
@@ -399,8 +425,12 @@ std::vector<Rule> loadRuntimeRules(const SafetyProfile& profile) {
 }
 
 std::vector<Rule> effectiveRules(const SafetyProfile& profile) {
+    if (profile.rule_pack_selection_mode == RulePackSelectionMode::None)
+        return {};
     auto rules = loadRuntimeRules(profile);
     if (!rules.empty()) return rules;
+    if (profile.rule_pack_selection_mode == RulePackSelectionMode::Selected)
+        return {};
     return builtinRules();
 }
 
@@ -464,6 +494,13 @@ bool parseSafetyProfileText(const std::string& text,
 
     SafetyProfile out;
     out.rule_pack_ids = jsonStringArray(root, "rule_pack_ids");
+    cJSON* mode =
+        cJSON_GetObjectItemCaseSensitive(root, "rule_pack_selection_mode");
+    cJSON* rulePackIds =
+        cJSON_GetObjectItemCaseSensitive(root, "rule_pack_ids");
+    out.rule_pack_selection_mode = parseRulePackSelectionMode(
+        jsonString(root, "rule_pack_selection_mode"), cJSON_IsString(mode),
+        cJSON_IsArray(rulePackIds) && cJSON_GetArraySize(rulePackIds) > 0);
     out.eval_dataset_ids = jsonStringArray(root, "eval_dataset_ids");
 
     out.token_classification_model_id =
@@ -622,6 +659,9 @@ bool saveSafetyProfile(const std::string& profile_id,
     cJSON_AddStringToObject(root, "token_classification_model_id",
                             tokenModel.c_str());
     cJSON_AddBoolToObject(root, "token_classification_enabled", tokenEnabled);
+    cJSON_AddStringToObject(
+        root, "rule_pack_selection_mode",
+        rulePackSelectionModeToText(profile.rule_pack_selection_mode));
     writeStringArray(root, "rule_pack_ids", profile.rule_pack_ids);
     writeStringArray(root, "eval_dataset_ids", profile.eval_dataset_ids);
 
@@ -733,6 +773,25 @@ SafetyProfileLoadResult resolveSelectedSafetyProfile(
     return fallback;
 }
 
+std::string stringProtectionModeToText(StringProtectionMode mode) {
+    switch (mode) {
+        case StringProtectionMode::ScanOnly:
+            return "scan-only";
+        case StringProtectionMode::Mask:
+            return "mask";
+        case StringProtectionMode::Off:
+            return "off";
+    }
+    return "off";
+}
+
+StringProtectionMode parseStringProtectionMode(const std::string& text) {
+    if (text == "scan-only") return StringProtectionMode::ScanOnly;
+    if (text == "mask" || text == "on" || text == "true")
+        return StringProtectionMode::Mask;
+    return StringProtectionMode::Off;
+}
+
 SafetyProfileValidation validateSafetyProfile(const SafetyProfile& profile) {
     SafetyProfileValidation validation;
     const auto registry = listSafetyAssets();
@@ -804,6 +863,10 @@ std::vector<Finding> scanStringWithRulePacks(const std::string& text,
     return mergeFindings(std::move(out));
 }
 
+std::size_t effectiveRuleCount(const SafetyProfile& profile) {
+    return effectiveRules(profile).size();
+}
+
 std::vector<Finding> mergeFindings(std::vector<Finding> findings) {
     findings.erase(
         std::remove_if(findings.begin(), findings.end(),
@@ -873,6 +936,27 @@ void allocateMaskTokensForOriginal(const std::string& original,
     }
 }
 
+std::string partiallyMaskText(const std::string& value) {
+    if (value.empty()) return value;
+    const std::size_t len = value.size();
+    std::size_t mask_count = (len * 65 + 50) / 100;
+    if (mask_count == 0) mask_count = 1;
+    if (mask_count > len) mask_count = len;
+
+    const std::size_t visible = len - mask_count;
+    const std::size_t prefix = visible / 2 + visible % 2;
+    const std::size_t suffix = visible / 2;
+
+    std::string out;
+    out.reserve(len);
+    out.append(value.substr(0, prefix));
+    out.append(mask_count, '*');
+    if (suffix > 0) {
+        out.append(value.substr(len - suffix));
+    }
+    return out;
+}
+
 ProtectedStringView buildProtectedStringView(
     const std::string& original,
     const std::string& alias,
@@ -887,7 +971,7 @@ ProtectedStringView buildProtectedStringView(
         const std::size_t end = std::min(f.end, original.size());
         if (end < pos) continue;
         masked.append(original.substr(pos, f.start - pos));
-        masked.append(f.mask_token);
+        masked.append(partiallyMaskText(original.substr(f.start, end - f.start)));
         pos = end;
     }
     masked.append(original.substr(pos));
@@ -895,6 +979,7 @@ ProtectedStringView buildProtectedStringView(
     ProtectedStringView out;
     out.original = original;
     out.alias = alias;
+    out.detected_encoding = detectStringEncoding(original);
     out.findings = std::move(findings);
     out.masked = out.findings.empty() ? original : masked;
     out.protected_value = !alias.empty() ? alias : out.masked;

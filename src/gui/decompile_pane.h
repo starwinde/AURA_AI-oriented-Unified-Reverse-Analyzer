@@ -69,6 +69,7 @@ signals:
     void contextResetName();
     void contextFindXrefs(quint64 addr);
     void contextAddComment(quint64 addr);
+    void contextToggleStringSubstitution();
 
 public slots:
     /* Phase 11.3.9 (P2.F4 C1): jump cursor to whichever line the

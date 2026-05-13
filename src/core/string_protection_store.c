@@ -230,6 +230,38 @@ int aura_string_protection_store_put_finding(
     return sqlite3_step(st) == SQLITE_DONE ? 0 : -1;
 }
 
+int aura_string_protection_store_delete_for_fingerprint(
+    AuraStringProtectionStore *s,
+    const char *binary_fingerprint) {
+    if (!s || !binary_fingerprint || !binary_fingerprint[0]) return -1;
+
+    const char *sql =
+        "DELETE FROM string_overrides WHERE binary_fingerprint = ?1;"
+        "DELETE FROM string_protection_findings WHERE binary_fingerprint = ?1;";
+    sqlite3_stmt *st = NULL;
+    const char *tail = sql;
+    int total_changed = 0;
+    while (tail && tail[0]) {
+        if (sqlite3_prepare_v2(s->db, tail, -1, &st, &tail) != SQLITE_OK)
+            return -1;
+        if (!st) continue;
+        if (sqlite3_bind_text(st, 1, binary_fingerprint, -1,
+                              SQLITE_TRANSIENT) != SQLITE_OK) {
+            sqlite3_finalize(st);
+            return -1;
+        }
+        const int rc = sqlite3_step(st);
+        if (rc != SQLITE_DONE) {
+            sqlite3_finalize(st);
+            return -1;
+        }
+        total_changed += sqlite3_changes(s->db);
+        sqlite3_finalize(st);
+        st = NULL;
+    }
+    return total_changed;
+}
+
 int aura_string_protection_store_count_strings(AuraStringProtectionStore *s) {
     return s ? count_table(s->db, "analysis_strings") : -1;
 }

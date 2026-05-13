@@ -7,6 +7,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPlainTextEdit>
+#include <QScrollBar>
 #include <QStringList>
 #include <QTabWidget>
 #include <QTextBlock>
@@ -16,6 +17,8 @@
 
 #include "code_syntax_highlighter.h"
 #include "disasm_flow_gutter.h"
+
+#include <limits>
 
 namespace aura::gui {
 
@@ -68,11 +71,14 @@ FullDisasmPane::FullDisasmPane(QWidget* parent) : QWidget(parent) {
     m_tabs = new QTabWidget(this);
 
     m_textView = new QPlainTextEdit(m_tabs);
+    m_textView->setObjectName(QStringLiteral("fullDisasmStructuredText"));
     m_textView->setReadOnly(true);
     m_textView->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
     m_textView->setLineWrapMode(QPlainTextEdit::NoWrap);
     new CodeSyntaxHighlighter(m_textView->document(),
                               CodeSyntaxHighlighter::Mode::Disasm);
+    connect(m_textView->verticalScrollBar(), &QScrollBar::valueChanged,
+            this, &FullDisasmPane::onStructuredScrollChanged);
 
     auto* structContainer = new QWidget(m_tabs);
     auto* structLayout = new QHBoxLayout(structContainer);
@@ -85,6 +91,7 @@ FullDisasmPane::FullDisasmPane(QWidget* parent) : QWidget(parent) {
     m_tabs->addTab(structContainer, QStringLiteral("Structured"));
 
     m_arrowView = new QPlainTextEdit(m_tabs);
+    m_arrowView->setObjectName(QStringLiteral("fullDisasmArrowText"));
     m_arrowView->setReadOnly(true);
     m_arrowView->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
     m_arrowView->setLineWrapMode(QPlainTextEdit::NoWrap);
@@ -106,6 +113,37 @@ QString FullDisasmPane::currentText() const {
     return m_textView ? m_textView->toPlainText() : QString();
 }
 
+quint64 FullDisasmPane::nextAddressAfterLoaded() const {
+    quint64 next = 0;
+    for (auto it = m_addrToEnd.constBegin(); it != m_addrToEnd.constEnd();
+         ++it) {
+        if (it.value() > next) next = it.value();
+    }
+    if (next != 0) return next;
+    return m_loadedMaxAddr == std::numeric_limits<quint64>::max()
+        ? m_loadedMaxAddr
+        : m_loadedMaxAddr + 1;
+}
+
+void FullDisasmPane::onStructuredScrollChanged(int value) {
+    if (!m_textView || m_loadedMaxAddr == 0) return;
+    auto* bar = m_textView->verticalScrollBar();
+    if (!bar || bar->maximum() <= 0) return;
+    if (value < bar->maximum() - 2) return;
+
+    const quint64 request = nextAddressAfterLoaded();
+    if (request == 0 || request == m_lastScrollLoadRequest) return;
+    m_lastScrollLoadRequest = request;
+    emit addressOutsideLoadedRange(request);
+}
+
+bool FullDisasmPane::containsAddress(quint64 addr) const {
+    return addr != 0
+        && m_loadedMinAddr != 0
+        && addr >= m_loadedMinAddr
+        && addr <= m_loadedMaxAddr;
+}
+
 void FullDisasmPane::setStartAddress(quint64 addr) {
     if (addr == 0 || !m_textView) return;
     m_currentAddr = addr;
@@ -113,14 +151,18 @@ void FullDisasmPane::setStartAddress(quint64 addr) {
     if (it == m_addrToLine.constEnd()) {
         quint64 bestAddr = 0;
         int bestLine = -1;
-        for (auto scan = m_addrToLine.constBegin();
-             scan != m_addrToLine.constEnd(); ++scan) {
-            if (scan.key() <= addr && scan.key() >= bestAddr) {
-                bestAddr = scan.key();
-                bestLine = scan.value();
+        for (auto span = m_addrToEnd.constBegin();
+             span != m_addrToEnd.constEnd(); ++span) {
+            if (span.key() <= addr && addr < span.value() &&
+                span.key() >= bestAddr) {
+                bestAddr = span.key();
+                bestLine = m_addrToLine.value(span.key(), -1);
             }
         }
-        if (bestLine < 0) return;
+        if (bestLine < 0) {
+            emit addressOutsideLoadedRange(addr);
+            return;
+        }
         it = m_addrToLine.constFind(bestAddr);
     }
 
@@ -147,8 +189,11 @@ void FullDisasmPane::showText(quint64 baseAddr,
             .arg(baseAddr, 0, 16)
             .arg(byteCount));
     m_textView->setPlainText(text);
+    m_lastScrollLoadRequest = 0;
     if (m_flowGutter) m_flowGutter->clearArrows();
+    m_addrToEnd.clear();
     rebuildAddressIndex(text);
+    updateLoadedRangeFromIndex();
 
     QTextCursor c = m_textView->textCursor();
     c.movePosition(QTextCursor::Start);
@@ -161,6 +206,7 @@ void FullDisasmPane::showInstructions(
     const QVector<GuiInstructionRecord>& ins) {
     m_currentAddr = baseAddr;
     m_addrToLine.clear();
+    m_addrToEnd.clear();
     m_headerLabel->setText(
         QStringLiteral("Full Disassembly: 0x%1  (%2/%3 instructions)")
             .arg(baseAddr, 0, 16)
@@ -172,6 +218,9 @@ void FullDisasmPane::showInstructions(
     for (int i = 0; i < ins.size(); ++i) {
         const auto& r = ins[i];
         m_addrToLine.insert(r.addr, i);
+        if (r.size > 0) {
+            m_addrToEnd.insert(r.addr, r.addr + r.size);
+        }
         out.append(QStringLiteral("0x%1  %2  %3 %4\n")
                        .arg(r.addr, 0, 16)
                        .arg(r.bytes, -16, QLatin1Char(' '))
@@ -179,6 +228,8 @@ void FullDisasmPane::showInstructions(
                        .arg(r.opStr));
     }
     m_textView->setPlainText(out);
+    m_lastScrollLoadRequest = 0;
+    updateLoadedRangeFromIndex();
     if (m_flowGutter) {
         QVector<GuiFlowArrow> arrows = MainWindow::computeFlowArrows(ins);
         MainWindow::assignFlowArrowLanes(arrows, m_flowGutter->maxLanes());
@@ -196,6 +247,7 @@ void FullDisasmPane::showMixedListing(
     const QVector<GuiInstructionRecord>& ins) {
     m_currentAddr = baseAddr;
     m_addrToLine.clear();
+    m_addrToEnd.clear();
     m_headerLabel->setText(
         QStringLiteral("Full Disassembly: 0x%1  (%2 instructions, mixed)")
             .arg(baseAddr, 0, 16)
@@ -203,7 +255,7 @@ void FullDisasmPane::showMixedListing(
 
     const QStringList lines = text.split(QLatin1Char('\n'));
     QString out;
-    out.reserve(text.size() + lines.size() * 12);
+    out.reserve(text.size() + lines.size() * 12 + ins.size() * 80);
     for (int i = 0; i < lines.size(); ++i) {
         quint64 addr = 0;
         if (parseLineAddress(lines.at(i), &addr) &&
@@ -213,7 +265,24 @@ void FullDisasmPane::showMixedListing(
         out.append(formatMixedListingLine(lines.at(i)));
         out.append(QLatin1Char('\n'));
     }
+    int lineNo = lines.size();
+    for (const auto& r : ins) {
+        if (r.size > 0) {
+            m_addrToEnd.insert(r.addr, r.addr + r.size);
+        }
+        if (m_addrToLine.contains(r.addr)) continue;
+        m_addrToLine.insert(r.addr, lineNo++);
+        const QString line = QStringLiteral("0x%1  %2  %3 %4")
+                                 .arg(r.addr, 0, 16)
+                                 .arg(r.bytes, -16, QLatin1Char(' '))
+                                 .arg(r.mnemonic, -8, QLatin1Char(' '))
+                                 .arg(r.opStr);
+        out.append(formatMixedListingLine(line));
+        out.append(QLatin1Char('\n'));
+    }
     m_textView->setPlainText(out);
+    m_lastScrollLoadRequest = 0;
+    updateLoadedRangeFromIndex();
 
     if (m_flowGutter) {
         QVector<GuiFlowArrow> rawArrows = MainWindow::computeFlowArrows(ins);
@@ -268,12 +337,31 @@ void FullDisasmPane::rebuildAddressIndex(const QString& text) {
     }
 }
 
+void FullDisasmPane::updateLoadedRangeFromIndex() {
+    m_loadedMinAddr = 0;
+    m_loadedMaxAddr = 0;
+    for (auto it = m_addrToLine.constBegin(); it != m_addrToLine.constEnd();
+         ++it) {
+        if (it.key() == 0) continue;
+        if (m_loadedMinAddr == 0 || it.key() < m_loadedMinAddr) {
+            m_loadedMinAddr = it.key();
+        }
+        if (it.key() > m_loadedMaxAddr) {
+            m_loadedMaxAddr = it.key();
+        }
+    }
+}
+
 void FullDisasmPane::showPlaceholder(const QString& message) {
     if (m_headerLabel) m_headerLabel->setText(QStringLiteral("Full Disassembly"));
     if (m_textView) m_textView->setPlainText(message);
     if (m_arrowView) m_arrowView->setPlainText(message);
     if (m_flowGutter) m_flowGutter->clearArrows();
     m_addrToLine.clear();
+    m_addrToEnd.clear();
+    m_loadedMinAddr = 0;
+    m_loadedMaxAddr = 0;
+    m_lastScrollLoadRequest = 0;
 }
 
 }  // namespace aura::gui

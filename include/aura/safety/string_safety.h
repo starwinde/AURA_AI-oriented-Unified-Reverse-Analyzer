@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "aura/safety/string_encoding.h"
+
 namespace aura::safety {
 
 enum class FindingSource {
@@ -35,6 +37,18 @@ enum class ModelFailureAction {
     BlockExport,
 };
 
+enum class RulePackSelectionMode {
+    All,
+    Selected,
+    None,
+};
+
+enum class StringProtectionMode {
+    Off,
+    ScanOnly,
+    Mask,
+};
+
 struct ModelPolicy {
     bool enabled = false;
     ModelPolicyMode mode = ModelPolicyMode::Disabled;
@@ -48,6 +62,8 @@ struct ModelPolicy {
 };
 
 struct SafetyProfile {
+    RulePackSelectionMode rule_pack_selection_mode =
+        RulePackSelectionMode::All;
     std::vector<std::string> rule_pack_ids;
     std::vector<std::string> eval_dataset_ids;
     std::string token_classification_model_id;
@@ -90,6 +106,7 @@ struct ProtectedStringView {
     std::string alias;
     std::string masked;
     std::string protected_value;
+    DetectedStringEncoding detected_encoding;
     std::vector<Finding> findings;
 };
 
@@ -109,8 +126,12 @@ bool saveSafetyProfile(const std::string& profile_id,
                       const SafetyProfile& profile,
                       std::string* diagnostic = nullptr);
 
+std::string stringProtectionModeToText(StringProtectionMode mode);
+StringProtectionMode parseStringProtectionMode(const std::string& text);
+
 std::vector<Finding> scanStringWithRulePacks(const std::string& text,
                                              const SafetyProfile& profile);
+std::size_t effectiveRuleCount(const SafetyProfile& profile);
 
 std::vector<Finding> mergeFindings(std::vector<Finding> findings);
 void allocateMaskTokens(std::vector<Finding>& findings);

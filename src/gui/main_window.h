@@ -4,8 +4,10 @@
 #pragma once
 
 #include "decompile_pane.h"
+#include "aura/safety/string_safety.h"
 
 #include <QMainWindow>
+#include <QHash>
 #include <QStack>
 #include <QString>
 #include <QVector>
@@ -21,12 +23,15 @@ extern "C" {
 class QStackedWidget;
 class QTableView;
 class QTreeView;
+class QTreeWidget;
 class QAction;
 class QPushButton;
 class QDockWidget;
 class QEvent;
 class QPlainTextEdit;
 class QWidget;
+class QComboBox;
+class QLabel;
 
 namespace aura::safety {
 struct SafetyProfile;
@@ -40,19 +45,24 @@ class XrefTableModel;
 class SymbolTableModel;
 class StringTableModel;
 class DecompilePane;
+class DemoModePane;
+class GatewayPane;
 class DisasmPane;
 class FullDisasmPane;
 class CfgPane;
 class HexPane;
+class SafetySettingsDialog;
 
 struct GuiFunctionRecord {
     QString  name;          // display name (override-applied if any)
     QString  originalName;  // engine-reported name (immutable)
+    QString  comment;       // user annotation loaded from override_store
     quint64  entry        = 0;
     quint64  size         = 0;
     QString  source;        // "rizin", or "user/rename" if overridden
     quint64  functionId   = 0;  // engine stable id (Phase 4A.X2 EXACT path)
     bool     overridden   = false;
+    bool     hasComment   = false;
 };
 
 // Phase 11.3.5: cross-reference record exposed to RPC + Xrefs dock.
@@ -89,6 +99,15 @@ struct GuiVariableRecord {
     QString name;
     QString kind;        // "stack"|"reg"|"arg"|"sp"|"bp"
     qint32  stackOffset = 0;
+};
+
+struct GuiVariableOverride {
+    quint32 varId      = 0;
+    quint32 functionId = 0;
+    QString alias;
+    QString typeName;
+    bool    hasAlias   = false;
+    bool    hasType    = false;
 };
 
 struct GuiTypeFactRecord {
@@ -226,6 +245,9 @@ struct GuiStringRecord {
     quint64 addr     = 0;
     quint64 length   = 0;
     QString encoding;        // "ascii"|"utf8"|"utf16le"|"utf16be"|"wide"|"unknown"
+    double  encodingConfidence = 0.0;
+    QString displayLiteral;
+    bool    encodingLossy = false;
     QString section;         // ".rodata" etc; "" if absent
     QString content;         // engine-reported text snippet (≤127 bytes)
     QString source;          // provenance.source
@@ -248,6 +270,23 @@ struct GuiStringRecord {
     QVector<ProtectionFinding> findings;
 };
 
+struct GuiMalwareRiskFinding {
+    QString id;
+    QString severity;
+    QString category;
+    QString title;
+    QString evidence;
+    QString source;
+};
+
+enum class TransmissionTarget {
+    GuiDisplay = 0,
+    LocalLlm,
+    ExternalLlm,
+    Mcp,
+    Cli,
+};
+
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
@@ -264,6 +303,12 @@ public:
     // Programmatic helpers (also exercised by gui_smoke ctest).
     bool openProject(const QString& path);
     bool addBinary(const QString& binaryPath);
+    bool addBinaryAndAnalyze(const QString& binaryPath,
+                             AuraAnalysisLevel level,
+                             aura::safety::StringProtectionMode protectionMode);
+    bool addBinaryAndAnalyze(const QString& binaryPath,
+                             AuraAnalysisLevel level,
+                             bool enableStringProtection);
 
     // Phase 11.5 (P5 polish) — recent projects MRU list.
     // Persisted via QSettings under "recentProjects" key. Newest first,
@@ -319,6 +364,7 @@ public:
     // <tr><td>key</td><td>action</td></tr> in a <table> so the
     // contract test can grep for both the key and the action label.
     static QString keyboardShortcutsHtml();
+    static QString protectionDeletionWarningText();
 
     // Phase 11.5 (P5 polish) — focus / raise one of the four tabified
     // workspace docks. n: 1=Decompile, 2=Disasm, 3=CFG, 4=Hex.
@@ -329,22 +375,48 @@ public:
     bool setStringMaskTokenAt(int stringRow, const QString& maskToken);
     bool setStringDisplayModeAt(int stringRow, int displayMode);
     QString stringProtectedValueAt(int stringRow) const;
+    QString stringTransmissionValueAt(int stringRow,
+                                      TransmissionTarget target) const;
+    bool clearStringProtectionForCurrentBinary();
+    bool recomputeStringProtectionForCurrentBinary();
+    QString latestSafetyAuditEventForTest() const {
+        return m_latestSafetyAuditEventForTest;
+    }
     bool analyzeBinaryAt(int row, AuraAnalysisLevel level);
+    bool analyzeBinaryAt(int row,
+                         AuraAnalysisLevel level,
+                         aura::safety::StringProtectionMode protectionMode);
+    bool analyzeBinaryAt(int row,
+                         AuraAnalysisLevel level,
+                         bool enableStringProtection);
     bool decompileFunctionAt(int functionRow);  // for test
     bool disassembleFunctionAt(int functionRow);  // for test (Phase 11.3.7)
     bool renameFunctionAt(int functionRow, const QString& newName);
     bool resetFunctionNameAt(int functionRow);
+    bool setFunctionCommentAt(int functionRow, const QString& comment);
+    QString functionCommentAt(int functionRow) const;
+    bool setVariableOverrideById(quint32 varId,
+                                 const QString& alias,
+                                 const QString& typeName);
+    GuiVariableOverride variableOverrideById(quint32 varId) const;
+    QVector<GuiVariableOverride> variableOverrideList() const;
 
     int  projectBinaryCount() const;
     int  functionCount() const { return m_functions.size(); }
     QString currentDecompileText() const;
     QString functionDisplayNameAt(int row) const;
+    QString renderDecompileTextForFunctionRow(int functionRow,
+                                              const QString& rawText) const;
 
     // Phase 11.3.5: read-only access to the most recent analyze's xrefs.
     // Empty before the first successful analyze.
     QVector<GuiXrefRecord> xrefList() const { return m_xrefs; }
     QVector<GuiSymbolRecord> symbolList() const { return m_symbols; }
     QVector<GuiStringRecord> stringList() const { return m_strings; }
+    QVector<GuiVariableRecord> variableList() const { return m_variables; }
+    QVector<GuiMalwareRiskFinding> malwareRiskList() const {
+        return m_malwareRisks;
+    }
 
     // Phase 11.3.7 (P2.F2 C3): on-demand disasm cache + invocation. RPC
     // server uses runDisasm() to fill the cache, then disasmList() to
@@ -466,6 +538,8 @@ private slots:
     void onDecompContextReset();
     void onDecompContextFindXrefs(quint64 addr);
     void onDecompContextAddComment(quint64 addr);
+    void onDecompContextToggleStringSubstitution();
+    QString renderDecompileTextForDisplay(const QString& rawText) const;
 
     // Phase 11.3.9 (P2.F4 C3): function navigation history.
 public slots:
@@ -508,14 +582,24 @@ private:
     void setActiveSafetyProfileId(const QString& profileId);
     void updateSafetyStatusText();
     void onSafetySettings();
+    bool openSafetySettingsDialog(QWidget* parentForDialog = nullptr);
+    bool saveSafetySettingsDialog(SafetySettingsDialog& dlg);
+    void confirmAndClearStringProtection();
+    void recomputeStringProtectionFromSafetySettings();
+    void recordSafetyAuditEvent(const QString& event, const QString& detail);
     void closeProject();
     void updateWindowTitle();
     void restoreUiState();
     void saveUiState();
 
     int  selectedProjectRow() const;
-    bool runAnalyze(int row, AuraAnalysisLevel level);
+    int  projectRowForFingerprint(const QString& fingerprint) const;
+    bool runAnalyze(int row,
+                    AuraAnalysisLevel level,
+                    aura::safety::StringProtectionMode protectionMode);
     bool runDecompile(quint64 funcAddr);
+    void refreshDemoModePane();
+    void refreshGatewayPane();
     AuraArtifactCacheKey decompileArtifactKey(quint64 funcAddr,
                                               const QString& backend) const;
     bool loadDecompileArtifact(quint64 funcAddr,
@@ -550,7 +634,11 @@ private:
 
     // Override pipeline.
     AuraOverrideKey buildKeyForFunction(int functionRow) const;
+    AuraOverrideKey buildKeyForVariable(int variableRow) const;
     void            applyOverridesToFunctions();   // post-analyze + post-rename
+    void            applyCommentOverridesToFunctions();
+    void            applyOverridesToVariables();
+    int             variableRowById(quint32 varId) const;
 
     void closeEvent(class QCloseEvent* event) override;
 
@@ -575,10 +663,14 @@ private:
     FunctionTableModel*  m_functionModel  = nullptr;
     QDockWidget*         m_decompileDock  = nullptr;
     DecompilePane*       m_decompilePane  = nullptr;
+    DemoModePane*        m_demoModePane   = nullptr;
+    QDockWidget*         m_gatewayDock    = nullptr;
+    GatewayPane*         m_gatewayPane    = nullptr;
     QDockWidget*         m_disasmDock     = nullptr;
     DisasmPane*          m_disasmPane     = nullptr;
     QDockWidget*         m_fullDisasmDock = nullptr;
     FullDisasmPane*      m_fullDisasmPane = nullptr;
+    bool                 m_fullDisasmLoadInProgress = false;
     QDockWidget*         m_xrefsDock      = nullptr;
     QTreeView*           m_xrefsTable     = nullptr;
     XrefTableModel*      m_xrefsModel     = nullptr;
@@ -591,6 +683,11 @@ private:
     QDockWidget*         m_stringsDock    = nullptr;
     QTreeView*           m_stringsTable   = nullptr;
     StringTableModel*    m_stringsModel   = nullptr;
+    QComboBox*           m_stringsCategoryFilterCombo = nullptr;
+    QComboBox*           m_stringsDisplayModeCombo = nullptr;
+    QLabel*              m_stringsCategoryCountLabel = nullptr;
+    QDockWidget*         m_malwareRiskDock = nullptr;
+    QTreeWidget*         m_malwareRiskTable = nullptr;
     QDockWidget*         m_cfgDock        = nullptr;
     CfgPane*             m_cfgPane        = nullptr;
     QDockWidget*         m_hexDock        = nullptr;
@@ -621,10 +718,12 @@ private:
     QVector<GuiXrefRecord>     m_xrefs;
     QVector<GuiSymbolRecord>   m_symbols;
     QVector<GuiStringRecord>   m_strings;
+    QVector<GuiMalwareRiskFinding> m_malwareRisks;
     QVector<GuiBlockRecord>    m_blocks;       // Phase 11.3.8
     QVector<GuiEdgeRecord>     m_edges;        // Phase 11.3.8
     QVector<GuiCallEdgeRecord> m_callEdges;    // Phase 11.4.3
     QVector<GuiVariableRecord> m_variables;    // Phase 11.4.3
+    QHash<quint32, GuiVariableOverride> m_variableOverrides;
     QVector<GuiTypeFactRecord> m_typeFacts;    // Phase 11.4.3
     AuraOverrideBinaryFingerprint m_currentFingerprint{};
     SearchScope m_activeSearchScope = SearchScope::Functions;
@@ -637,6 +736,15 @@ private:
     QAction* m_actBackToProject  = nullptr;
     QAction* m_actAbout          = nullptr;
     QString  m_safetyStatusText;
+    QString  m_latestSafetyAuditEventForTest;
+    bool     m_gatewayProtectionEnabled = true;
+    bool     m_gatewaySafetyScanExecuted = false;
+    bool     m_gatewaySafetyProfileApplied = false;
+    bool     m_gatewayRulePacksLoaded = false;
+    bool     m_gatewayMaskingCacheCurrent = false;
+    int      m_gatewayScannedStringCount = 0;
+    int      m_gatewayProtectedFindingCount = 0;
+    int      m_gatewayActiveRuleCount = 0;
 
     // Phase 11.5: recent-projects submenu (rebuilt on each push).
     class QMenu* m_recentMenu    = nullptr;
