@@ -382,6 +382,17 @@ public:
     QString latestSafetyAuditEventForTest() const {
         return m_latestSafetyAuditEventForTest;
     }
+    void recordRpcActivity(const QString& method,
+                           bool ok,
+                           const QString& summary,
+                           const QString& source = QStringLiteral("MCP/RPC"));
+    void recordRpcActivityForTest(const QString& method,
+                                  bool ok,
+                                  const QString& summary) {
+        recordRpcActivity(method, ok, summary);
+    }
+    int rpcActivityCountForTest() const;
+    int rpcSensitiveActivityCountForTest() const;
     bool analyzeBinaryAt(int row, AuraAnalysisLevel level);
     bool analyzeBinaryAt(int row,
                          AuraAnalysisLevel level,
@@ -407,6 +418,9 @@ public:
     QString functionDisplayNameAt(int row) const;
     QString renderDecompileTextForFunctionRow(int functionRow,
                                               const QString& rawText) const;
+    QString renderProtectedDecompileTextForFunctionRow(
+        int functionRow,
+        const QString& rawText) const;
 
     // Phase 11.3.5: read-only access to the most recent analyze's xrefs.
     // Empty before the first successful analyze.
@@ -666,6 +680,9 @@ private:
     DemoModePane*        m_demoModePane   = nullptr;
     QDockWidget*         m_gatewayDock    = nullptr;
     GatewayPane*         m_gatewayPane    = nullptr;
+    QDockWidget*         m_rpcActivityDock = nullptr;
+    QTreeWidget*         m_rpcActivityTable = nullptr;
+    QTreeWidget*         m_rpcSensitiveActivityTable = nullptr;
     QDockWidget*         m_disasmDock     = nullptr;
     DisasmPane*          m_disasmPane     = nullptr;
     QDockWidget*         m_fullDisasmDock = nullptr;

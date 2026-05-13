@@ -8,6 +8,7 @@
 #include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QSet>
+#include <QStringList>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTextStream>
@@ -63,6 +64,64 @@ const char* cstr(cJSON* o, const char* key) {
 int intval(cJSON* o, const char* key, int defv) {
     cJSON* v = cJSON_GetObjectItemCaseSensitive(o, key);
     return (v && cJSON_IsNumber(v)) ? v->valueint : defv;
+}
+
+QString summarizeCount(cJSON* object, const char* key) {
+    cJSON* value = cJSON_GetObjectItemCaseSensitive(object, key);
+    if (!cJSON_IsNumber(value)) return {};
+    return QStringLiteral("%1=%2").arg(QString::fromLatin1(key)).arg(value->valueint);
+}
+
+QString summarizeArray(cJSON* object, const char* key) {
+    cJSON* value = cJSON_GetObjectItemCaseSensitive(object, key);
+    if (!cJSON_IsArray(value)) return {};
+    return QStringLiteral("%1=%2").arg(QString::fromLatin1(key)).arg(cJSON_GetArraySize(value));
+}
+
+QString summarizeRpcActivityResult(const QString& response) {
+    cJSON* root = cJSON_Parse(response.toUtf8().constData());
+    if (!root) return QStringLiteral("invalid response");
+
+    QStringList parts;
+    cJSON* ok = cJSON_GetObjectItemCaseSensitive(root, "ok");
+    cJSON* result = cJSON_GetObjectItemCaseSensitive(root, "result");
+    if (cJSON_IsObject(result)) {
+        for (const char* key : {"binary_count", "function_count",
+                                "string_row", "function_addr"}) {
+            const QString part = summarizeCount(result, key);
+            if (!part.isEmpty()) parts.push_back(part);
+        }
+        for (const char* key : {"functions", "strings", "symbols", "xrefs",
+                                "instructions", "blocks", "edges"}) {
+            const QString part = summarizeArray(result, key);
+            if (!part.isEmpty()) parts.push_back(part);
+        }
+        cJSON* snapshot = cJSON_GetObjectItemCaseSensitive(result,
+                                                           "snapshot_schema");
+        if (cJSON_IsNumber(snapshot)) {
+            cJSON* protectedOnly =
+                cJSON_GetObjectItemCaseSensitive(result, "protected_only");
+            parts.push_back(QStringLiteral("snapshot=demo_minimal"));
+            if (cJSON_IsBool(protectedOnly)) {
+                parts.push_back(QStringLiteral("protected_only=%1")
+                                    .arg(cJSON_IsTrue(protectedOnly)
+                                             ? QStringLiteral("true")
+                                             : QStringLiteral("false")));
+            }
+        }
+    }
+
+    if (parts.isEmpty() && cJSON_IsFalse(ok)) {
+        cJSON* error = cJSON_GetObjectItemCaseSensitive(root, "error");
+        if (cJSON_IsString(error) && error->valuestring) {
+            parts.push_back(QStringLiteral("error=%1")
+                                .arg(QString::fromUtf8(error->valuestring)));
+        }
+    }
+    if (parts.isEmpty()) parts.push_back(QStringLiteral("no returned records"));
+
+    cJSON_Delete(root);
+    return parts.join(QStringLiteral("; "));
 }
 
 cJSON* stringRecordJson(const GuiStringRecord& s, bool protectedOnly) {
@@ -396,7 +455,8 @@ QString RpcServer::dispatch(const QByteArray& jsonLine) {
         }
         cJSON* r = cJSON_CreateObject();
         cJSON_AddStringToObject(r, "text",
-            protectedDecompileText(m_mw->currentDecompileText())
+            m_mw->renderProtectedDecompileTextForFunctionRow(
+                    row, m_mw->currentDecompileText())
                 .toUtf8()
                 .constData());
         cJSON_AddBoolToObject(r, "raw_comment_text_omitted", true);
@@ -412,7 +472,8 @@ QString RpcServer::dispatch(const QByteArray& jsonLine) {
         cJSON* r = cJSON_CreateObject();
         cJSON_AddNumberToObject(r, "string_row", row);
         cJSON_AddStringToObject(r, "text",
-            protectedDecompileText(m_mw->currentDecompileText())
+            m_mw->renderProtectedDecompileTextForFunctionRow(
+                    -1, m_mw->currentDecompileText())
                 .toUtf8()
                 .constData());
         cJSON_AddBoolToObject(r, "raw_comment_text_omitted", true);
@@ -727,6 +788,18 @@ QString RpcServer::dispatch(const QByteArray& jsonLine) {
         QCoreApplication::quit();
     } else {
         out = resultJson(false, nullptr, "unknown method");
+    }
+
+    if (m_mw) {
+        cJSON* response = cJSON_Parse(out.toUtf8().constData());
+        cJSON* ok = response
+                        ? cJSON_GetObjectItemCaseSensitive(response, "ok")
+                        : nullptr;
+        m_mw->recordRpcActivity(
+            QString::fromUtf8(method),
+            cJSON_IsBool(ok) && cJSON_IsTrue(ok),
+            summarizeRpcActivityResult(out));
+        if (response) cJSON_Delete(response);
     }
 
     cJSON_Delete(root);

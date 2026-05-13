@@ -68,6 +68,7 @@
 #include <QStatusBar>
 #include <QStyleFactory>
 #include <QTableView>
+#include <QTabWidget>
 #include <QTextCursor>
 #include <QTreeView>
 #include <QTreeWidget>
@@ -887,6 +888,47 @@ void MainWindow::buildCentralStack() {
     m_gatewayDock->setWidget(m_gatewayPane);
     m_workspace->tabifyDockWidget(m_decompileDock, m_gatewayDock);
     refreshGatewayPane();
+
+    m_rpcActivityDock = new QDockWidget(
+        useKoreanUi() ? QStringLiteral("MCP/RPC 활동")
+                      : QStringLiteral("MCP/RPC Activity"),
+        m_workspace);
+    m_rpcActivityDock->setObjectName(QStringLiteral("rpcActivityDock"));
+    m_rpcActivityDock->setAllowedAreas(Qt::AllDockWidgetAreas);
+    auto* rpcActivityTabs = new QTabWidget(m_rpcActivityDock);
+    rpcActivityTabs->setObjectName(QStringLiteral("rpcActivityTabs"));
+    const QStringList rpcActivityHeaders =
+        useKoreanUi()
+            ? QStringList{QStringLiteral("시간"), QStringLiteral("출처"),
+                          QStringLiteral("호출"), QStringLiteral("상태"),
+                          QStringLiteral("요약")}
+            : QStringList{QStringLiteral("Time"), QStringLiteral("Source"),
+                          QStringLiteral("Call"), QStringLiteral("Status"),
+                          QStringLiteral("Summary")};
+    m_rpcActivityTable = new QTreeWidget(rpcActivityTabs);
+    m_rpcActivityTable->setObjectName(QStringLiteral("rpcActivityTable"));
+    m_rpcActivityTable->setColumnCount(5);
+    m_rpcActivityTable->setHeaderLabels(rpcActivityHeaders);
+    m_rpcActivityTable->setRootIsDecorated(false);
+    m_rpcActivityTable->setUniformRowHeights(true);
+    m_rpcActivityTable->header()->setStretchLastSection(true);
+    m_rpcSensitiveActivityTable = new QTreeWidget(rpcActivityTabs);
+    m_rpcSensitiveActivityTable->setObjectName(
+        QStringLiteral("rpcSensitiveActivityTable"));
+    m_rpcSensitiveActivityTable->setColumnCount(5);
+    m_rpcSensitiveActivityTable->setHeaderLabels(rpcActivityHeaders);
+    m_rpcSensitiveActivityTable->setRootIsDecorated(false);
+    m_rpcSensitiveActivityTable->setUniformRowHeights(true);
+    m_rpcSensitiveActivityTable->header()->setStretchLastSection(true);
+    rpcActivityTabs->addTab(m_rpcActivityTable,
+                            useKoreanUi() ? QStringLiteral("전체 호출")
+                                          : QStringLiteral("All Calls"));
+    rpcActivityTabs->addTab(m_rpcSensitiveActivityTable,
+                            useKoreanUi()
+                                ? QStringLiteral("민감/보호 데이터")
+                                : QStringLiteral("Sensitive Data"));
+    m_rpcActivityDock->setWidget(rpcActivityTabs);
+    m_workspace->tabifyDockWidget(m_decompileDock, m_rpcActivityDock);
 
     // Phase 11.3.7 (P2.F2 C3): Disassembly dock — tabified onto Decompile
     // dock per ADR-0040 D5 (Cutter pattern; user toggles between
@@ -2055,6 +2097,57 @@ void MainWindow::refreshGatewayPane() {
     }
 
     m_gatewayPane->setSnapshot(aura::gateway::buildGatewaySnapshot(input));
+}
+
+void MainWindow::recordRpcActivity(const QString& method,
+                                   bool ok,
+                                   const QString& summary,
+                                   const QString& source) {
+    if (!m_rpcActivityTable) return;
+
+    const auto addRow = [&](QTreeWidget* table) {
+        if (!table) return;
+        auto* row = new QTreeWidgetItem();
+        row->setText(0, QDateTime::currentDateTime()
+                            .toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")));
+        row->setText(1, source.isEmpty() ? QStringLiteral("MCP/RPC") : source);
+        row->setText(2, method);
+        row->setText(3, ok ? QStringLiteral("ok") : QStringLiteral("error"));
+        row->setText(4, summary);
+        table->insertTopLevelItem(0, row);
+
+        constexpr int kMaxRpcActivityRows = 200;
+        while (table->topLevelItemCount() > kMaxRpcActivityRows) {
+            delete table->takeTopLevelItem(table->topLevelItemCount() - 1);
+        }
+    };
+
+    addRow(m_rpcActivityTable);
+
+    const QSet<QString> sensitiveMethods = {
+        QStringLiteral("demo_snapshot"),
+        QStringLiteral("list_protected_strings"),
+        QStringLiteral("list_strings"),
+        QStringLiteral("decompile"),
+        QStringLiteral("jump_string_reference"),
+        QStringLiteral("disasm_function"),
+        QStringLiteral("cfg_function"),
+        QStringLiteral("list_symbols"),
+        QStringLiteral("list_xrefs"),
+    };
+    if (sensitiveMethods.contains(method)) {
+        addRow(m_rpcSensitiveActivityTable);
+    }
+}
+
+int MainWindow::rpcActivityCountForTest() const {
+    return m_rpcActivityTable ? m_rpcActivityTable->topLevelItemCount() : 0;
+}
+
+int MainWindow::rpcSensitiveActivityCountForTest() const {
+    return m_rpcSensitiveActivityTable
+               ? m_rpcSensitiveActivityTable->topLevelItemCount()
+               : 0;
 }
 
 bool MainWindow::clearStringProtectionForCurrentBinary() {
@@ -5247,6 +5340,56 @@ QString MainWindow::renderDecompileTextForFunctionRow(
         out.append(QStringLiteral("// AURA comment: %1\n")
                        .arg(m_functions[functionRow].comment));
     }
+    return out;
+}
+
+QString MainWindow::renderProtectedDecompileTextForFunctionRow(
+    int functionRow, const QString& rawText) const {
+    QString out = rawText;
+
+    for (const auto& s : m_strings) {
+        if (s.content.isEmpty()) continue;
+        const QString protectedValue = protectedTransmissionValue(s);
+        const bool hasProtectedReplacement =
+            !protectedValue.isEmpty() && protectedValue != s.content;
+        const QString exportValue =
+            hasProtectedReplacement
+                ? protectedValue
+                : QStringLiteral("<RAW_CONTENT_OMITTED>");
+        out.replace(s.content, exportValue, Qt::CaseSensitive);
+    }
+
+    for (const auto& s : m_strings) {
+        if (s.addr == 0) continue;
+        const QString addr = QStringLiteral("0x%1").arg(s.addr, 0, 16);
+        const QString protectedValue = protectedTransmissionValue(s);
+        const QString value =
+            (!protectedValue.isEmpty() && protectedValue != s.content)
+                ? protectedValue
+                : QStringLiteral("<RAW_CONTENT_OMITTED>");
+        const QString replacement =
+            QStringLiteral("%1 /* %2 */")
+                .arg(cStringLiteralForDisplay(value), addr);
+        const QString commentReplacement =
+            QStringLiteral("/* protected: %1; address: %2 */")
+                .arg(cStringLiteralForDisplay(value), addr);
+        const QRegularExpression commentRe(
+            QStringLiteral("/\\*\\s*%1\\s*\\*/")
+                .arg(QRegularExpression::escape(addr)),
+            QRegularExpression::CaseInsensitiveOption);
+        out.replace(commentRe, commentReplacement);
+        const QRegularExpression re(
+            QStringLiteral("(?<!/\\*\\s)\\b%1\\b(?!\\s*\\*/)")
+                .arg(QRegularExpression::escape(addr)),
+            QRegularExpression::CaseInsensitiveOption);
+        out.replace(re, replacement);
+    }
+
+    static const QRegularExpression commentLine(
+        QStringLiteral("(?m)^// AURA comment:.*(?:\\r?\\n)?"));
+    out.remove(commentLine);
+
+    (void)functionRow;
     return out;
 }
 

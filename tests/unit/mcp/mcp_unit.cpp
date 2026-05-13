@@ -496,6 +496,7 @@ TEST_CASE("mcp tool registry lists protected and raw tool names") {
     CHECK(hasToolNamed(tools, "aura_get_llm_context"));
     CHECK(hasToolNamed(tools, "aura_get_raw_disassembly"));
     CHECK(hasToolNamed(tools, "aura_get_raw_decompile"));
+    CHECK(hasToolNamed(tools, "aura_gui_decompile"));
 
     cJSON_Delete(tools);
 }
@@ -553,6 +554,24 @@ TEST_CASE("mcp tool schemas declare expected required arguments") {
     CHECK(arrayHasString(disassembly_required, "binary_path"));
     CHECK(arrayHasString(disassembly_required, "function_addr"));
     CHECK(cJSON_IsFalse(field(disassembly_schema, "additionalProperties")));
+
+    const cJSON* gui_decompile_schema =
+        field(toolNamed(tools, "aura_gui_decompile"), "inputSchema");
+    REQUIRE(cJSON_IsObject(gui_decompile_schema));
+    const cJSON* gui_decompile_required =
+        field(gui_decompile_schema, "required");
+    REQUIRE(cJSON_IsArray(gui_decompile_required));
+    CHECK(arrayHasString(gui_decompile_required, "gui_port"));
+    CHECK(arrayHasString(gui_decompile_required, "gui_token"));
+    CHECK_FALSE(arrayHasString(gui_decompile_required, "function_row"));
+    const cJSON* gui_decompile_properties =
+        field(gui_decompile_schema, "properties");
+    REQUIRE(cJSON_IsObject(gui_decompile_properties));
+    const cJSON* function_row =
+        field(field(gui_decompile_properties, "function_row"), "type");
+    REQUIRE(cJSON_IsString(function_row));
+    CHECK(std::string(function_row->valuestring) == "integer");
+    CHECK(cJSON_IsFalse(field(gui_decompile_schema, "additionalProperties")));
 
     cJSON_Delete(tools);
 }
